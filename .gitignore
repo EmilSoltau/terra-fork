@@ -1,0 +1,21 @@
+# Build output
+build/bin/
+
+# Frontend
+node_modules/
+frontend/dist/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# Runtime work directories (sidecar output)
+geosense-run-*/
+
+# OS
+.DS_Store
+
+# Editor
+.vscode/
+.idea/
