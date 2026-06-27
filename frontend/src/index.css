@@ -1,0 +1,173 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "leaflet/dist/leaflet.css";
+@import "leaflet-draw/dist/leaflet.draw.css";
+
+@custom-variant dark (&:is(.dark *));
+
+/*
+  geosense-infer visual identity: "Earth-observation instrument" x "technical atlas".
+  Deep graphite-blue night-satellite ground, frosted-glass instrument panels over a
+  full-bleed map, cyan-NIR signal accent, topographic terracotta secondary, and a
+  monospace telemetry voice for all measured data (coordinates, dates, areas, counts).
+*/
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-panel: var(--panel);
+  --color-panel-solid: var(--panel-solid);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-terra: var(--terra);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-hairline: var(--hairline);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --radius-sm: 2px;
+  --radius-md: 3px;
+  --radius-lg: 4px;
+  --radius-xl: 6px;
+  --font-mono: var(--font-telemetry);
+}
+
+:root {
+  --radius: 4px;
+
+  /* Night-satellite graphite-blue ground */
+  --background: oklch(0.17 0.012 240);
+  --foreground: oklch(0.94 0.01 90);
+
+  /* Frosted instrument panels (with alpha; backdrop-blur applied per element) */
+  --panel: oklch(0.215 0.014 240 / 0.82);
+  --panel-solid: oklch(0.215 0.014 240);
+  --card: oklch(0.215 0.014 240 / 0.82);
+  --card-foreground: oklch(0.94 0.01 90);
+  --popover: oklch(0.2 0.014 240);
+  --popover-foreground: oklch(0.94 0.01 90);
+
+  /* Cyan-NIR signal: the instrument accent */
+  --primary: oklch(0.8 0.13 195);
+  --primary-foreground: oklch(0.17 0.012 240);
+  --accent: oklch(0.8 0.13 195);
+  --accent-foreground: oklch(0.17 0.012 240);
+
+  /* Topographic terracotta: secondary / contour */
+  --terra: oklch(0.66 0.12 48);
+
+  --secondary: oklch(0.27 0.014 240);
+  --secondary-foreground: oklch(0.94 0.01 90);
+  --muted: oklch(0.27 0.012 240);
+  --muted-foreground: oklch(0.68 0.012 240);
+
+  --destructive: oklch(0.62 0.2 25);
+
+  /* Hairlines: thin cartographic rules */
+  --border: oklch(0.42 0.012 240 / 0.55);
+  --hairline: oklch(0.5 0.012 240 / 0.4);
+  --input: oklch(0.38 0.012 240 / 0.6);
+  --ring: oklch(0.8 0.13 195 / 0.6);
+
+  --font-telemetry: ui-monospace, "SF Mono", "JetBrains Mono", "Menlo", monospace;
+  --font-display: ui-sans-serif, system-ui, "Inter", "Segoe UI", sans-serif;
+}
+
+@layer base {
+  * {
+    border-color: var(--border);
+  }
+  html, body, #root {
+    height: 100%;
+    margin: 0;
+  }
+  body {
+    background-color: var(--background);
+    color: var(--foreground);
+    font-family: var(--font-display);
+    overflow: hidden;
+    -webkit-font-smoothing: antialiased;
+  }
+}
+
+/* Wails draggable region */
+.app-draggable { --wails-draggable: drag; }
+.app-no-drag { --wails-draggable: no-drag; }
+
+/* Atlas eyebrow: uppercase, tracked, hairline-feel section labels */
+.eyebrow {
+  font-family: var(--font-telemetry);
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+  font-size: 10px;
+  color: var(--muted-foreground);
+}
+
+/* Telemetry readout: measured values in mono */
+.telemetry {
+  font-family: var(--font-telemetry);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.01em;
+}
+
+/* Frosted instrument panel */
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  backdrop-filter: blur(16px) saturate(1.2);
+  -webkit-backdrop-filter: blur(16px) saturate(1.2);
+  box-shadow: 0 8px 30px oklch(0 0 0 / 0.35);
+}
+
+/* Hairline divider */
+.hairline {
+  border: none;
+  border-top: 1px solid var(--hairline);
+}
+
+/* Leaflet surface tuned to the dark instrument ground */
+.leaflet-container {
+  background: oklch(0.13 0.012 240);
+  font-family: var(--font-display);
+}
+.leaflet-control-zoom a,
+.leaflet-draw-toolbar a {
+  background-color: var(--panel-solid) !important;
+  color: var(--foreground) !important;
+  border-color: var(--border) !important;
+}
+.leaflet-control-zoom a:hover,
+.leaflet-draw-toolbar a:hover {
+  background-color: var(--secondary) !important;
+}
+.leaflet-bar {
+  border: 1px solid var(--border) !important;
+  box-shadow: 0 4px 16px oklch(0 0 0 / 0.4) !important;
+}
+.leaflet-draw-actions a {
+  background-color: var(--panel-solid) !important;
+  color: var(--foreground) !important;
+}
+.leaflet-control-attribution {
+  background: oklch(0.17 0.012 240 / 0.7) !important;
+  color: var(--muted-foreground) !important;
+}
+.leaflet-control-attribution a { color: var(--primary) !important; }
+
+/* Custom scrollbar for panels */
+.panel-scroll::-webkit-scrollbar { width: 8px; }
+.panel-scroll::-webkit-scrollbar-thumb {
+  background: oklch(0.4 0.012 240 / 0.5);
+  border-radius: 4px;
+}
+.panel-scroll::-webkit-scrollbar-track { background: transparent; }
