@@ -1,0 +1,131 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write # needed to create the release and upload assets
+
+jobs:
+  build:
+    name: Build ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: macOS (universal)
+            os: macos-latest
+            platform: darwin/universal
+            artifact: geosense-macOS-universal.zip
+          - name: Windows (amd64)
+            os: windows-latest
+            platform: windows/amd64
+            artifact: geosense-Windows-amd64.zip
+          - name: Linux (amd64)
+            os: ubuntu-latest
+            platform: linux/amd64
+            artifact: geosense-Linux-amd64.zip
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.23"
+          cache: true
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install Linux WebKit/GTK deps
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev
+
+      - name: Install Wails CLI
+        run: go install github.com/wailsapp/wails/v2/cmd/wails@v2.12.0
+
+      # Ubuntu 24.04 ships webkit2gtk 4.1 only; tell Wails to target it.
+      - name: Build (Linux)
+        if: runner.os == 'Linux'
+        run: wails build -platform ${{ matrix.platform }} -clean -tags webkit2_41
+
+      - name: Build (macOS / Windows)
+        if: runner.os != 'Linux'
+        run: wails build -platform ${{ matrix.platform }} -clean
+
+      # --- package per platform ---
+
+      - name: Package (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          cd build/bin
+          app=$(ls -d *.app | head -n1)
+          echo "packaging $app"
+          ditto -c -k --keepParent "$app" "../../${{ matrix.artifact }}"
+
+      - name: Package (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $exe = Get-ChildItem build/bin -Filter *.exe | Select-Object -First 1
+          Write-Host "packaging $($exe.Name)"
+          Compress-Archive -Path $exe.FullName -DestinationPath ${{ matrix.artifact }}
+
+      - name: Package (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          cd build/bin
+          bin=$(find . -maxdepth 1 -type f ! -name "*.*" | head -n1)
+          echo "packaging $bin"
+          chmod +x "$bin" || true
+          zip -j "../../${{ matrix.artifact }}" "$bin"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: ${{ matrix.artifact }}
+          if-no-files-found: error
+
+  release:
+    name: Publish release
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
+          generate_release_notes: true
+          draft: false
+          prerelease: false
+          body: |
+            ## geosense-infer ${{ github.ref_name }}
+
+            Desktop builds for macOS, Windows, and Linux.
+
+            **Runtime requirement.** These builds bundle the UI and the trained
+            model but rely on a local Python 3.12 with the inference
+            dependencies (`rasterio`, `scikit-learn`, `pyproj`, `shapely`,
+            `joblib`, `numpy`, `pystac-client`, `planetary-computer`). Point the
+            app at it with the `GEOSENSE_PYTHON` environment variable if it is
+            not on `PATH`. See the README for details.
+
+            Sentinel-2 imagery is read on demand from the Microsoft Planetary
+            Computer STAC catalog; no full product download is required.
