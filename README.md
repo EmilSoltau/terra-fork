@@ -15,6 +15,8 @@ The classifier and feature engineering reproduce the method described in:
 > Series.* XLIV Brazilian Symposium on Telecommunications and Signal Processing
 > (SBrT 2026), Salvador, BA, Brazil.
 
+![geosense-infer classifying a custom area drawn over José de Freitas, Piauí, Brazil](docs/img/screenshot.jpeg)
+
 ## Overview
 
 - Select any area in the world: draw a polygon, search a location, or import a
