@@ -30,6 +30,18 @@ The classifier and feature engineering reproduce the method described in:
 - Inspect the classified map overlay, per-class statistics, and the soybean
   retention curve.
 
+## Download
+
+Prebuilt desktop bundles for macOS, Windows, and Linux are attached to each
+[release](https://github.com/rexionmars/geosense/releases).
+
+> **Runtime requirement.** The bundles include the UI and the trained model but
+> run inference through a local Python 3.12 with `rasterio`, `scikit-learn`,
+> `pyproj`, `shapely`, `joblib`, `numpy`, `pystac-client`, and
+> `planetary-computer`. If that interpreter is not on `PATH`, point the app at it
+> with the `GEOSENSE_PYTHON` environment variable. See
+> [Requirements](#requirements) and [Configuration](#configuration).
+
 ## Architecture
 
 ```
