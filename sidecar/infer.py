@@ -564,6 +564,54 @@ def class_statistics(classification_map):
     return stats
 
 
+# --- Prithvi-EO 2.0 classification -----------------------------------------
+
+def classify_prithvi(products, polygon, ref_profile, model_dir, mode):
+    """
+    Classify a representative acquisition using frozen Prithvi-EO 2.0 embeddings
+    and the matching Random Forest head. mode is 'pixel' or 'patch'.
+    Returns a (H, W) map of MapBiomas class ids (-1 = invalid).
+    """
+    import prithvi as pv
+
+    rf_path = model_dir / f'prithvi_rf_{mode}.joblib'
+    sc_path = model_dir / f'prithvi_scaler_{mode}.joblib'
+    le_path = model_dir / 'prithvi_label_encoder.joblib'
+    for p in (rf_path, sc_path, le_path):
+        if not p.exists():
+            fail(f'Prithvi model artifact missing: {p.name}. Train it with train_prithvi.py')
+    rf = joblib.load(rf_path)
+    sc = joblib.load(sc_path)
+    le = joblib.load(le_path)
+
+    target = products[len(products) // 2]
+    emit_progress(30, f'loading Prithvi bands ({target["date"].strftime("%Y-%m-%d")})')
+    bands = []
+    for name, res in [('B02', '10m'), ('B03', '10m'), ('B04', '10m'),
+                      ('B8A', '20m'), ('B11', '20m'), ('B12', '20m')]:
+        arr = load_band_to_reference_grid(target, name, polygon, ref_profile, resolution=res)
+        bands.append(np.clip(arr / 10000.0, 0, 1))
+    band_stack = np.stack(bands, axis=0).astype(np.float32)
+
+    ref0 = bands[2]  # B04
+    valid = ref0 > 0
+    height, width = valid.shape
+    cls_map = np.full((height, width), -1, dtype=np.int32)
+
+    emit_progress(45, f'extracting Prithvi embeddings ({mode})')
+    if mode == 'patch':
+        emb_map = pv.embed_patches(band_stack, valid)
+        X = emb_map[valid]
+    else:
+        X = pv.embed_pixels(band_stack, valid)
+
+    emit_progress(85, 'classifying embeddings')
+    pred = le.inverse_transform(rf.predict(sc.transform(X)))
+    rows, cols = np.where(valid)
+    cls_map[rows, cols] = pred
+    return cls_map
+
+
 # --- Main ------------------------------------------------------------------
 
 def configure_gdal_for_cog():
@@ -594,6 +642,10 @@ def main():
     end = req.get('end')
     max_cloud = float(req.get('max_cloud', 100.0))
     monthly_best = bool(req.get('monthly_best', True))
+    # Model selection: 'spectral' (Random Forest on spectro-temporal features,
+    # default) or 'prithvi' (Random Forest on frozen Prithvi-EO 2.0 embeddings).
+    model_kind = req.get('model_kind', 'spectral')
+    prithvi_mode = req.get('prithvi_mode', 'pixel')  # 'pixel' or 'patch'
     work_dir.mkdir(parents=True, exist_ok=True)
 
     if source == 'stac':
@@ -613,18 +665,20 @@ def main():
     if not model_dir.exists():
         fail(f'model directory not found: {model_dir}')
 
-    emit_progress(5, 'loading model artifacts')
-    try:
-        rf_model = joblib.load(model_dir / 'rf_classifier.joblib')
-        scaler = joblib.load(model_dir / 'scaler.joblib')
-        label_encoder = joblib.load(model_dir / 'label_encoder.joblib')
-        feature_names = joblib.load(model_dir / 'feature_names.joblib')
-    except Exception as e:
-        fail(f'failed to load model artifacts: {e}')
-
-    # N_DATES_MODEL: total features minus the 58 non-temporal features
-    # (14 stats * 3 indices + 16 band stats). The remainder are raw NDVI dates.
-    n_dates_model = len(feature_names) - 58
+    rf_model = scaler = label_encoder = feature_names = None
+    n_dates_model = 22
+    if model_kind == 'spectral':
+        emit_progress(5, 'loading model artifacts')
+        try:
+            rf_model = joblib.load(model_dir / 'rf_classifier.joblib')
+            scaler = joblib.load(model_dir / 'scaler.joblib')
+            label_encoder = joblib.load(model_dir / 'label_encoder.joblib')
+            feature_names = joblib.load(model_dir / 'feature_names.joblib')
+        except Exception as e:
+            fail(f'failed to load model artifacts: {e}')
+        # N_DATES_MODEL: total features minus the 58 non-temporal features
+        # (14 stats * 3 indices + 16 band stats). Remainder are raw NDVI dates.
+        n_dates_model = len(feature_names) - 58
 
     if source == 'stac':
         if not start or not end:
@@ -668,7 +722,11 @@ def main():
 
     temporal = []
 
-    if mode == 'temporal':
+    if model_kind == 'prithvi':
+        classification_map = classify_prithvi(
+            products, polygon, ref_profile, model_dir, prithvi_mode
+        )
+    elif mode == 'temporal':
         n = len(products)
         for idx in range(n):
             cumulative = products[:idx + 1]
