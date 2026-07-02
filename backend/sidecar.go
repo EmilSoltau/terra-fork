@@ -151,6 +151,14 @@ func (r *Runner) Predict(ctx context.Context, req PredictRequest) (*PredictResul
 	if maxCloud <= 0 {
 		maxCloud = 100
 	}
+	modelKind := req.ModelKind
+	if modelKind == "" {
+		modelKind = "spectral"
+	}
+	prithviMode := req.PrithviMode
+	if prithviMode == "" {
+		prithviMode = "pixel"
+	}
 
 	// Resolve polygon and MapBiomas path. Embedded areas (A/B/C) use the
 	// validated PR tiles and their MapBiomas reference; custom polygons leave the
@@ -193,6 +201,8 @@ func (r *Runner) Predict(ctx context.Context, req PredictRequest) (*PredictResul
 		PolygonGeoJSON: polygon,
 		MapBiomasPath:  mbPath,
 		Mode:           mode,
+		ModelKind:      modelKind,
+		PrithviMode:    prithviMode,
 		WorkDir:        workDir,
 	}
 	reqBytes, err := json.Marshal(sReq)

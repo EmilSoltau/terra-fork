@@ -33,6 +33,10 @@ interface ControlPanelProps {
   onMonthlyBestChange: (v: boolean) => void
   mode: "single" | "temporal"
   onModeChange: (m: "single" | "temporal") => void
+  modelKind: "spectral" | "prithvi"
+  onModelKindChange: (m: "spectral" | "prithvi") => void
+  prithviMode: "pixel" | "patch"
+  onPrithviModeChange: (m: "pixel" | "patch") => void
   overlayOpacity: number
   onOpacityChange: (v: number) => void
   running: boolean
@@ -80,6 +84,10 @@ export function ControlPanel(props: ControlPanelProps) {
     onMonthlyBestChange,
     mode,
     onModeChange,
+    modelKind,
+    onModelKindChange,
+    prithviMode,
+    onPrithviModeChange,
     overlayOpacity,
     onOpacityChange,
     running,
@@ -264,8 +272,70 @@ export function ControlPanel(props: ControlPanelProps) {
 
       <hr className="hairline" />
 
-      {/* STEP 3 — mode */}
-      <Section step="03" title="Modo">
+      {/* STEP 3 — model */}
+      <Section step="03" title="Modelo">
+        <div className="grid grid-cols-2 gap-2">
+          {(
+            [
+              ["spectral", "Random Forest", "features espectro-temporais"],
+              ["prithvi", "Prithvi-EO 2.0", "embeddings (NASA/IBM)"],
+            ] as const
+          ).map(([m, label, sub]) => (
+            <button
+              key={m}
+              disabled={running}
+              onClick={() => onModelKindChange(m)}
+              className={cn(
+                "rounded-sm border p-2 text-left text-xs disabled:opacity-50",
+                modelKind === m
+                  ? "border-primary bg-primary/10"
+                  : "border-border hover:bg-secondary"
+              )}
+            >
+              <span className="block font-medium">{label}</span>
+              <span className="mt-0.5 block text-[10px] text-muted-foreground">
+                {sub}
+              </span>
+            </button>
+          ))}
+        </div>
+        {modelKind === "prithvi" && (
+          <div className="flex flex-col gap-1.5">
+            <div className="grid grid-cols-2 gap-2">
+              {(
+                [
+                  ["pixel", "Pixel", "10 m, comparavel ao RF"],
+                  ["patch", "Patch", "~160 m, contexto espacial"],
+                ] as const
+              ).map(([m, label, sub]) => (
+                <button
+                  key={m}
+                  disabled={running}
+                  onClick={() => onPrithviModeChange(m)}
+                  className={cn(
+                    "rounded-sm border p-1.5 text-left text-[11px] disabled:opacity-50",
+                    prithviMode === m
+                      ? "border-primary bg-primary/10"
+                      : "border-border hover:bg-secondary"
+                  )}
+                >
+                  <span className="block font-medium">{label}</span>
+                  <span className="block text-[9px] text-muted-foreground">{sub}</span>
+                </button>
+              ))}
+            </div>
+            <p className="text-[10px] leading-relaxed text-muted-foreground">
+              Backbone congelado + Random Forest. A retencao temporal de soja usa
+              o modelo Random Forest; no Prithvi, apenas o mapa e produzido.
+            </p>
+          </div>
+        )}
+      </Section>
+
+      <hr className="hairline" />
+
+      {/* STEP 4 — mode */}
+      <Section step="04" title="Modo">
         <div className="grid grid-cols-2 gap-2">
           {(
             [

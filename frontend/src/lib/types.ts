@@ -34,6 +34,8 @@ export interface PredictRequest {
   monthly_best: boolean
   tiles: string[]
   mode: "single" | "temporal"
+  model_kind: "spectral" | "prithvi"
+  prithvi_mode: "pixel" | "patch"
 }
 
 export interface ClassStat {

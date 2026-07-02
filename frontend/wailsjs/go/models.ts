@@ -127,6 +127,8 @@ export namespace backend {
 	    monthly_best: boolean;
 	    tiles: string[];
 	    mode: string;
+	    model_kind: string;
+	    prithvi_mode: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new PredictRequest(source);
@@ -142,6 +144,8 @@ export namespace backend {
 	        this.monthly_best = source["monthly_best"];
 	        this.tiles = source["tiles"];
 	        this.mode = source["mode"];
+	        this.model_kind = source["model_kind"];
+	        this.prithvi_mode = source["prithvi_mode"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {

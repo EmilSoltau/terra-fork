@@ -44,6 +44,11 @@ type PredictRequest struct {
 	Tiles []string `json:"tiles"`
 	// Mode is "single" (full stack) or "temporal" (cumulative retention).
 	Mode string `json:"mode"`
+	// ModelKind is "spectral" (Random Forest on spectro-temporal features) or
+	// "prithvi" (Random Forest on frozen Prithvi-EO 2.0 embeddings).
+	ModelKind string `json:"model_kind"`
+	// PrithviMode is "pixel" or "patch" (used when ModelKind is "prithvi").
+	PrithviMode string `json:"prithvi_mode"`
 }
 
 // sidecarRequest is the JSON contract written to the Python sidecar stdin.
@@ -58,6 +63,8 @@ type sidecarRequest struct {
 	PolygonGeoJSON *GeoJSONGeometry `json:"polygon_geojson,omitempty"`
 	MapBiomasPath  string           `json:"mapbiomas_path,omitempty"`
 	Mode           string           `json:"mode"`
+	ModelKind      string           `json:"model_kind"`
+	PrithviMode    string           `json:"prithvi_mode"`
 	WorkDir        string           `json:"work_dir"`
 }
 

@@ -47,6 +47,8 @@ function App() {
   const [maxCloud, setMaxCloud] = useState<number>(40)
   const [monthlyBest, setMonthlyBest] = useState<boolean>(true)
   const [mode, setMode] = useState<"single" | "temporal">("single")
+  const [modelKind, setModelKind] = useState<"spectral" | "prithvi">("spectral")
+  const [prithviMode, setPrithviMode] = useState<"pixel" | "patch">("pixel")
   const [overlayOpacity, setOverlayOpacity] = useState<number>(0.75)
   const [running, setRunning] = useState<boolean>(false)
   const [progress, setProgress] = useState<number>(0)
@@ -159,6 +161,8 @@ function App() {
       monthly_best: monthlyBest,
       tiles: [],
       mode,
+      model_kind: modelKind,
+      prithvi_mode: prithviMode,
     }
     try {
       const res = (await Predict(req as never)) as unknown as PredictResult
@@ -219,6 +223,10 @@ function App() {
         onMonthlyBestChange={setMonthlyBest}
         mode={mode}
         onModeChange={setMode}
+        modelKind={modelKind}
+        onModelKindChange={setModelKind}
+        prithviMode={prithviMode}
+        onPrithviModeChange={setPrithviMode}
         overlayOpacity={overlayOpacity}
         onOpacityChange={setOverlayOpacity}
         running={running}
