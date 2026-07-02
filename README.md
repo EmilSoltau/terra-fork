@@ -82,6 +82,7 @@ label encoder are loaded from `model/`.
 - Node.js 18+
 - Python 3.12 with the inference dependencies: `rasterio`, `scikit-learn`,
   `pyproj`, `shapely`, `joblib`, `numpy`, `pystac-client`, `planetary-computer`
+- For the Prithvi model only: `torch` and `terratorch` (`>=1.2`)
 - [Wails CLI](https://wails.io): `go install github.com/wailsapp/wails/v2/cmd/wails@latest`
 
 The Python interpreter is resolved in this order: `GEOSENSE_PYTHON`, a `.venv` at
@@ -113,9 +114,11 @@ Path resolution can be overridden with environment variables:
 | `GEOSENSE_APP_DIR`   | Directory containing `sidecar/`, `areas/`, `model/` |
 | `GEOSENSE_MODEL_DIR` | Trained model directory (defaults to `model/`) |
 
-## Model
+## Models
 
-The `model/` directory contains the serialized Random Forest pipeline:
+Two classifiers are selectable in the app.
+
+### Spectral Random Forest (default)
 
 ```
 rf_classifier.joblib   Random Forest (300 trees)
@@ -126,8 +129,31 @@ feature_names.joblib   Ordered feature names (80)
 
 Each pixel is described by 80 spectro-temporal features: 14 temporal statistics
 for each of NDVI, EVI, and SAVI; 4 statistics per spectral band (B02, B03, B04,
-B08); and the raw NDVI series. The model must be loaded with a scikit-learn
-version compatible with the one used for serialization.
+B08); and the raw NDVI series. Reproduces the reference work.
+
+### Prithvi-EO 2.0 embeddings
+
+```
+prithvi_rf_pixel.joblib    Random Forest on per-pixel embeddings
+prithvi_rf_patch.joblib    Random Forest on per-patch embeddings
+prithvi_scaler_{pixel,patch}.joblib
+prithvi_label_encoder.joblib
+```
+
+Uses the frozen [Prithvi-EO 2.0 300M](https://huggingface.co/ibm-nasa-geospatial/Prithvi-EO-2.0-300M)
+geospatial foundation model (NASA/IBM) as an encoder over six Sentinel-2 bands
+(B02, B03, B04, B8A, B11, B12), with a Random Forest head trained on its 1024-d
+embeddings. Two granularities are available: `pixel` (each pixel encoded
+independently, 10 m, comparable to the spectral model) and `patch` (each 16×16
+patch encoded with spatial context, ~160 m). The backbone weights (~1.2 GB) are
+downloaded from the Hugging Face Hub on first use and cached. This path requires
+`terratorch` and `torch`; on Apple Silicon it runs on MPS. Temporal soybean
+retention is available only for the spectral model.
+
+To retrain the Prithvi heads, see `sidecar/train_prithvi.py`.
+
+Models must be loaded with a scikit-learn version compatible with the one used
+for serialization.
 
 ## Data sources
 
