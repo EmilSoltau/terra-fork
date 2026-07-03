@@ -30,7 +30,7 @@ export function TitleBar({ view, result, onOpenRepo }: TitleBarProps) {
           <span className="text-sm font-semibold tracking-[0.18em]">GEOSENSE</span>
         </div>
         <span className="hairline h-4 w-px self-center border-l" />
-        <span className="eyebrow hidden sm:inline">cobertura do solo · sentinel-2</span>
+        <span className="eyebrow hidden sm:inline">land cover · sentinel-2</span>
       </div>
 
       <div className="flex items-center gap-3">
@@ -55,17 +55,17 @@ export function TitleBar({ view, result, onOpenRepo }: TitleBarProps) {
         </div>
 
         <div className="app-no-drag flex items-center gap-1">
-          <WindowButton onClick={onOpenRepo} title="Repositorio">
+          <WindowButton onClick={onOpenRepo} title="Repository">
             <Github className="h-3.5 w-3.5" />
           </WindowButton>
           <span className="hairline mx-1 h-4 w-px self-center border-l" />
-          <WindowButton onClick={WindowMinimise} title="Minimizar">
+          <WindowButton onClick={WindowMinimise} title="Minimize">
             <Minus className="h-3.5 w-3.5" />
           </WindowButton>
-          <WindowButton onClick={WindowToggleMaximise} title="Maximizar">
+          <WindowButton onClick={WindowToggleMaximise} title="Maximize">
             <Square className="h-3 w-3" />
           </WindowButton>
-          <WindowButton onClick={Quit} danger title="Fechar">
+          <WindowButton onClick={Quit} danger title="Close">
             <X className="h-3.5 w-3.5" />
           </WindowButton>
         </div>

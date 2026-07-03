@@ -23,7 +23,7 @@ export function SearchBar({ onSelectLocation }: SearchBarProps) {
       setResults(res ?? [])
       setOpen(true)
       if ((res ?? []).length === 0) {
-        toast.message("Nenhum local encontrado.")
+        toast.message("No location found.")
       }
     } catch (e) {
       toast.error("Falha na busca: " + e)
@@ -48,7 +48,7 @@ export function SearchBar({ onSelectLocation }: SearchBarProps) {
           onKeyDown={(e) => {
             if (e.key === "Enter") runSearch()
           }}
-          placeholder="Buscar local..."
+          placeholder="Search location..."
           className="w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground"
         />
         {loading ? (
@@ -58,7 +58,7 @@ export function SearchBar({ onSelectLocation }: SearchBarProps) {
             onClick={runSearch}
             className="shrink-0 rounded-sm px-2 py-0.5 text-[11px] text-muted-foreground hover:bg-secondary hover:text-foreground"
           >
-            Buscar
+            Search
           </button>
         )}
       </div>

@@ -106,7 +106,7 @@ export function ControlPanel(props: ControlPanelProps) {
           key="collapsed"
           onClick={() => setCollapsed(false)}
           className="panel app-no-drag absolute left-3 top-3 z-[1000] flex h-9 w-9 items-center justify-center rounded-sm text-muted-foreground hover:text-foreground"
-          title="Mostrar controles"
+          title="Show controls"
           initial={{ opacity: 0, scale: 0.8 }}
           animate={{ opacity: 1, scale: 1 }}
           exit={{ opacity: 0, scale: 0.8 }}
@@ -124,11 +124,11 @@ export function ControlPanel(props: ControlPanelProps) {
           transition={{ type: "spring", stiffness: 360, damping: 34 }}
         >
       <div className="flex items-center justify-between">
-        <h1 className="text-sm font-semibold">Nova classificacao</h1>
+        <h1 className="text-sm font-semibold">New classification</h1>
         <button
           onClick={() => setCollapsed(true)}
           className="text-muted-foreground hover:text-foreground"
-          title="Recolher"
+          title="Collapse"
         >
           <ChevronLeft className="size-4" />
         </button>
@@ -137,8 +137,8 @@ export function ControlPanel(props: ControlPanelProps) {
       {/* STEP 1 — area */}
       <Section step="01" title="Area">
         <p className="text-xs leading-relaxed text-muted-foreground">
-          Desenhe um poligono no mapa, busque um local ou carregue um arquivo.
-          Funciona em qualquer regiao.
+          Draw a polygon on the map, search a location, or load a file.
+          Works anywhere in the world.
         </p>
         <div className="grid grid-cols-2 gap-2">
           <button
@@ -147,7 +147,7 @@ export function ControlPanel(props: ControlPanelProps) {
             className="flex items-center justify-center gap-1.5 rounded-sm border border-border px-2 py-1.5 text-xs hover:bg-secondary disabled:opacity-50"
           >
             <Upload className="size-3.5" />
-            Importar
+            Import
           </button>
           <button
             onClick={onClearArea}
@@ -155,7 +155,7 @@ export function ControlPanel(props: ControlPanelProps) {
             className="flex items-center justify-center gap-1.5 rounded-sm border border-border px-2 py-1.5 text-xs hover:bg-secondary disabled:opacity-40"
           >
             <Trash2 className="size-3.5" />
-            Limpar
+            Clear
           </button>
         </div>
         <div
@@ -173,9 +173,9 @@ export function ControlPanel(props: ControlPanelProps) {
           )}
           {hasArea
             ? activeExample
-              ? `Exemplo ${activeExample} carregado`
-              : "Area definida"
-            : "Nenhuma area definida"}
+              ? `Example ${activeExample} loaded`
+              : "Area defined"
+            : "No area defined"}
         </div>
 
         {/* Examples: secondary launcher, collapsed by default */}
@@ -185,7 +185,7 @@ export function ControlPanel(props: ControlPanelProps) {
             className="flex items-center gap-1.5 self-start text-[11px] text-muted-foreground hover:text-foreground"
           >
             <Layers className="size-3" />
-            Exemplos do artigo
+            Reference examples
             {showExamples ? (
               <ChevronLeft className="size-3 rotate-90" />
             ) : (
@@ -218,10 +218,10 @@ export function ControlPanel(props: ControlPanelProps) {
       <hr className="hairline" />
 
       {/* STEP 2 — period + scenes */}
-      <Section step="02" title="Periodo & cenas">
+      <Section step="02" title="Period & scenes">
         <div className="grid grid-cols-2 gap-2">
           <label className="flex flex-col gap-1">
-            <span className="eyebrow">inicio</span>
+            <span className="eyebrow">start</span>
             <input
               type="date"
               value={start}
@@ -231,7 +231,7 @@ export function ControlPanel(props: ControlPanelProps) {
             />
           </label>
           <label className="flex flex-col gap-1">
-            <span className="eyebrow">fim</span>
+            <span className="eyebrow">end</span>
             <input
               type="date"
               value={end}
@@ -243,7 +243,7 @@ export function ControlPanel(props: ControlPanelProps) {
         </div>
         <div className="flex flex-col gap-1">
           <div className="flex items-center justify-between">
-            <span className="eyebrow">nuvem maxima</span>
+            <span className="eyebrow">max cloud</span>
             <span className="telemetry text-xs text-foreground">{maxCloud}%</span>
           </div>
           <input
@@ -266,18 +266,18 @@ export function ControlPanel(props: ControlPanelProps) {
           ) : (
             <Circle className="size-3.5" />
           )}
-          Melhor cena por mes
+          Best scene per month
         </button>
       </Section>
 
       <hr className="hairline" />
 
       {/* STEP 3 — model */}
-      <Section step="03" title="Modelo">
+      <Section step="03" title="Model">
         <div className="grid grid-cols-2 gap-2">
           {(
             [
-              ["spectral", "Random Forest", "features espectro-temporais"],
+              ["spectral", "Random Forest", "spectro-temporal features"],
               ["prithvi", "Prithvi-EO 2.0", "embeddings (NASA/IBM)"],
             ] as const
           ).map(([m, label, sub]) => (
@@ -304,8 +304,8 @@ export function ControlPanel(props: ControlPanelProps) {
             <div className="grid grid-cols-2 gap-2">
               {(
                 [
-                  ["pixel", "Pixel", "10 m, comparavel ao RF"],
-                  ["patch", "Patch", "~160 m, contexto espacial"],
+                  ["pixel", "Pixel", "10 m, comparable to RF"],
+                  ["patch", "Patch", "~160 m, spatial context"],
                 ] as const
               ).map(([m, label, sub]) => (
                 <button
@@ -325,8 +325,8 @@ export function ControlPanel(props: ControlPanelProps) {
               ))}
             </div>
             <p className="text-[10px] leading-relaxed text-muted-foreground">
-              Backbone congelado + Random Forest. A retencao temporal de soja usa
-              o modelo Random Forest; no Prithvi, apenas o mapa e produzido.
+              Frozen backbone + Random Forest. Temporal soybean retention uses the
+              Random Forest model; Prithvi produces the map only.
             </p>
           </div>
         )}
@@ -335,12 +335,12 @@ export function ControlPanel(props: ControlPanelProps) {
       <hr className="hairline" />
 
       {/* STEP 4 — mode */}
-      <Section step="04" title="Modo">
+      <Section step="04" title="Mode">
         <div className="grid grid-cols-2 gap-2">
           {(
             [
-              ["single", "Mapa", "empilhamento completo"],
-              ["temporal", "Temporal", "retencao cumulativa"],
+              ["single", "Map", "full temporal stack"],
+              ["temporal", "Temporal", "cumulative retention"],
             ] as const
           ).map(([m, label, sub]) => (
             <button
@@ -363,7 +363,7 @@ export function ControlPanel(props: ControlPanelProps) {
         </div>
         <div className="flex flex-col gap-1">
           <div className="flex items-center justify-between">
-            <span className="eyebrow">opacidade overlay</span>
+            <span className="eyebrow">overlay opacity</span>
             <span className="telemetry text-xs text-foreground">
               {Math.round(overlayOpacity * 100)}%
             </span>
@@ -384,7 +384,7 @@ export function ControlPanel(props: ControlPanelProps) {
         {running && (
           <div className="flex flex-col gap-1">
             <div className="flex items-center justify-between text-[11px] text-muted-foreground">
-              <span className="telemetry">{progressMsg || "processando"}</span>
+              <span className="telemetry">{progressMsg || "processing"}</span>
               <span className="telemetry text-primary">
                 {progress >= 0 ? `${progress}%` : "··"}
               </span>
@@ -405,12 +405,12 @@ export function ControlPanel(props: ControlPanelProps) {
           {running ? (
             <>
               <Loader2 className="size-4 animate-spin" />
-              Classificando
+              Classifying
             </>
           ) : (
             <>
               <Play className="size-4" />
-              Classificar
+              Classify
             </>
           )}
         </button>

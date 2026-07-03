@@ -204,14 +204,14 @@ export function MapView({
     <MapContainer center={center} zoom={4} className="h-full w-full" zoomControl={false}>
       <ZoomControl position="bottomright" />
       <LayersControl position="topright">
-        <LayersControl.BaseLayer checked name="Satelite">
+        <LayersControl.BaseLayer checked name="Satellite">
           <TileLayer
             attribution="Tiles &copy; Esri"
             url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
             maxZoom={19}
           />
         </LayersControl.BaseLayer>
-        <LayersControl.BaseLayer name="Mapa (OSM)">
+        <LayersControl.BaseLayer name="Map (OSM)">
           <TileLayer
             attribution="&copy; OpenStreetMap"
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"

@@ -58,7 +58,7 @@ function App() {
   useEffect(() => {
     ListEmbeddedAreas()
       .then((a) => setAreas((a ?? []) as unknown as Area[]))
-      .catch((e) => toast.error("Falha ao carregar exemplos: " + e))
+      .catch((e) => toast.error("Failed to load examples: " + e))
   }, [])
 
   useEffect(() => {
@@ -119,30 +119,30 @@ function App() {
             }
           }
         } catch (e) {
-          toast.error("Arquivo invalido: " + e)
+          toast.error("Invalid file: " + e)
           return
         }
         if (!geom) {
-          toast.error("Nenhum poligono encontrado no arquivo.")
+          toast.error("No polygon found in the file.")
           return
         }
         setActiveExample("")
         setCustomPolygon(geom)
-        toast.success("Poligono importado.")
+        toast.success("Polygon imported.")
       }
       input.click()
     } catch (e) {
-      toast.error("Falha ao importar: " + e)
+      toast.error("Import failed: " + e)
     }
   }
 
   const handleRun = async () => {
     if (!start || !end) {
-      toast.error("Defina o periodo de aquisicao.")
+      toast.error("Set the acquisition period.")
       return
     }
     if (!customPolygon && !activeExample) {
-      toast.error("Defina uma area: desenhe, busque ou carregue um exemplo.")
+      toast.error("Define an area: draw, search, or load an example.")
       return
     }
     setRunning(true)
@@ -167,9 +167,9 @@ function App() {
     try {
       const res = (await Predict(req as never)) as unknown as PredictResult
       setResult(res)
-      toast.success(`Classificacao concluida — ${res.n_dates} cenas.`)
+      toast.success(`Classification complete — ${res.n_dates} scenes.`)
     } catch (e) {
-      toast.error("Erro na inferencia: " + e)
+      toast.error("Inference error: " + e)
     } finally {
       setRunning(false)
     }

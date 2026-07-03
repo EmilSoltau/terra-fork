@@ -37,23 +37,23 @@ export function ResultsPanel({ result, onClose }: ResultsPanelProps) {
     >
       <div className="flex items-center justify-between px-3 py-2">
         <div className="flex items-baseline gap-2">
-          <span className="eyebrow !text-foreground">Resultado</span>
+          <span className="eyebrow !text-foreground">Result</span>
           <span className="telemetry text-[11px] text-muted-foreground">
-            {result.n_dates} cenas · {result.date_range[0]} → {result.date_range[1]}
+            {result.n_dates} scenes · {result.date_range[0]} → {result.date_range[1]}
           </span>
         </div>
         <div className="flex items-center gap-1">
           <button
             onClick={() => setCollapsed((c) => !c)}
             className="text-muted-foreground hover:text-foreground"
-            title={collapsed ? "Expandir" : "Recolher"}
+            title={collapsed ? "Expand" : "Collapse"}
           >
             {collapsed ? <ChevronUp className="size-4" /> : <ChevronDown className="size-4" />}
           </button>
           <button
             onClick={onClose}
             className="text-muted-foreground hover:text-foreground"
-            title="Fechar"
+            title="Close"
           >
             <X className="size-4" />
           </button>
@@ -66,7 +66,7 @@ export function ResultsPanel({ result, onClose }: ResultsPanelProps) {
           <div className={cn("grid gap-4 p-3", hasRetention ? "grid-cols-2" : "grid-cols-1")}>
             {/* Class distribution as horizontal proportion bars */}
             <div className="flex flex-col gap-2">
-              <span className="eyebrow">distribuicao por classe</span>
+              <span className="eyebrow">class distribution</span>
               <ul className="flex flex-col gap-1.5">
                 {result.class_stats.map((s) => (
                   <li key={s.class_id} className="flex items-center gap-2 text-xs">
@@ -94,7 +94,7 @@ export function ResultsPanel({ result, onClose }: ResultsPanelProps) {
 
             {hasRetention && (
               <div className="flex flex-col gap-2">
-                <span className="eyebrow">retencao de soja · empilhamento</span>
+                <span className="eyebrow">soybean retention · stacking</span>
                 <ResponsiveContainer width="100%" height={150}>
                   <LineChart data={chartData} margin={{ top: 5, right: 8, left: -18, bottom: 0 }}>
                     <CartesianGrid strokeDasharray="2 4" stroke="var(--hairline)" />
@@ -121,7 +121,7 @@ export function ResultsPanel({ result, onClose }: ResultsPanelProps) {
                     <Line
                       type="monotone"
                       dataKey="retencao"
-                      name="retencao %"
+                      name="retention %"
                       stroke="var(--primary)"
                       strokeWidth={1.8}
                       dot={{ r: 1.5 }}

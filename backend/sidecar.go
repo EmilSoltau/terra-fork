@@ -140,7 +140,7 @@ func (r *Runner) Predict(ctx context.Context, req PredictRequest) (*PredictResul
 		return nil, fmt.Errorf("model directory not found at %s", r.modelDir)
 	}
 	if strings.TrimSpace(req.Start) == "" || strings.TrimSpace(req.End) == "" {
-		return nil, fmt.Errorf("informe o periodo (data inicial e final)")
+		return nil, fmt.Errorf("set the acquisition period (start and end dates)")
 	}
 
 	mode := req.Mode
