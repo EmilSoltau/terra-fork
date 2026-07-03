@@ -57,13 +57,14 @@ warnings.filterwarnings('ignore')
 
 SOJA_CLASS_ID = 39
 
-# Class metadata used for labels and the overlay palette (from the notebooks).
+# Class metadata used for labels and the overlay palette (MapBiomas classes,
+# English labels).
 MAPBIOMAS_LEGEND = {
-    3: 'Formacao Florestal',
-    21: 'Mosaico Agric.-Pastagem',
-    25: 'Area nao Vegetada',
-    39: 'Soja',
-    41: 'Outras Lav. Temporarias',
+    3: 'Forest Formation',
+    21: 'Agriculture-Pasture Mosaic',
+    25: 'Non-vegetated Area',
+    39: 'Soybean',
+    41: 'Other Temporary Crops',
 }
 
 MAPBIOMAS_COLORS = {
@@ -177,20 +178,53 @@ def list_stac_products(polygon, start, end, tile_list=None, max_cloud=100.0,
             set (22 dates), keeping the temporal-statistic features comparable to
             the trained model. When False, all scenes below max_cloud are kept.
     """
+    import time
     import pystac_client
     import planetary_computer
 
     bounds = polygon.bounds
-    catalog = pystac_client.Client.open(stac_url, modifier=planetary_computer.sign_inplace)
-    search = catalog.search(
-        collections=[collection],
-        bbox=[bounds[0], bounds[1], bounds[2], bounds[3]],
-        datetime=f'{start}/{end}',
-        query={'eo:cloud_cover': {'lt': max_cloud}},
-    )
-    items = list(search.items())
 
-    bands = {'B02': 'B02', 'B03': 'B03', 'B04': 'B04', 'B08': 'B08'}
+    # The Planetary Computer STAC endpoint occasionally returns transient 5xx
+    # (502/503/504) or times out under load. Retry the catalog open + search +
+    # item paging with exponential backoff so a momentary outage does not abort
+    # the whole run.
+    attempts = 4
+    items = None
+    last_err = None
+    for attempt in range(attempts):
+        try:
+            catalog = pystac_client.Client.open(
+                stac_url, modifier=planetary_computer.sign_inplace
+            )
+            search = catalog.search(
+                collections=[collection],
+                bbox=[bounds[0], bounds[1], bounds[2], bounds[3]],
+                datetime=f'{start}/{end}',
+                query={'eo:cloud_cover': {'lt': max_cloud}},
+            )
+            items = list(search.items())  # triggers HTTP paging
+            break
+        except Exception as e:
+            last_err = e
+            if attempt < attempts - 1:
+                wait = 2 ** attempt  # 1s, 2s, 4s
+                sys.stderr.write(json.dumps({
+                    'progress': -1,
+                    'msg': f'STAC unavailable, retrying in {wait}s ({attempt + 1}/{attempts})',
+                }) + '\n')
+                sys.stderr.flush()
+                time.sleep(wait)
+    if items is None:
+        raise RuntimeError(
+            'the Sentinel-2 STAC service (Planetary Computer) is temporarily '
+            'unavailable; please try again in a moment'
+        ) from last_err
+
+    # B02/B03/B04/B08 are required by the spectral model; B8A/B11/B12 are also
+    # collected (present in Planetary Computer assets) so the Prithvi path has
+    # its six bands. Missing extra bands do not drop the scene.
+    required_bands = ['B02', 'B03', 'B04', 'B08']
+    extra_bands = ['B8A', 'B11', 'B12']
     products = {}
     for item in items:
         props = item.properties
@@ -207,13 +241,16 @@ def list_stac_products(polygon, start, end, tile_list=None, max_cloud=100.0,
 
         assets = {}
         ok = True
-        for band, key in bands.items():
-            if key not in item.assets:
+        for band in required_bands:
+            if band not in item.assets:
                 ok = False
                 break
-            assets[band] = item.assets[key].href
+            assets[band] = item.assets[band].href
         if not ok:
             continue
+        for band in extra_bands:
+            if band in item.assets:
+                assets[band] = item.assets[band].href
 
         # Deduplicate by date, preferring tile_list order, then lower cloud cover.
         if date_str in products:
@@ -554,7 +591,7 @@ def class_statistics(classification_map):
         cls_id = int(cls_id)
         stats.append({
             'class_id': cls_id,
-            'name': MAPBIOMAS_LEGEND.get(cls_id, f'Classe {cls_id}'),
+            'name': MAPBIOMAS_LEGEND.get(cls_id, f'Class {cls_id}'),
             'color': MAPBIOMAS_COLORS.get(cls_id, '#cccccc'),
             'pixels': int(count),
             'pct': float(round(100.0 * count / total, 2)),
