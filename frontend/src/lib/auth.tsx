@@ -1,0 +1,194 @@
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+} from "react"
+import { toast } from "sonner"
+import {
+  CurrentUser,
+  GetPreferences,
+  ListRuns,
+  Login,
+  Logout,
+  Register,
+  SavePreferences,
+  UpdateProfile,
+} from "../../wailsjs/go/main/App"
+import type { InferenceRun, Preferences, User } from "@/lib/types"
+
+export type AppScreen = "map" | "auth" | "profile" | "settings"
+
+interface AuthContextValue {
+  user: User | null
+  prefs: Preferences | null
+  runs: InferenceRun[]
+  loading: boolean
+  screen: AppScreen
+  goMap: () => void
+  goAuth: () => void
+  goProfile: () => void
+  goSettings: () => void
+  navigate: (screen: AppScreen) => void
+  login: (email: string, password: string) => Promise<void>
+  register: (email: string, password: string, displayName: string) => Promise<void>
+  logout: () => Promise<void>
+  updateProfile: (displayName: string, avatarPath?: string) => Promise<void>
+  savePrefs: (prefs: Preferences) => Promise<void>
+  refreshRuns: () => Promise<void>
+}
+
+const AuthContext = createContext<AuthContextValue | null>(null)
+
+export function AuthProvider({
+  children,
+  onPrefsApplied,
+}: {
+  children: ReactNode
+  onPrefsApplied?: (p: Preferences) => void
+}) {
+  const [user, setUser] = useState<User | null>(null)
+  const [prefs, setPrefs] = useState<Preferences | null>(null)
+  const [runs, setRuns] = useState<InferenceRun[]>([])
+  const [loading, setLoading] = useState(true)
+  const [screen, setScreen] = useState<AppScreen>("map")
+
+  const loadPrefsAndRuns = useCallback(
+    async (u: User) => {
+      try {
+        const p = (await GetPreferences()) as unknown as Preferences
+        setPrefs(p)
+        onPrefsApplied?.(p)
+      } catch {
+        setPrefs(null)
+      }
+      try {
+        const r = (await ListRuns(20)) as unknown as InferenceRun[]
+        setRuns(r ?? [])
+      } catch {
+        setRuns([])
+      }
+      void u
+    },
+    [onPrefsApplied]
+  )
+
+  useEffect(() => {
+    CurrentUser()
+      .then(async (u) => {
+        const raw = u as User | null
+        const next = raw?.id ? raw : null
+        setUser(next)
+        if (next) await loadPrefsAndRuns(next)
+      })
+      .catch(() => setUser(null))
+      .finally(() => setLoading(false))
+  }, [loadPrefsAndRuns])
+
+  const login = useCallback(
+    async (email: string, password: string) => {
+      const u = (await Login(email, password)) as unknown as User
+      setUser(u)
+      await loadPrefsAndRuns(u)
+      setScreen("map")
+      toast.success(`Welcome back, ${u.display_name}.`)
+    },
+    [loadPrefsAndRuns]
+  )
+
+  const register = useCallback(
+    async (email: string, password: string, displayName: string) => {
+      const u = (await Register(email, password, displayName)) as unknown as User
+      setUser(u)
+      await loadPrefsAndRuns(u)
+      setScreen("map")
+      toast.success("Account created.")
+    },
+    [loadPrefsAndRuns]
+  )
+
+  const logout = useCallback(async () => {
+    await Logout()
+    setUser(null)
+    setPrefs(null)
+    setRuns([])
+    setScreen("map")
+    toast.success("Signed out.")
+  }, [])
+
+  const updateProfile = useCallback(async (displayName: string, avatarPath = "") => {
+    const u = (await UpdateProfile(displayName, avatarPath)) as unknown as User
+    setUser(u)
+    toast.success("Profile updated.")
+  }, [])
+
+  const savePrefs = useCallback(
+    async (p: Preferences) => {
+      await SavePreferences(p as never)
+      setPrefs(p)
+      onPrefsApplied?.(p)
+      toast.success("Preferences saved.")
+    },
+    [onPrefsApplied]
+  )
+
+  const refreshRuns = useCallback(async () => {
+    if (!user) return
+    try {
+      const r = (await ListRuns(20)) as unknown as InferenceRun[]
+      setRuns(r ?? [])
+    } catch {
+      /* ignore */
+    }
+  }, [user])
+
+  const goProfile = useCallback(() => {
+    setScreen(user ? "profile" : "auth")
+  }, [user])
+
+  const value = useMemo<AuthContextValue>(
+    () => ({
+      user,
+      prefs,
+      runs,
+      loading,
+      screen,
+      goMap: () => setScreen("map"),
+      goAuth: () => setScreen("auth"),
+      goProfile,
+      goSettings: () => setScreen(user ? "settings" : "auth"),
+      navigate: setScreen,
+      login,
+      register,
+      logout,
+      updateProfile,
+      savePrefs,
+      refreshRuns,
+    }),
+    [
+      user,
+      prefs,
+      runs,
+      loading,
+      screen,
+      goProfile,
+      login,
+      register,
+      logout,
+      updateProfile,
+      savePrefs,
+      refreshRuns,
+    ]
+  )
+
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
+}
+
+export function useAuth() {
+  const ctx = useContext(AuthContext)
+  if (!ctx) throw new Error("useAuth must be used within AuthProvider")
+  return ctx
+}
