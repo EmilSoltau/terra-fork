@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from "react"
-import { Camera, History, LogOut, Save, Trash2, UserRound } from "lucide-react"
+import { Camera, History, LogOut, Save, Trash2 } from "lucide-react"
 import { useAuth } from "@/lib/auth"
+import { AvatarCircle } from "@/components/AvatarCircle"
+import type { Preferences } from "@/lib/types"
 
 const MAX_AVATAR_BYTES = 2_000_000
 
@@ -8,14 +10,19 @@ export function ProfilePage() {
   const {
     user,
     runs,
+    prefs,
     logout,
     updateProfile,
     setAvatar,
     clearAvatar,
+    savePrefs,
     refreshRuns,
     goAuth,
   } = useAuth()
   const [name, setName] = useState("")
+  const [model, setModel] = useState("spectral")
+  const [opacity, setOpacity] = useState(0.75)
+  const [theme, setTheme] = useState("dark")
   const [busy, setBusy] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
 
@@ -28,9 +35,16 @@ export function ProfilePage() {
     void refreshRuns()
   }, [user, goAuth, refreshRuns])
 
+  useEffect(() => {
+    if (!prefs) return
+    setModel(prefs.default_model || "spectral")
+    setOpacity(prefs.overlay_opacity ?? 0.75)
+    setTheme(prefs.theme || "dark")
+  }, [prefs])
+
   if (!user) return null
 
-  const save = async () => {
+  const saveAccount = async () => {
     if (!name.trim()) return
     setBusy(true)
     try {
@@ -40,14 +54,26 @@ export function ProfilePage() {
     }
   }
 
+  const savePreferences = async () => {
+    setBusy(true)
+    try {
+      const next: Preferences = {
+        user_id: user.id,
+        default_model: model,
+        overlay_opacity: opacity,
+        theme,
+        extras_json: prefs?.extras_json || "{}",
+      }
+      await savePrefs(next)
+    } finally {
+      setBusy(false)
+    }
+  }
+
   const onPickPhoto = async (file: File | null) => {
     if (!file) return
-    if (!file.type.startsWith("image/")) {
-      return
-    }
-    if (file.size > MAX_AVATAR_BYTES) {
-      return
-    }
+    if (!file.type.startsWith("image/")) return
+    if (file.size > MAX_AVATAR_BYTES) return
     setBusy(true)
     try {
       const dataURI = await readAsDataURL(file)
@@ -122,11 +148,63 @@ export function ProfilePage() {
             <button
               type="button"
               disabled={busy || !name.trim()}
-              onClick={() => void save()}
+              onClick={() => void saveAccount()}
               className="flex h-9 w-fit items-center justify-center gap-1.5 rounded-sm bg-primary px-4 text-xs font-semibold text-primary-foreground disabled:opacity-60"
             >
               <Save className="h-3 w-3" />
               Save profile
+            </button>
+          </div>
+        </section>
+
+        <section className="rounded-md border border-border bg-card/40 p-5">
+          <p className="eyebrow mb-4">Preferences</p>
+          <div className="flex flex-col gap-4">
+            <label className="flex flex-col gap-1">
+              <span className="eyebrow">Default model</span>
+              <select
+                className="field-input"
+                value={model}
+                onChange={(e) => setModel(e.target.value)}
+              >
+                <option value="spectral">Random Forest (spectral)</option>
+                <option value="prithvi">Prithvi-EO 2.0</option>
+              </select>
+            </label>
+
+            <label className="flex flex-col gap-1">
+              <span className="eyebrow">Overlay opacity · {opacity.toFixed(2)}</span>
+              <input
+                type="range"
+                min={0.2}
+                max={1}
+                step={0.05}
+                value={opacity}
+                onChange={(e) => setOpacity(Number(e.target.value))}
+                className="w-full"
+              />
+            </label>
+
+            <label className="flex flex-col gap-1">
+              <span className="eyebrow">Theme</span>
+              <select
+                className="field-input"
+                value={theme}
+                onChange={(e) => setTheme(e.target.value)}
+              >
+                <option value="dark">Dark</option>
+                <option value="system">System</option>
+              </select>
+            </label>
+
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => void savePreferences()}
+              className="flex h-9 w-fit items-center justify-center gap-1.5 rounded-sm bg-primary px-4 text-xs font-semibold text-primary-foreground disabled:opacity-60"
+            >
+              <Save className="h-3 w-3" />
+              Save preferences
             </button>
           </div>
         </section>
@@ -183,30 +261,4 @@ function readAsDataURL(file: File): Promise<string> {
     reader.onerror = () => reject(reader.error)
     reader.readAsDataURL(file)
   })
-}
-
-export function AvatarCircle({
-  uri,
-  size = "md",
-}: {
-  uri?: string
-  size?: "sm" | "md" | "lg"
-}) {
-  const dim = size === "lg" ? "h-16 w-16" : size === "sm" ? "h-7 w-7" : "h-10 w-10"
-  if (uri) {
-    return (
-      <img
-        src={uri}
-        alt=""
-        className={`${dim} shrink-0 rounded-full border border-border object-cover`}
-      />
-    )
-  }
-  return (
-    <span
-      className={`${dim} flex shrink-0 items-center justify-center rounded-full border border-border bg-secondary text-muted-foreground`}
-    >
-      <UserRound className={size === "lg" ? "h-7 w-7" : "h-3.5 w-3.5"} />
-    </span>
-  )
 }

@@ -28,7 +28,7 @@ export function TitleBar({ view, result }: TitleBarProps) {
       <div className="flex items-center gap-3">
         <div className="flex items-center gap-2">
           <img
-            src="/geosense-dark.png"
+            src="/terra-logo.png"
             alt=""
             className="h-7 w-7 object-contain"
           />
@@ -40,9 +40,7 @@ export function TitleBar({ view, result }: TitleBarProps) {
             ? "land cover · sentinel-2"
             : screen === "auth"
               ? "sign in"
-              : screen === "profile"
-                ? "profile"
-                : "settings"}
+              : "profile"}
         </span>
       </div>
 

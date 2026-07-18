@@ -20,7 +20,6 @@ import { AppSidebar } from "@/components/AppSidebar"
 import { MapScreen } from "@/pages/MapScreen"
 import { AuthPage } from "@/pages/AuthPage"
 import { ProfilePage } from "@/pages/ProfilePage"
-import { SettingsPage } from "@/pages/SettingsPage"
 
 function defaultPeriod(): { start: string; end: string } {
   const now = new Date()
@@ -321,7 +320,6 @@ function AppBody(props: {
           )}
           {screen === "auth" && <AuthPage />}
           {screen === "profile" && <ProfilePage />}
-          {screen === "settings" && <SettingsPage />}
         </div>
       </div>
     </div>
