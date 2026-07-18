@@ -290,19 +290,21 @@ export namespace store {
 	    email: string;
 	    display_name: string;
 	    avatar_path?: string;
+	    avatar_uri?: string;
 	    created_at: string;
 	    updated_at: string;
-	
+
 	    static createFrom(source: any = {}) {
 	        return new User(source);
 	    }
-	
+
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.id = source["id"];
 	        this.email = source["email"];
 	        this.display_name = source["display_name"];
 	        this.avatar_path = source["avatar_path"];
+	        this.avatar_uri = source["avatar_uri"];
 	        this.created_at = source["created_at"];
 	        this.updated_at = source["updated_at"];
 	    }

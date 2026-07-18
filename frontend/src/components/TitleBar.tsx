@@ -26,8 +26,12 @@ export function TitleBar({ view, result }: TitleBarProps) {
   return (
     <header className="app-draggable flex h-11 shrink-0 items-center justify-between border-b border-border bg-card/60 pl-20 pr-2 backdrop-blur">
       <div className="flex items-center gap-3">
-        <div className="flex items-center gap-1.5">
-          <span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-primary" />
+        <div className="flex items-center gap-2">
+          <img
+            src="/geosense-dark.png"
+            alt=""
+            className="h-7 w-7 object-contain"
+          />
           <span className="text-sm font-semibold tracking-[0.18em]">GEOSENSE</span>
         </div>
         <span className="hairline h-4 w-px self-center border-l" />

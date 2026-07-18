@@ -3,6 +3,8 @@
 import {store} from '../models';
 import {backend} from '../models';
 
+export function ClearAvatar():Promise<store.User>;
+
 export function CurrentUser():Promise<store.User>;
 
 export function GeocodeSearch(arg1:string):Promise<Array<backend.GeocodeResult>>;
@@ -25,4 +27,6 @@ export function Register(arg1:string,arg2:string,arg3:string):Promise<store.User
 
 export function SavePreferences(arg1:store.Preferences):Promise<void>;
 
-export function UpdateProfile(arg1:string,arg2:string):Promise<store.User>;
+export function SetAvatar(arg1:string):Promise<store.User>;
+
+export function UpdateProfile(arg1:string):Promise<store.User>;

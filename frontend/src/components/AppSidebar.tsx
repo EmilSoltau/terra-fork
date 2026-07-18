@@ -1,6 +1,7 @@
 import { Map, UserRound, Settings, LogIn, Github } from "lucide-react"
 import { useAuth } from "@/lib/auth"
 import { cn } from "@/lib/utils"
+import { AvatarCircle } from "@/components/AvatarCircle"
 
 interface AppSidebarProps {
   onOpenRepo: () => void
@@ -11,6 +12,19 @@ export function AppSidebar({ onOpenRepo }: AppSidebarProps) {
 
   return (
     <aside className="app-no-drag flex w-14 shrink-0 flex-col items-center border-r border-border bg-card/50 py-3 backdrop-blur">
+      <button
+        type="button"
+        title="Map"
+        onClick={goMap}
+        className="mb-3 flex h-10 w-10 items-center justify-center rounded-sm hover:bg-secondary/60"
+      >
+        <img
+          src="/geosense-dark.png"
+          alt="GeoSense"
+          className="h-8 w-8 object-contain"
+        />
+      </button>
+
       <nav className="flex flex-1 flex-col items-center gap-1">
         <NavItem
           active={screen === "map"}
@@ -25,7 +39,9 @@ export function AppSidebar({ onOpenRepo }: AppSidebarProps) {
               title={user ? "Profile" : "Sign in"}
               onClick={() => (user ? goProfile() : goAuth())}
               icon={
-                user ? (
+                user?.avatar_uri ? (
+                  <AvatarCircle uri={user.avatar_uri} size="sm" />
+                ) : user ? (
                   <UserRound className="h-4 w-4" />
                 ) : (
                   <LogIn className="h-4 w-4" />

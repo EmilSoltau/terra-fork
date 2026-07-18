@@ -9,6 +9,7 @@ import {
 } from "react"
 import { toast } from "sonner"
 import {
+  ClearAvatar,
   CurrentUser,
   GetPreferences,
   ListRuns,
@@ -16,6 +17,7 @@ import {
   Logout,
   Register,
   SavePreferences,
+  SetAvatar,
   UpdateProfile,
 } from "../../wailsjs/go/main/App"
 import type { InferenceRun, Preferences, User } from "@/lib/types"
@@ -36,7 +38,9 @@ interface AuthContextValue {
   login: (email: string, password: string) => Promise<void>
   register: (email: string, password: string, displayName: string) => Promise<void>
   logout: () => Promise<void>
-  updateProfile: (displayName: string, avatarPath?: string) => Promise<void>
+  updateProfile: (displayName: string) => Promise<void>
+  setAvatar: (dataURI: string) => Promise<void>
+  clearAvatar: () => Promise<void>
   savePrefs: (prefs: Preferences) => Promise<void>
   refreshRuns: () => Promise<void>
 }
@@ -119,10 +123,22 @@ export function AuthProvider({
     toast.success("Signed out.")
   }, [])
 
-  const updateProfile = useCallback(async (displayName: string, avatarPath = "") => {
-    const u = (await UpdateProfile(displayName, avatarPath)) as unknown as User
+  const updateProfile = useCallback(async (displayName: string) => {
+    const u = (await UpdateProfile(displayName)) as unknown as User
     setUser(u)
     toast.success("Profile updated.")
+  }, [])
+
+  const setAvatar = useCallback(async (dataURI: string) => {
+    const u = (await SetAvatar(dataURI)) as unknown as User
+    setUser(u)
+    toast.success("Photo updated.")
+  }, [])
+
+  const clearAvatar = useCallback(async () => {
+    const u = (await ClearAvatar()) as unknown as User
+    setUser(u)
+    toast.success("Photo removed.")
   }, [])
 
   const savePrefs = useCallback(
@@ -165,6 +181,8 @@ export function AuthProvider({
       register,
       logout,
       updateProfile,
+      setAvatar,
+      clearAvatar,
       savePrefs,
       refreshRuns,
     }),
@@ -179,6 +197,8 @@ export function AuthProvider({
       register,
       logout,
       updateProfile,
+      setAvatar,
+      clearAvatar,
       savePrefs,
       refreshRuns,
     ]

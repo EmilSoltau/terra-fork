@@ -82,6 +82,7 @@ export interface User {
   email: string
   display_name: string
   avatar_path?: string
+  avatar_uri?: string
   created_at: string
   updated_at: string
 }
