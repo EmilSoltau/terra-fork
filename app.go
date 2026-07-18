@@ -188,8 +188,8 @@ func (a *App) CurrentUser() *store.User {
 	return a.currentUser
 }
 
-// UpdateProfile updates the display name (avatarPath optional).
-func (a *App) UpdateProfile(displayName, avatarPath string) (*store.User, error) {
+// UpdateProfile updates the display name.
+func (a *App) UpdateProfile(displayName string) (*store.User, error) {
 	if err := a.requireStore(); err != nil {
 		return nil, err
 	}
@@ -199,7 +199,49 @@ func (a *App) UpdateProfile(displayName, avatarPath string) (*store.User, error)
 	if u == nil {
 		return nil, store.ErrUnauthorized
 	}
-	updated, err := a.store.UpdateProfile(u.ID, displayName, avatarPath)
+	updated, err := a.store.UpdateProfile(u.ID, displayName)
+	if err != nil {
+		return nil, mapStoreErr(err)
+	}
+	a.mu.Lock()
+	a.currentUser = updated
+	a.mu.Unlock()
+	return updated, nil
+}
+
+// SetAvatar saves a profile photo from a browser data URI (data:image/...;base64,...).
+func (a *App) SetAvatar(dataURI string) (*store.User, error) {
+	if err := a.requireStore(); err != nil {
+		return nil, err
+	}
+	a.mu.RLock()
+	u := a.currentUser
+	a.mu.RUnlock()
+	if u == nil {
+		return nil, store.ErrUnauthorized
+	}
+	updated, err := a.store.SetAvatarFromDataURI(u.ID, dataURI)
+	if err != nil {
+		return nil, mapStoreErr(err)
+	}
+	a.mu.Lock()
+	a.currentUser = updated
+	a.mu.Unlock()
+	return updated, nil
+}
+
+// ClearAvatar removes the current user's profile photo.
+func (a *App) ClearAvatar() (*store.User, error) {
+	if err := a.requireStore(); err != nil {
+		return nil, err
+	}
+	a.mu.RLock()
+	u := a.currentUser
+	a.mu.RUnlock()
+	if u == nil {
+		return nil, store.ErrUnauthorized
+	}
+	updated, err := a.store.ClearAvatar(u.ID)
 	if err != nil {
 		return nil, mapStoreErr(err)
 	}

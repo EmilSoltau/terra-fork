@@ -2,6 +2,7 @@ package store
 
 import (
 	"database/sql"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -31,6 +32,7 @@ type User struct {
 	Email       string `json:"email"`
 	DisplayName string `json:"display_name"`
 	AvatarPath  string `json:"avatar_path,omitempty"`
+	AvatarURI   string `json:"avatar_uri,omitempty"` // data URI for the WebView
 	CreatedAt   string `json:"created_at"`
 	UpdatedAt   string `json:"updated_at"`
 }
@@ -184,6 +186,7 @@ func (s *Store) Register(email, password, displayName string) (*User, string, er
 		return nil, "", err
 	}
 	u := &User{ID: id, Email: email, DisplayName: displayName, CreatedAt: ts, UpdatedAt: ts}
+	s.hydrateAvatarURI(u)
 	if err := s.writeSessionFile(token); err != nil {
 		return u, token, nil // user created; session file is best-effort
 	}
@@ -218,6 +221,7 @@ func (s *Store) Login(email, password string) (*User, string, error) {
 		return nil, "", err
 	}
 	_ = s.writeSessionFile(token)
+	s.hydrateAvatarURI(&u)
 	return &u, token, nil
 }
 
@@ -283,6 +287,7 @@ func (s *Store) UserFromSession(token string) (*User, error) {
 		_, _ = s.db.Exec(`DELETE FROM sessions WHERE token = ?`, token)
 		return nil, ErrUnauthorized
 	}
+	s.hydrateAvatarURI(&u)
 	return &u, nil
 }
 
@@ -301,16 +306,16 @@ func (s *Store) RestoreSession() (*User, string, error) {
 	return u, token, nil
 }
 
-// UpdateProfile updates display name (and optional avatar path).
-func (s *Store) UpdateProfile(userID, displayName, avatarPath string) (*User, error) {
+// UpdateProfile updates the display name only (avatar via SetAvatar/ClearAvatar).
+func (s *Store) UpdateProfile(userID, displayName string) (*User, error) {
 	displayName = strings.TrimSpace(displayName)
 	if userID == "" || displayName == "" {
 		return nil, ErrInvalidInput
 	}
 	ts := nowISO()
 	_, err := s.db.Exec(
-		`UPDATE users SET display_name = ?, avatar_path = ?, updated_at = ? WHERE id = ?`,
-		displayName, nullIfEmpty(avatarPath), ts, userID,
+		`UPDATE users SET display_name = ?, updated_at = ? WHERE id = ?`,
+		displayName, ts, userID,
 	)
 	if err != nil {
 		return nil, err
@@ -325,6 +330,128 @@ func nullIfEmpty(s string) any {
 	return s
 }
 
+func (s *Store) avatarDir() string {
+	return filepath.Join(s.dataDir, "avatars")
+}
+
+func (s *Store) hydrateAvatarURI(u *User) {
+	if u == nil || u.AvatarPath == "" {
+		return
+	}
+	path := u.AvatarPath
+	if !filepath.IsAbs(path) {
+		path = filepath.Join(s.dataDir, path)
+	}
+	b, err := os.ReadFile(path)
+	if err != nil || len(b) == 0 {
+		return
+	}
+	mime := "image/jpeg"
+	ext := strings.ToLower(filepath.Ext(path))
+	switch ext {
+	case ".png":
+		mime = "image/png"
+	case ".webp":
+		mime = "image/webp"
+	case ".gif":
+		mime = "image/gif"
+	}
+	u.AvatarURI = "data:" + mime + ";base64," + base64.StdEncoding.EncodeToString(b)
+}
+
+// SetAvatarFromDataURI saves a profile photo from a browser data URI.
+func (s *Store) SetAvatarFromDataURI(userID, dataURI string) (*User, error) {
+	if userID == "" || !strings.HasPrefix(dataURI, "data:image/") {
+		return nil, ErrInvalidInput
+	}
+	comma := strings.Index(dataURI, ",")
+	if comma < 0 {
+		return nil, ErrInvalidInput
+	}
+	meta := dataURI[5:comma] // image/png;base64
+	payload := dataURI[comma+1:]
+	if !strings.Contains(meta, "base64") {
+		return nil, ErrInvalidInput
+	}
+	mime := strings.Split(meta, ";")[0]
+	ext := ".jpg"
+	switch mime {
+	case "image/png":
+		ext = ".png"
+	case "image/webp":
+		ext = ".webp"
+	case "image/gif":
+		ext = ".gif"
+	case "image/jpeg", "image/jpg":
+		ext = ".jpg"
+	default:
+		return nil, ErrInvalidInput
+	}
+	raw, err := base64.StdEncoding.DecodeString(payload)
+	if err != nil {
+		return nil, ErrInvalidInput
+	}
+	// Cap at ~2.5 MiB decoded.
+	if len(raw) == 0 || len(raw) > 2_500_000 {
+		return nil, ErrInvalidInput
+	}
+	if err := os.MkdirAll(s.avatarDir(), 0o700); err != nil {
+		return nil, err
+	}
+	rel := filepath.Join("avatars", userID+ext)
+	abs := filepath.Join(s.dataDir, rel)
+	// Remove previous avatar files for this user (any extension).
+	if matches, _ := filepath.Glob(filepath.Join(s.avatarDir(), userID+".*")); len(matches) > 0 {
+		for _, m := range matches {
+			_ = os.Remove(m)
+		}
+	}
+	if err := os.WriteFile(abs, raw, 0o600); err != nil {
+		return nil, err
+	}
+	ts := nowISO()
+	_, err = s.db.Exec(
+		`UPDATE users SET avatar_path = ?, updated_at = ? WHERE id = ?`,
+		rel, ts, userID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	return s.GetUser(userID)
+}
+
+// ClearAvatar removes the profile photo.
+func (s *Store) ClearAvatar(userID string) (*User, error) {
+	if userID == "" {
+		return nil, ErrInvalidInput
+	}
+	u, err := s.GetUser(userID)
+	if err != nil {
+		return nil, err
+	}
+	if u.AvatarPath != "" {
+		path := u.AvatarPath
+		if !filepath.IsAbs(path) {
+			path = filepath.Join(s.dataDir, path)
+		}
+		_ = os.Remove(path)
+	}
+	if matches, _ := filepath.Glob(filepath.Join(s.avatarDir(), userID+".*")); len(matches) > 0 {
+		for _, m := range matches {
+			_ = os.Remove(m)
+		}
+	}
+	ts := nowISO()
+	_, err = s.db.Exec(
+		`UPDATE users SET avatar_path = NULL, updated_at = ? WHERE id = ?`,
+		ts, userID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	return s.GetUser(userID)
+}
+
 func (s *Store) GetUser(id string) (*User, error) {
 	var u User
 	err := s.db.QueryRow(
@@ -337,6 +464,7 @@ func (s *Store) GetUser(id string) (*User, error) {
 	if err != nil {
 		return nil, err
 	}
+	s.hydrateAvatarURI(&u)
 	return &u, nil
 }
 
