@@ -171,3 +171,22 @@
   border-radius: 4px;
 }
 .panel-scroll::-webkit-scrollbar-track { background: transparent; }
+
+/* Shared form field for auth/profile panels */
+.field-input {
+  height: 2rem;
+  width: 100%;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--input);
+  background: transparent;
+  padding: 0 0.5rem;
+  font-size: 0.75rem;
+  color: var(--foreground);
+  outline: none;
+}
+.field-input:focus {
+  border-color: var(--ring);
+}
+.field-input::placeholder {
+  color: var(--muted-foreground);
+}

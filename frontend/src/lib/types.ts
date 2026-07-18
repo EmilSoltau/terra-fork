@@ -76,3 +76,35 @@ export interface GeocodeResult {
   lon: number
   bounding_box: number[]
 }
+
+export interface User {
+  id: string
+  email: string
+  display_name: string
+  avatar_path?: string
+  avatar_uri?: string
+  created_at: string
+  updated_at: string
+}
+
+export interface Preferences {
+  user_id: string
+  default_model: string
+  overlay_opacity: number
+  theme: string
+  extras_json?: string
+}
+
+export interface InferenceRun {
+  id: string
+  user_id: string
+  created_at: string
+  model_kind: string
+  period_start: string
+  period_end: string
+  polygon_geojson: string
+  status: string
+  summary: string
+  overlay_relpath?: string
+  n_dates: number
+}

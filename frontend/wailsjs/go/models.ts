@@ -231,3 +231,84 @@ export namespace backend {
 
 }
 
+export namespace store {
+	
+	export class InferenceRun {
+	    id: string;
+	    user_id: string;
+	    created_at: string;
+	    model_kind: string;
+	    period_start: string;
+	    period_end: string;
+	    polygon_geojson: string;
+	    status: string;
+	    summary: string;
+	    overlay_relpath?: string;
+	    n_dates: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new InferenceRun(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.user_id = source["user_id"];
+	        this.created_at = source["created_at"];
+	        this.model_kind = source["model_kind"];
+	        this.period_start = source["period_start"];
+	        this.period_end = source["period_end"];
+	        this.polygon_geojson = source["polygon_geojson"];
+	        this.status = source["status"];
+	        this.summary = source["summary"];
+	        this.overlay_relpath = source["overlay_relpath"];
+	        this.n_dates = source["n_dates"];
+	    }
+	}
+	export class Preferences {
+	    user_id: string;
+	    default_model: string;
+	    overlay_opacity: number;
+	    theme: string;
+	    extras_json?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new Preferences(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.user_id = source["user_id"];
+	        this.default_model = source["default_model"];
+	        this.overlay_opacity = source["overlay_opacity"];
+	        this.theme = source["theme"];
+	        this.extras_json = source["extras_json"];
+	    }
+	}
+	export class User {
+	    id: string;
+	    email: string;
+	    display_name: string;
+	    avatar_path?: string;
+	    avatar_uri?: string;
+	    created_at: string;
+	    updated_at: string;
+
+	    static createFrom(source: any = {}) {
+	        return new User(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.email = source["email"];
+	        this.display_name = source["display_name"];
+	        this.avatar_path = source["avatar_path"];
+	        this.avatar_uri = source["avatar_uri"];
+	        this.created_at = source["created_at"];
+	        this.updated_at = source["updated_at"];
+	    }
+	}
+
+}
+
