@@ -4,6 +4,9 @@
     <meta charset="UTF-8"/>
     <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
     <title>geosense-infer</title>
+    <!-- Must run before Leaflet loads: PointerEvent exists in WKWebView/desktop
+         and would otherwise set L.Browser.touch=true, closing polygons at 3 pts. -->
+    <script>window.L_NO_TOUCH = true</script>
 </head>
 <body>
 <div id="root"></div>

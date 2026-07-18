@@ -1,47 +1,123 @@
 import L from "leaflet"
 import "leaflet-draw"
 
-// Compatibility patch for leaflet-draw 1.0.4 running on leaflet 1.9.x.
+// Compatibility patch for leaflet-draw 1.0.4 on Leaflet 1.9.x / Wails WKWebView.
 //
-// leaflet-draw 1.0.4 was built against leaflet 1.7. Its L.Draw.Polyline._endPoint
-// contains a touch-device shortcut:
+// Symptoms: after the 3rd vertex, further clicks appear to "finish" the polygon.
+// Runtime evidence showed the handler stayed active; clicks were dropped because
+// dragCheckDistance exceeded leaflet-draw's 9*dpr threshold (e.g. 44 > 18 on
+// retina) once the filled triangle was on screen.
 //
-//     else if (lastPtDistance < 10 && L.Browser.touch) { this._finishShape(); }
-//
-// In leaflet 1.9.x, L.Browser.touch is defined as
-//     !window.L_NO_TOUCH && (touchNative || pointer)
-// with pointer = !!window.PointerEvent. window.PointerEvent exists in modern
-// WebKit/WKWebView (and Chromium) on non-touch desktop hardware, so
-// L.Browser.touch evaluates true on desktop. The shortcut, intended only for
-// touchscreens, then fires on ordinary mouse clicks: any click within 10
-// container-pixels of the polygon's first vertex calls _finishShape(), and once
-// 3 markers exist the polygon closes (L.Draw.Polygon._shapeIsValid requires
-// markers.length >= 3). Result: polygons auto-finish at the 3rd vertex.
-//
-// This patch disables only that proximity-based touch shortcut by returning
-// Infinity from _calculateFinishDistance, so the `< 10` branch is never taken.
-// All explicit finish paths remain intact:
-//   - clicking the first marker (polygon) or last marker (polyline) -> _finishShape
-//     (wired by _updateFinishHandler, independent of this distance check)
-//   - double-clicking the last marker -> _finishShape
-//   - the toolbar Finish action -> _finishShape
-//   - the maxPoints cap branch in _endPoint (uses options.maxPoints, not distance)
-//
-// Reference: Leaflet/Leaflet.draw issue family on "polygon closes after 3 points
-// with Leaflet 1.8+". leaflet-draw 1.0.4 is the final release and unmaintained,
-// so the fix is applied on the consumer side at runtime.
+// Also harden against WKWebView PointerEvent quirks:
+//   - L_NO_TOUCH / Browser.touch=false (also set early in index.html)
+//   - No-op _onTouch (pointer→touch synthesis)
+//   - _endPoint always adds a vertex when latlng is present (map pan is off)
+//   - Polygon finish only via first-marker click or toolbar Finish (no dblclick)
+
+window.L_NO_TOUCH = true
+
+const browser = (L as unknown as { Browser?: { touch?: boolean } }).Browser
+if (browser) {
+  browser.touch = false
+}
+
+type DrawHandler = {
+  _markers?: L.Marker[]
+  _finishIgnoreUntil?: number
+  _shapeIsValid?: () => boolean
+  _fireCreatedEvent?: () => void
+  disable?: () => void
+  enable?: () => void
+  options?: { allowIntersection?: boolean; repeatMode?: boolean; maxPoints?: number }
+  _poly?: {
+    _defaultShape?: () => L.LatLng[]
+    getLatLngs: () => L.LatLng[]
+    newLatLngIntersects: (latlng: L.LatLng) => boolean
+  }
+  _showErrorTooltip?: () => void
+  addVertex?: (latlng: L.LatLng) => void
+  _enableNewMarkers?: () => void
+  _mouseDownOrigin?: L.Point | null
+  _finishShape?: () => void
+  type?: string
+}
 
 type DrawPolylineCtor = {
-  prototype: {
+  prototype: DrawHandler & {
     _calculateFinishDistance?: (potentialLatLng: L.LatLng) => number
+    _onTouch?: (e: L.LeafletEvent) => void
+    _endPoint?: (clientX: number, clientY: number, e: L.LeafletEvent) => void
+    _finishShape?: () => void
   }
 }
 
-const LDraw = (L as unknown as { Draw?: { Polyline?: DrawPolylineCtor } }).Draw
+type DrawPolygonCtor = {
+  prototype: DrawHandler & {
+    _updateFinishHandler?: () => void
+  }
+}
+
+const LDraw = (
+  L as unknown as {
+    Draw?: { Polyline?: DrawPolylineCtor; Polygon?: DrawPolygonCtor }
+  }
+).Draw
 
 if (LDraw?.Polyline?.prototype) {
-  LDraw.Polyline.prototype._calculateFinishDistance = function (): number {
+  const proto = LDraw.Polyline.prototype
+
+  proto._calculateFinishDistance = function (): number {
     return Infinity
+  }
+
+  proto._onTouch = function (): void {}
+
+  proto._endPoint = function (
+    this: DrawHandler,
+    _clientX: number,
+    _clientY: number,
+    e: L.LeafletEvent
+  ): void {
+    if (!this._mouseDownOrigin) return
+
+    const latlng = (e as L.LeafletMouseEvent).latlng
+    // Do not gate on drag distance: after ≥3 vertices the filled shape makes
+    // mousedown/mouseup deltas routinely exceed leaflet-draw's 9*dpr limit.
+    if (latlng) {
+      this._finishIgnoreUntil = Date.now() + 50
+      this.addVertex?.(latlng)
+    }
+    this._enableNewMarkers?.()
+    this._mouseDownOrigin = null
+  }
+
+  const originalFinish = proto._finishShape
+  proto._finishShape = function (this: DrawHandler): void {
+    if (this._finishIgnoreUntil && Date.now() < this._finishIgnoreUntil) {
+      return
+    }
+    if (typeof originalFinish === "function") {
+      originalFinish.call(this)
+    }
+  }
+}
+
+if (LDraw?.Polygon?.prototype) {
+  LDraw.Polygon.prototype._updateFinishHandler = function (this: DrawHandler): void {
+    const markers = this._markers
+    if (!markers) return
+
+    // Click first vertex to close (defer so the creating click cannot fire it).
+    if (markers.length === 1) {
+      const marker = markers[0]
+      const finish = this._finishShape
+      if (finish) {
+        window.setTimeout(() => {
+          marker.on("click", finish, this)
+        }, 100)
+      }
+    }
+    // Intentionally omit dblclick → finish (WKWebView/trackpad false positives).
   }
 }
 

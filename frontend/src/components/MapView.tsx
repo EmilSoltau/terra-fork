@@ -109,7 +109,13 @@ function DrawControl({
     const drawControl = new (L as any).Control.Draw({
       position: "bottomright",
       draw: {
-        polygon: { allowIntersection: false, showArea: true },
+        polygon: {
+          allowIntersection: false,
+          showArea: true,
+          // Keep the in-progress shape from stealing mouseup/mousedown while
+          // placing vertices 4+ (filled triangle is a large hit target).
+          shapeOptions: { interactive: false },
+        },
         polyline: false,
         rectangle: false,
         circle: false,

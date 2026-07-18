@@ -1,6 +1,8 @@
 import { createRoot } from "react-dom/client"
 import { ThemeProvider } from "next-themes"
 import { Toaster } from "sonner"
+// Apply leaflet-draw touch/desktop patch as early as possible (also set in index.html).
+import "./components/leafletDrawPatch"
 import "./index.css"
 import App from "./App"
 
