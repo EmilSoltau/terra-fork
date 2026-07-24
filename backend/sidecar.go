@@ -301,15 +301,40 @@ func (r *Runner) Predict(ctx context.Context, req PredictRequest) (*PredictResul
 	if err != nil {
 		return nil, fmt.Errorf("failed to read overlay: %w", err)
 	}
+	confidenceURI := ""
+	if sres.ConfidencePNG != "" {
+		if uri, cerr := pngToDataURI(sres.ConfidencePNG); cerr == nil {
+			confidenceURI = uri
+		}
+	}
+	ndviMeanURI := ""
+	if sres.NDVIMeanPNG != "" {
+		if uri, cerr := pngToDataURI(sres.NDVIMeanPNG); cerr == nil {
+			ndviMeanURI = uri
+		}
+	}
+	referenceURI := ""
+	if sres.ReferencePNG != "" {
+		if uri, cerr := pngToDataURI(sres.ReferencePNG); cerr == nil {
+			referenceURI = uri
+		}
+	}
 
 	result := &PredictResult{
-		Extent:     sres.Extent,
-		OverlayURI: overlayURI,
-		RasterTIF:  sres.RasterTIF,
-		NDates:     sres.NDates,
-		DateRange:  sres.DateRange,
-		ClassStats: sres.ClassStats,
-		Temporal:   sres.Temporal,
+		Extent:          sres.Extent,
+		OverlayURI:      overlayURI,
+		ConfidenceURI:   confidenceURI,
+		NDVIMeanURI:     ndviMeanURI,
+		ReferenceURI:    referenceURI,
+		RasterTIF:       sres.RasterTIF,
+		MeanConfidence:  sres.MeanConfidence,
+		NDates:          sres.NDates,
+		DateRange:       sres.DateRange,
+		ClassStats:      sres.ClassStats,
+		Temporal:        sres.Temporal,
+		VISeries:        sres.VISeries,
+		Phenology:       sres.Phenology,
+		PhenologyStates: sres.PhenologyStates,
 	}
 	if result.DateRange == nil {
 		result.DateRange = []string{}
@@ -319,6 +344,12 @@ func (r *Runner) Predict(ctx context.Context, req PredictRequest) (*PredictResul
 	}
 	if result.Temporal == nil {
 		result.Temporal = []TemporalPoint{}
+	}
+	if result.VISeries == nil {
+		result.VISeries = []VISeriesPoint{}
+	}
+	if result.PhenologyStates == nil {
+		result.PhenologyStates = []PhenologyStatePoint{}
 	}
 	return result, nil
 }
