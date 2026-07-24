@@ -10,6 +10,10 @@ export function CurrentUser() {
   return window['go']['main']['App']['CurrentUser']();
 }
 
+export function ExportClassification(arg1) {
+  return window['go']['main']['App']['ExportClassification'](arg1);
+}
+
 export function GeocodeSearch(arg1) {
   return window['go']['main']['App']['GeocodeSearch'](arg1);
 }
@@ -24,6 +28,10 @@ export function ListEmbeddedAreas() {
 
 export function ListRuns(arg1) {
   return window['go']['main']['App']['ListRuns'](arg1);
+}
+
+export function LoadAnalysis(arg1) {
+  return window['go']['main']['App']['LoadAnalysis'](arg1);
 }
 
 export function Login(arg1, arg2) {

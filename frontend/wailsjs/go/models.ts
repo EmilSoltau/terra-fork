@@ -243,8 +243,11 @@ export namespace store {
 	    polygon_geojson: string;
 	    status: string;
 	    summary: string;
+	    result_json?: string;
 	    overlay_relpath?: string;
+	    assets_relpath?: string;
 	    n_dates: number;
+	    label?: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new InferenceRun(source);
@@ -261,8 +264,11 @@ export namespace store {
 	        this.polygon_geojson = source["polygon_geojson"];
 	        this.status = source["status"];
 	        this.summary = source["summary"];
+	        this.result_json = source["result_json"];
 	        this.overlay_relpath = source["overlay_relpath"];
+	        this.assets_relpath = source["assets_relpath"];
 	        this.n_dates = source["n_dates"];
+	        this.label = source["label"];
 	    }
 	}
 	export class Preferences {

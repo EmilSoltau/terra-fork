@@ -4,12 +4,17 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"io"
 	"os"
+	"path/filepath"
+	"strings"
 	"sync"
 
 	"geosense-infer/backend"
 	"geosense-infer/backend/store"
 
+	"github.com/google/uuid"
 	wruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
@@ -32,6 +37,7 @@ func NewApp() *App {
 // startup is called when the app starts; it saves the context and builds the runner.
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
+	wruntime.WindowMaximise(ctx)
 	appDir, err := os.Getwd()
 	if err != nil {
 		appDir = "."
@@ -77,35 +83,194 @@ func (a *App) Predict(req backend.PredictRequest) (*backend.PredictResult, error
 	return res, nil
 }
 
+// ExportClassification copies the classification GeoTIFF to a user-chosen path.
+func (a *App) ExportClassification(rasterPath string) (string, error) {
+	if strings.TrimSpace(rasterPath) == "" {
+		return "", errors.New("no raster to export")
+	}
+	if _, err := os.Stat(rasterPath); err != nil {
+		return "", errors.New("classification raster not found (run Classify first)")
+	}
+	dest, err := wruntime.SaveFileDialog(a.ctx, wruntime.SaveDialogOptions{
+		Title:           "Export classification GeoTIFF",
+		DefaultFilename: "geosense_classification.tif",
+		Filters: []wruntime.FileFilter{
+			{DisplayName: "GeoTIFF", Pattern: "*.tif;*.tiff"},
+		},
+	})
+	if err != nil {
+		return "", err
+	}
+	if dest == "" {
+		return "", nil
+	}
+	in, err := os.Open(rasterPath)
+	if err != nil {
+		return "", err
+	}
+	defer in.Close()
+	out, err := os.Create(dest)
+	if err != nil {
+		return "", err
+	}
+	defer out.Close()
+	if _, err := io.Copy(out, in); err != nil {
+		return "", err
+	}
+	return dest, nil
+}
+
 func (a *App) persistRunIfLoggedIn(req backend.PredictRequest, res *backend.PredictResult) {
+	a.persistAnalysis(req, res)
+}
+
+func (a *App) persistAnalysis(req backend.PredictRequest, res *backend.PredictResult) {
 	a.mu.RLock()
 	user := a.currentUser
 	st := a.store
 	a.mu.RUnlock()
-	if user == nil || st == nil || res == nil {
+	if st == nil || res == nil {
 		return
 	}
+	userID := store.LocalUserID
+	if user != nil {
+		userID = user.ID
+	}
+
+	runID := uuid.NewString()
+	assetsRel := filepath.Join("runs", runID)
+	assetsDir := st.RunsDir(runID)
+	_ = os.MkdirAll(assetsDir, 0o700)
+
+	_ = store.WriteDataURIFile(res.OverlayURI, filepath.Join(assetsDir, "overlay.png"))
+	_ = store.WriteDataURIFile(res.ConfidenceURI, filepath.Join(assetsDir, "confidence.png"))
+	_ = store.WriteDataURIFile(res.NDVIMeanURI, filepath.Join(assetsDir, "ndvi_mean.png"))
+	_ = store.WriteDataURIFile(res.ReferenceURI, filepath.Join(assetsDir, "reference.png"))
+	rasterRel := ""
+	if strings.TrimSpace(res.RasterTIF) != "" {
+		dest := filepath.Join(assetsDir, "classification.tif")
+		if err := store.WriteDataURIFile(res.RasterTIF, dest); err == nil {
+			rasterRel = filepath.Join(assetsRel, "classification.tif")
+		}
+	}
+
+	// Persist result without bulky data URIs; assets restored on load.
+	stored := *res
+	stored.OverlayURI = ""
+	stored.ConfidenceURI = ""
+	stored.NDVIMeanURI = ""
+	stored.ReferenceURI = ""
+	if rasterRel != "" {
+		stored.RasterTIF = rasterRel
+	} else {
+		stored.RasterTIF = ""
+	}
+	resultBytes, _ := json.Marshal(stored)
+
 	poly := ""
 	if req.PolygonGeoJSON != nil {
 		if b, err := json.Marshal(req.PolygonGeoJSON); err == nil {
 			poly = string(b)
 		}
+	} else if req.AreaID != "" {
+		poly = fmt.Sprintf(`{"area_id":%q}`, req.AreaID)
+	}
+	label := req.AreaID
+	if label == "" {
+		label = "Custom AOI"
 	}
 	summary, _ := json.Marshal(map[string]any{
-		"class_stats": res.ClassStats,
-		"date_range":  res.DateRange,
-		"n_dates":     res.NDates,
+		"class_stats":      res.ClassStats,
+		"date_range":       res.DateRange,
+		"n_dates":          res.NDates,
+		"mean_confidence":  res.MeanConfidence,
+		"area_id":          req.AreaID,
+		"has_reference":    res.ReferenceURI != "",
+		"has_ndvi_mean":    res.NDVIMeanURI != "",
 	})
+
 	_, _ = st.SaveRun(store.InferenceRun{
-		UserID:         user.ID,
+		ID:             runID,
+		UserID:         userID,
 		ModelKind:      req.ModelKind,
 		PeriodStart:    req.Start,
 		PeriodEnd:      req.End,
 		PolygonGeoJSON: poly,
 		Status:         "ok",
 		SummaryJSON:    string(summary),
+		ResultJSON:     string(resultBytes),
+		OverlayRelPath: filepath.Join(assetsRel, "overlay.png"),
+		AssetsRelPath:  assetsRel,
 		NDates:         res.NDates,
+		Label:          label,
 	})
+}
+
+// ListRuns returns recent inference runs (signed-in user, or local guest).
+func (a *App) ListRuns(limit int) ([]store.InferenceRun, error) {
+	if err := a.requireStore(); err != nil {
+		return nil, err
+	}
+	a.mu.RLock()
+	u := a.currentUser
+	a.mu.RUnlock()
+	userID := store.LocalUserID
+	if u != nil {
+		userID = u.ID
+	}
+	return a.store.ListRuns(userID, limit)
+}
+
+// LoadAnalysis restores a saved PredictResult (with image data URIs) by run id.
+func (a *App) LoadAnalysis(runID string) (*backend.PredictResult, error) {
+	if err := a.requireStore(); err != nil {
+		return nil, err
+	}
+	a.mu.RLock()
+	u := a.currentUser
+	a.mu.RUnlock()
+	userID := store.LocalUserID
+	if u != nil {
+		userID = u.ID
+	}
+	run, err := a.store.GetRun(userID, runID)
+	if err != nil {
+		// Also try local bucket if signed-in user has no match (legacy local saves).
+		if u != nil {
+			run, err = a.store.GetRun(store.LocalUserID, runID)
+		}
+		if err != nil {
+			return nil, mapStoreErr(err)
+		}
+	}
+	var res backend.PredictResult
+	if run.ResultJSON != "" && run.ResultJSON != "{}" {
+		_ = json.Unmarshal([]byte(run.ResultJSON), &res)
+	}
+	assetsDir := a.store.RunsDir(run.ID)
+	if uri, err := store.ReadFileDataURI(filepath.Join(assetsDir, "overlay.png"), "image/png"); err == nil {
+		res.OverlayURI = uri
+	}
+	if uri, err := store.ReadFileDataURI(filepath.Join(assetsDir, "confidence.png"), "image/png"); err == nil {
+		res.ConfidenceURI = uri
+	}
+	if uri, err := store.ReadFileDataURI(filepath.Join(assetsDir, "ndvi_mean.png"), "image/png"); err == nil {
+		res.NDVIMeanURI = uri
+	}
+	if uri, err := store.ReadFileDataURI(filepath.Join(assetsDir, "reference.png"), "image/png"); err == nil {
+		res.ReferenceURI = uri
+	}
+	tif := filepath.Join(assetsDir, "classification.tif")
+	if _, err := os.Stat(tif); err == nil {
+		res.RasterTIF = tif
+	}
+	if res.DateRange == nil {
+		res.DateRange = []string{run.PeriodStart, run.PeriodEnd}
+	}
+	if res.NDates == 0 {
+		res.NDates = run.NDates
+	}
+	return &res, nil
 }
 
 // GeocodeSearch resolves a place name to candidate locations (OSM Nominatim).
@@ -278,20 +443,6 @@ func (a *App) SavePreferences(prefs store.Preferences) error {
 	}
 	prefs.UserID = u.ID
 	return a.store.SavePreferences(prefs)
-}
-
-// ListRuns returns recent inference runs for the logged-in user.
-func (a *App) ListRuns(limit int) ([]store.InferenceRun, error) {
-	if err := a.requireStore(); err != nil {
-		return nil, err
-	}
-	a.mu.RLock()
-	u := a.currentUser
-	a.mu.RUnlock()
-	if u == nil {
-		return nil, store.ErrUnauthorized
-	}
-	return a.store.ListRuns(u.ID, limit)
 }
 
 func mapStoreErr(err error) error {

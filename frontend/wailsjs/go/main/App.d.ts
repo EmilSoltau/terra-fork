@@ -7,6 +7,8 @@ export function ClearAvatar():Promise<store.User>;
 
 export function CurrentUser():Promise<store.User>;
 
+export function ExportClassification(arg1:string):Promise<string>;
+
 export function GeocodeSearch(arg1:string):Promise<Array<backend.GeocodeResult>>;
 
 export function GetPreferences():Promise<store.Preferences>;
@@ -14,6 +16,8 @@ export function GetPreferences():Promise<store.Preferences>;
 export function ListEmbeddedAreas():Promise<Array<backend.Area>>;
 
 export function ListRuns(arg1:number):Promise<Array<store.InferenceRun>>;
+
+export function LoadAnalysis(arg1:string):Promise<backend.PredictResult>;
 
 export function Login(arg1:string,arg2:string):Promise<store.User>;
 

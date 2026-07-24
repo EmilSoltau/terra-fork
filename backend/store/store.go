@@ -57,9 +57,16 @@ type InferenceRun struct {
 	PolygonGeoJSON string `json:"polygon_geojson"`
 	Status         string `json:"status"`
 	SummaryJSON    string `json:"summary"`
+	ResultJSON     string `json:"result_json,omitempty"`
 	OverlayRelPath string `json:"overlay_relpath,omitempty"`
+	AssetsRelPath  string `json:"assets_relpath,omitempty"`
 	NDates         int    `json:"n_dates"`
+	Label          string `json:"label,omitempty"`
 }
+
+// LocalUserID owns analyses saved when nobody is signed in.
+const LocalUserID = "00000000-0000-0000-0000-000000000001"
+const LocalUserEmail = "local@geosense.local"
 
 // Store is the local SQLite-backed user database.
 type Store struct {
@@ -141,7 +148,37 @@ CREATE INDEX IF NOT EXISTS idx_runs_user_created ON inference_runs(user_id, crea
 	if _, err := s.db.Exec(schema); err != nil {
 		return fmt.Errorf("migrate: %w", err)
 	}
+	// Additive columns for full analysis persistence (ignore if already present).
+	for _, stmt := range []string{
+		`ALTER TABLE inference_runs ADD COLUMN result_json TEXT NOT NULL DEFAULT '{}'`,
+		`ALTER TABLE inference_runs ADD COLUMN assets_relpath TEXT`,
+		`ALTER TABLE inference_runs ADD COLUMN label TEXT NOT NULL DEFAULT ''`,
+	} {
+		_, _ = s.db.Exec(stmt)
+	}
+	if err := s.ensureLocalUser(); err != nil {
+		return err
+	}
 	return nil
+}
+
+func (s *Store) ensureLocalUser() error {
+	var n int
+	_ = s.db.QueryRow(`SELECT COUNT(1) FROM users WHERE id = ?`, LocalUserID).Scan(&n)
+	if n > 0 {
+		return nil
+	}
+	ts := nowISO()
+	hash, err := bcrypt.GenerateFromPassword([]byte(uuid.NewString()), bcrypt.DefaultCost)
+	if err != nil {
+		return err
+	}
+	_, err = s.db.Exec(
+		`INSERT OR IGNORE INTO users (id, email, display_name, password_hash, created_at, updated_at)
+		 VALUES (?, ?, 'Local', ?, ?, ?)`,
+		LocalUserID, LocalUserEmail, string(hash), ts, ts,
+	)
+	return err
 }
 
 func nowISO() string {
@@ -541,12 +578,20 @@ func (s *Store) SaveRun(run InferenceRun) (*InferenceRun, error) {
 	if !json.Valid([]byte(run.SummaryJSON)) {
 		run.SummaryJSON = "{}"
 	}
+	if run.ResultJSON == "" {
+		run.ResultJSON = "{}"
+	}
+	if !json.Valid([]byte(run.ResultJSON)) {
+		run.ResultJSON = "{}"
+	}
 	_, err := s.db.Exec(
 		`INSERT INTO inference_runs
-		 (id, user_id, created_at, model_kind, period_start, period_end, polygon_geojson, status, summary_json, overlay_relpath, n_dates)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		 (id, user_id, created_at, model_kind, period_start, period_end, polygon_geojson, status,
+		  summary_json, overlay_relpath, n_dates, result_json, assets_relpath, label)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		run.ID, run.UserID, run.CreatedAt, run.ModelKind, run.PeriodStart, run.PeriodEnd,
 		run.PolygonGeoJSON, run.Status, run.SummaryJSON, nullIfEmpty(run.OverlayRelPath), run.NDates,
+		run.ResultJSON, nullIfEmpty(run.AssetsRelPath), run.Label,
 	)
 	if err != nil {
 		return nil, err
@@ -555,12 +600,16 @@ func (s *Store) SaveRun(run InferenceRun) (*InferenceRun, error) {
 }
 
 func (s *Store) ListRuns(userID string, limit int) ([]InferenceRun, error) {
+	if userID == "" {
+		userID = LocalUserID
+	}
 	if limit <= 0 || limit > 100 {
 		limit = 20
 	}
 	rows, err := s.db.Query(
 		`SELECT id, user_id, created_at, model_kind, period_start, period_end, polygon_geojson,
-		        status, summary_json, COALESCE(overlay_relpath,''), n_dates
+		        status, summary_json, COALESCE(overlay_relpath,''), n_dates,
+		        COALESCE(result_json,'{}'), COALESCE(assets_relpath,''), COALESCE(label,'')
 		 FROM inference_runs WHERE user_id = ?
 		 ORDER BY created_at DESC LIMIT ?`,
 		userID, limit,
@@ -575,10 +624,79 @@ func (s *Store) ListRuns(userID string, limit int) ([]InferenceRun, error) {
 		if err := rows.Scan(
 			&r.ID, &r.UserID, &r.CreatedAt, &r.ModelKind, &r.PeriodStart, &r.PeriodEnd,
 			&r.PolygonGeoJSON, &r.Status, &r.SummaryJSON, &r.OverlayRelPath, &r.NDates,
+			&r.ResultJSON, &r.AssetsRelPath, &r.Label,
 		); err != nil {
 			return nil, err
 		}
 		out = append(out, r)
 	}
 	return out, rows.Err()
+}
+
+func (s *Store) GetRun(userID, runID string) (*InferenceRun, error) {
+	if userID == "" {
+		userID = LocalUserID
+	}
+	var r InferenceRun
+	err := s.db.QueryRow(
+		`SELECT id, user_id, created_at, model_kind, period_start, period_end, polygon_geojson,
+		        status, summary_json, COALESCE(overlay_relpath,''), n_dates,
+		        COALESCE(result_json,'{}'), COALESCE(assets_relpath,''), COALESCE(label,'')
+		 FROM inference_runs WHERE id = ? AND user_id = ?`,
+		runID, userID,
+	).Scan(
+		&r.ID, &r.UserID, &r.CreatedAt, &r.ModelKind, &r.PeriodStart, &r.PeriodEnd,
+		&r.PolygonGeoJSON, &r.Status, &r.SummaryJSON, &r.OverlayRelPath, &r.NDates,
+		&r.ResultJSON, &r.AssetsRelPath, &r.Label,
+	)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &r, nil
+}
+
+func (s *Store) RunsDir(runID string) string {
+	return filepath.Join(s.dataDir, "runs", runID)
+}
+
+// WriteDataURIFile decodes a data URI (or copies a filesystem path) into dest.
+func WriteDataURIFile(src, dest string) error {
+	if strings.TrimSpace(src) == "" {
+		return nil
+	}
+	if err := os.MkdirAll(filepath.Dir(dest), 0o700); err != nil {
+		return err
+	}
+	if strings.HasPrefix(src, "data:") {
+		idx := strings.Index(src, ",")
+		if idx < 0 {
+			return fmt.Errorf("invalid data uri")
+		}
+		raw, err := base64.StdEncoding.DecodeString(src[idx+1:])
+		if err != nil {
+			return err
+		}
+		return os.WriteFile(dest, raw, 0o600)
+	}
+	// Treat as filesystem path.
+	in, err := os.ReadFile(src)
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(dest, in, 0o600)
+}
+
+// ReadFileDataURI reads a file and returns a PNG/TIFF-agnostic data URI (image/png default).
+func ReadFileDataURI(path, mime string) (string, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return "", err
+	}
+	if mime == "" {
+		mime = "image/png"
+	}
+	return "data:" + mime + ";base64," + base64.StdEncoding.EncodeToString(data), nil
 }

@@ -16,11 +16,12 @@ func main() {
 	app := NewApp()
 
 	err := wails.Run(&options.App{
-		Title:     "geosense-infer",
-		Width:     1280,
-		Height:    860,
-		MinWidth:  1000,
-		MinHeight: 700,
+		Title:            "geosense-infer",
+		Width:            1280,
+		Height:           860,
+		MinWidth:         1000,
+		MinHeight:        700,
+		WindowStartState: options.Maximised,
 		AssetServer: &assetserver.Options{
 			Assets: assets,
 		},
