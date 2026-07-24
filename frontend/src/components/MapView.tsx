@@ -75,6 +75,12 @@ function FitBounds({
   useEffect(() => {
     if (result) {
       const e = result.extent
+      if (
+        !e ||
+        (e.lon_min === 0 && e.lon_max === 0 && e.lat_min === 0 && e.lat_max === 0)
+      ) {
+        return
+      }
       map.fitBounds(
         [
           [e.lat_min, e.lon_min],
@@ -209,12 +215,22 @@ export function MapView({
 }: MapViewProps) {
   const center = useMemo<[number, number]>(() => [-14.5, -52], [])
 
+  const overlayUrl =
+    result?.overlay_uri || result?.lulc?.map_uri || result?.reference_uri || ""
   const overlayBounds: LatLngBoundsExpression | null = result
     ? [
         [result.extent.lat_min, result.extent.lon_min],
         [result.extent.lat_max, result.extent.lon_max],
       ]
     : null
+  const hasValidExtent =
+    !!result?.extent &&
+    !(
+      result.extent.lon_min === 0 &&
+      result.extent.lon_max === 0 &&
+      result.extent.lat_min === 0 &&
+      result.extent.lat_max === 0
+    )
 
   // Example outlines are shown only when no custom polygon is active, as faint
   // clickable shortcuts to the article's validated sites.
@@ -263,10 +279,10 @@ export function MapView({
           />
         ))}
 
-      {result && overlayBounds && (
-        <ImageOverlay url={result.overlay_uri} bounds={overlayBounds} opacity={overlayOpacity} />
+      {result && hasValidExtent && overlayBounds && overlayUrl && (
+        <ImageOverlay url={overlayUrl} bounds={overlayBounds} opacity={overlayOpacity} />
       )}
-      {result && overlayBounds && showConfidence && result.confidence_uri && (
+      {result && hasValidExtent && overlayBounds && showConfidence && result.confidence_uri && (
         <ImageOverlay
           url={result.confidence_uri}
           bounds={overlayBounds}

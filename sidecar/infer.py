@@ -837,12 +837,28 @@ def main():
     except Exception as e:
         fail(f'invalid request JSON: {e}')
 
+    action = req.get('action', 'predict')
+    work_dir = Path(req.get('work_dir', '.'))
+    work_dir.mkdir(parents=True, exist_ok=True)
+
+    # Standalone MapBiomas land-cover / land-use analysis (no Sentinel / model).
+    if action == 'lulc':
+        emit_progress(10, 'resolving MapBiomas for AOI')
+        try:
+            import lulc as lulc_mod
+            lulc = lulc_mod.analyze_from_request(req)
+        except Exception as e:
+            fail(f'LULC analysis failed: {e}')
+        emit_progress(100, 'done')
+        sys.stdout.write(json.dumps({'lulc': lulc}))
+        sys.stdout.flush()
+        return
+
     model_dir = Path(req.get('model_dir', ''))
     source = req.get('source', 'stac')  # 'stac' (cloud COG) or 'local' (.SAFE)
     sentinel_dir = Path(req.get('sentinel_dir', '')) if req.get('sentinel_dir') else None
     tiles = req.get('tiles') or None
     mode = req.get('mode', 'single')
-    work_dir = Path(req.get('work_dir', '.'))
     mapbiomas_path = req.get('mapbiomas_path')
     # STAC parameters (used when source == 'stac').
     start = req.get('start')
@@ -852,7 +868,6 @@ def main():
     # Model selection: 'spectral', 'prithvi', or 'temporal_transformer'.
     model_kind = req.get('model_kind', 'spectral')
     prithvi_mode = req.get('prithvi_mode', 'pixel')  # 'pixel' or 'patch'
-    work_dir.mkdir(parents=True, exist_ok=True)
 
     if source == 'stac':
         configure_gdal_for_cog()
@@ -917,16 +932,28 @@ def main():
         fail(f'failed to build reference grid: {e}')
 
     # Optional MapBiomas full map for reference panel + soja mask for retention.
+    # Embedded areas ship a local TIFF; custom AOIs in Brazil fetch the COG window.
     soja_mask = None
     mb_map = None
-    if mapbiomas_path and Path(mapbiomas_path).exists():
-        try:
-            mb_map = reproject_mapbiomas_to_grid(mapbiomas_path, ref_profile, ref_band)
+    try:
+        import lulc as lulc_mod
+        if mapbiomas_path and Path(mapbiomas_path).exists():
+            resolved_mb = mapbiomas_path
+        elif lulc_mod.polygon_in_brazil(polygon):
+            emit_progress(18, 'fetching MapBiomas COG for AOI')
+            resolved_mb = str(lulc_mod.fetch_mapbiomas_window(polygon, work_dir))
+            mapbiomas_path = resolved_mb
+        else:
+            resolved_mb = None
+        if resolved_mb:
+            mb_map = reproject_mapbiomas_to_grid(resolved_mb, ref_profile, ref_band)
             soja_mask = mb_map == SOJA_CLASS_ID
-            emit_progress(18, f'soja reference pixels: {int(np.sum(soja_mask))}')
-        except Exception as e:
-            sys.stderr.write(json.dumps({'progress': -1, 'msg': f'mapbiomas error: {e}'}) + '\n')
-            mb_map = None
+            emit_progress(20, f'soja reference pixels: {int(np.sum(soja_mask))}')
+    except Exception as e:
+        sys.stderr.write(json.dumps({'progress': -1, 'msg': f'mapbiomas error: {e}'}) + '\n')
+        sys.stderr.flush()
+        mb_map = None
+        soja_mask = None
 
     temporal = []
     confidence_map = None
@@ -1038,6 +1065,31 @@ def main():
         reference_path = str(reference_png)
     mean_conf = float(confidence_map[classification_map >= 0].mean()) if np.any(classification_map >= 0) else 0.0
 
+    lulc_payload = None
+    if mapbiomas_path and Path(mapbiomas_path).exists():
+        emit_progress(96, 'analyzing MapBiomas land cover / land use')
+        try:
+            import lulc as lulc_mod
+            # Prefer native MapBiomas clip for composition; attach pred-vs-ref
+            # when the reprojected reference grid is available.
+            ref_grid = mb_map if mb_map is not None else None
+            lulc_payload = lulc_mod.analyze_mapbiomas(
+                mapbiomas_path,
+                polygon,
+                work_dir=work_dir,
+                pred_map=classification_map if ref_grid is not None else None,
+                ref_on_pred_grid=None,  # composition from native clip
+            )
+            if ref_grid is not None:
+                # Overlay comparison on Sentinel grid (10 m → 0.01 ha/px).
+                compare = lulc_mod.pred_vs_ref_composition(classification_map, ref_grid)
+                lulc_payload['pred_vs_ref'] = compare
+        except Exception as e:
+            sys.stderr.write(json.dumps({
+                'progress': -1, 'msg': f'lulc analysis skipped: {e}'
+            }) + '\n')
+            sys.stderr.flush()
+
     lon_min, lon_max, lat_min, lat_max = get_map_extent(ref_profile)
 
     result = {
@@ -1061,6 +1113,7 @@ def main():
         'vi_series': vi_series,
         'phenology': phenology,
         'phenology_states': phenology_states,
+        'lulc': lulc_payload,
     }
 
     emit_progress(100, 'done')

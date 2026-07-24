@@ -52,6 +52,7 @@ type PredictRequest struct {
 
 // sidecarRequest is the JSON contract written to the Python sidecar stdin.
 type sidecarRequest struct {
+	Action         string           `json:"action,omitempty"`
 	ModelDir       string           `json:"model_dir"`
 	Source         string           `json:"source"`
 	Start          string           `json:"start,omitempty"`
@@ -117,6 +118,68 @@ type PhenologyStatePoint struct {
 	NDVIMean  *float64 `json:"ndvi_mean"`
 }
 
+// LULCClassRow is one MapBiomas class in the descriptive composition.
+type LULCClassRow struct {
+	ClassID int     `json:"class_id"`
+	Name    string  `json:"name"`
+	Color   string  `json:"color"`
+	Group   string  `json:"group"`
+	Pixels  int     `json:"pixels"`
+	Pct     float64 `json:"pct"`
+	AreaHa  float64 `json:"area_ha"`
+}
+
+// LULCGroupRow aggregates classes into land-use groups.
+type LULCGroupRow struct {
+	Group  string  `json:"group"`
+	Color  string  `json:"color"`
+	Pct    float64 `json:"pct"`
+	AreaHa float64 `json:"area_ha"`
+}
+
+// LULCMetrics summarizes diversity and dominance of the AOI composition.
+type LULCMetrics struct {
+	AreaHa        float64 `json:"area_ha"`
+	NPixels       int     `json:"n_pixels"`
+	NClasses      int     `json:"n_classes"`
+	ShannonH      float64 `json:"shannon_h"`
+	PielouJ       float64 `json:"pielou_j"`
+	DominantClass string  `json:"dominant_class"`
+	DominantPct   float64 `json:"dominant_pct"`
+	SojaPct       float64 `json:"soja_pct"`
+	OutrasLavPct  float64 `json:"outras_lav_pct"`
+	AgricolaPct   float64 `json:"agricola_pct"`
+}
+
+// LULCCompareRow compares MapBiomas vs predicted composition for one class.
+type LULCCompareRow struct {
+	ClassID int     `json:"class_id"`
+	Name    string  `json:"name"`
+	Color   string  `json:"color"`
+	PctRef  float64 `json:"pct_ref"`
+	PctPred float64 `json:"pct_pred"`
+}
+
+// LULCAnalysis is the descriptive land cover / land use payload.
+type LULCAnalysis struct {
+	Year        int              `json:"year"`
+	Source      string           `json:"source"`
+	MapURI      string           `json:"map_uri,omitempty"`
+	MapPNG      string           `json:"map_png,omitempty"`
+	Extent      Bounds           `json:"extent"`
+	Metrics     LULCMetrics      `json:"metrics"`
+	Composition []LULCClassRow   `json:"composition"`
+	Groups      []LULCGroupRow   `json:"groups"`
+	PredVsRef   []LULCCompareRow `json:"pred_vs_ref"`
+}
+
+// LULCRequest selects an embedded area (or explicit polygon + MapBiomas path).
+type LULCRequest struct {
+	AreaID         string           `json:"area_id"`
+	PolygonGeoJSON *GeoJSONGeometry `json:"polygon_geojson,omitempty"`
+	MapBiomasPath  string           `json:"mapbiomas_path,omitempty"`
+}
+
 // sidecarResult is the raw JSON returned by the sidecar on stdout.
 type sidecarResult struct {
 	Extent          Bounds                `json:"extent"`
@@ -133,6 +196,19 @@ type sidecarResult struct {
 	VISeries        []VISeriesPoint       `json:"vi_series"`
 	Phenology       PhenologyMetrics      `json:"phenology"`
 	PhenologyStates []PhenologyStatePoint `json:"phenology_states"`
+	LULC            *lulcSidecarPayload   `json:"lulc"`
+}
+
+// lulcSidecarPayload is the raw LULC block from Python (map as file path).
+type lulcSidecarPayload struct {
+	Year        int              `json:"year"`
+	Source      string           `json:"source"`
+	MapPNG      string           `json:"map_png"`
+	Extent      Bounds           `json:"extent"`
+	Metrics     LULCMetrics      `json:"metrics"`
+	Composition []LULCClassRow   `json:"composition"`
+	Groups      []LULCGroupRow   `json:"groups"`
+	PredVsRef   []LULCCompareRow `json:"pred_vs_ref"`
 }
 
 // PredictResult is returned to the frontend. The overlay is delivered as a
@@ -152,6 +228,7 @@ type PredictResult struct {
 	VISeries        []VISeriesPoint       `json:"vi_series"`
 	Phenology       PhenologyMetrics      `json:"phenology"`
 	PhenologyStates []PhenologyStatePoint `json:"phenology_states"`
+	LULC            *LULCAnalysis         `json:"lulc,omitempty"`
 }
 
 // ProgressEvent is emitted to the frontend as "predict:progress".

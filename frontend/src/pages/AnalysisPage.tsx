@@ -13,6 +13,7 @@ import {
 import { useAuth } from "@/lib/auth"
 import type { InferenceRun, PredictResult } from "@/lib/types"
 import { ExportClassification } from "../../wailsjs/go/main/App"
+import { LulcSection } from "@/components/LulcSection"
 
 const MAPBIOMAS_LEGEND = [
   { id: 3, name: "Forest Formation", color: "#006d2c" },
@@ -26,6 +27,7 @@ interface AnalysisPageProps {
   result: PredictResult | null
   modelKind: string
   areaLabel?: string
+  areaId?: string
   loadingRun?: boolean
   onOpenRun: (run: InferenceRun) => Promise<void>
 }
@@ -34,6 +36,7 @@ export function AnalysisPage({
   result,
   modelKind,
   areaLabel,
+  areaId,
   loadingRun,
   onOpenRun,
 }: AnalysisPageProps) {
@@ -73,6 +76,8 @@ export function AnalysisPage({
   const viSeries = result.vi_series ?? []
   const states = result.phenology_states ?? []
   const pheno = result.phenology
+  const lulc = result.lulc
+  const hasClassification = (result.n_dates ?? 0) > 0 || !!result.overlay_uri
   const viChart = viSeries.map((p) => ({
     date: p.date,
     ndvi: p.ndvi_mean,
@@ -112,14 +117,20 @@ export function AnalysisPage({
           <div>
             <p className="telemetry text-[10px] text-primary">ANALYSIS</p>
             <h1 className="mt-1 font-display text-xl font-semibold tracking-wide">
-              Cover map
+              {hasClassification ? "Cover map" : "Land cover / land use"}
               {areaLabel ? ` — ${areaLabel}` : ""}
             </h1>
             <p className="mt-1 text-xs text-muted-foreground">
-              {result.n_dates} scenes · {result.date_range[0]} → {result.date_range[1]} ·{" "}
-              {modelLabel}
-              {result.mean_confidence > 0 && (
-                <> · mean conf {(result.mean_confidence * 100).toFixed(0)}%</>
+              {hasClassification ? (
+                <>
+                  {result.n_dates} scenes · {result.date_range[0]} → {result.date_range[1]} ·{" "}
+                  {modelLabel}
+                  {result.mean_confidence > 0 && (
+                    <> · mean conf {(result.mean_confidence * 100).toFixed(0)}%</>
+                  )}
+                </>
+              ) : (
+                <>MapBiomas descriptive analysis · no Sentinel classification</>
               )}
             </p>
           </div>
@@ -132,17 +143,24 @@ export function AnalysisPage({
               <Play className="h-3 w-3" />
               Back to map
             </button>
-            <button
-              type="button"
-              onClick={() => void exportTif()}
-              className="flex h-8 items-center gap-1.5 rounded-sm bg-primary px-3 text-[11px] font-semibold text-primary-foreground"
-            >
-              <Download className="h-3 w-3" />
-              Export GeoTIFF
-            </button>
+            {hasClassification && result.raster_tif && (
+              <button
+                type="button"
+                onClick={() => void exportTif()}
+                className="flex h-8 items-center gap-1.5 rounded-sm bg-primary px-3 text-[11px] font-semibold text-primary-foreground"
+              >
+                <Download className="h-3 w-3" />
+                Export GeoTIFF
+              </button>
+            )}
           </div>
         </div>
 
+        {lulc && (
+          <LulcSection lulc={lulc} areaId={areaId} areaLabel={areaLabel} />
+        )}
+
+        {hasClassification && (
         <section className="rounded-md border border-border bg-card/40 p-4">
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
             <PanelTile
@@ -153,7 +171,7 @@ export function AnalysisPage({
             <PanelTile
               title="MapBiomas reference"
               uri={result.reference_uri}
-              empty="No MapBiomas for this AOI (use example A/B/C)"
+              empty="No MapBiomas for this AOI"
             />
             <PanelTile
               title={`Predicted · ${modelLabel}`}
@@ -175,9 +193,11 @@ export function AnalysisPage({
             ))}
           </div>
         </section>
+        )}
 
+        {hasClassification && result.class_stats?.length > 0 && (
         <section className="rounded-md border border-border bg-card/40 p-5">
-          <p className="eyebrow mb-3">Class distribution</p>
+          <p className="eyebrow mb-3">Predicted class distribution</p>
           <ul className="flex flex-col gap-1.5">
             {result.class_stats.map((s) => (
               <li key={s.class_id} className="flex items-center gap-2 text-xs">
@@ -200,6 +220,7 @@ export function AnalysisPage({
             ))}
           </ul>
         </section>
+        )}
 
         {viChart.length > 0 && (
           <section className="rounded-md border border-border bg-card/40 p-5">
@@ -232,7 +253,7 @@ export function AnalysisPage({
           </section>
         )}
 
-        {pheno && (
+        {pheno && hasClassification && (
           <section className="rounded-md border border-border bg-card/40 p-5">
             <p className="eyebrow mb-3">Phenology metrics · AOI NDVI</p>
             <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 lg:grid-cols-7">

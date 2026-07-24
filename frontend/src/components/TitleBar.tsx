@@ -64,7 +64,11 @@ export function TitleBar({ view, result }: TitleBarProps) {
               <>
                 <span className="hairline h-4 w-px self-center border-l" />
                 <span className="status-pill text-place/80">
-                  {result.n_dates} scenes · active
+                  {result.n_dates > 0
+                    ? `${result.n_dates} scenes · active`
+                    : result.lulc
+                      ? "MapBiomas · active"
+                      : "overlay · active"}
                 </span>
               </>
             )}

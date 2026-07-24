@@ -335,6 +335,7 @@ func (r *Runner) Predict(ctx context.Context, req PredictRequest) (*PredictResul
 		VISeries:        sres.VISeries,
 		Phenology:       sres.Phenology,
 		PhenologyStates: sres.PhenologyStates,
+		LULC:            convertLULC(sres.LULC),
 	}
 	if result.DateRange == nil {
 		result.DateRange = []string{}
@@ -352,6 +353,168 @@ func (r *Runner) Predict(ctx context.Context, req PredictRequest) (*PredictResul
 		result.PhenologyStates = []PhenologyStatePoint{}
 	}
 	return result, nil
+}
+
+func convertLULC(raw *lulcSidecarPayload) *LULCAnalysis {
+	if raw == nil {
+		return nil
+	}
+	out := &LULCAnalysis{
+		Year:        raw.Year,
+		Source:      raw.Source,
+		Extent:      raw.Extent,
+		Metrics:     raw.Metrics,
+		Composition: raw.Composition,
+		Groups:      raw.Groups,
+		PredVsRef:   raw.PredVsRef,
+	}
+	if out.Composition == nil {
+		out.Composition = []LULCClassRow{}
+	}
+	if out.Groups == nil {
+		out.Groups = []LULCGroupRow{}
+	}
+	if out.PredVsRef == nil {
+		out.PredVsRef = []LULCCompareRow{}
+	}
+	if raw.MapPNG != "" {
+		if uri, err := pngToDataURI(raw.MapPNG); err == nil {
+			out.MapURI = uri
+		}
+	}
+	return out
+}
+
+// AnalyzeLULC runs descriptive MapBiomas land-cover / land-use analysis
+// without Sentinel imagery or a classifier.
+func (r *Runner) AnalyzeLULC(ctx context.Context, req LULCRequest) (*LULCAnalysis, error) {
+	if _, err := os.Stat(r.sidecar); err != nil {
+		return nil, fmt.Errorf("sidecar not found at %s", r.sidecar)
+	}
+
+	var polygon *GeoJSONGeometry
+	var mbPath string
+	if req.AreaID != "" {
+		area, ok := r.loadArea(req.AreaID)
+		if !ok {
+			return nil, fmt.Errorf("unknown area: %s", req.AreaID)
+		}
+		geom := area.Geometry
+		polygon = &geom
+		mbPath = r.mapbiomasPath(area.MapBiomas)
+	} else if req.PolygonGeoJSON != nil {
+		polygon = req.PolygonGeoJSON
+		mbPath = req.MapBiomasPath // optional; sidecar fetches Brazil COG if empty
+	} else {
+		return nil, fmt.Errorf("no area or polygon provided")
+	}
+	// mbPath may be empty for custom polygons — Python fetches MapBiomas on demand.
+
+	workDir, err := os.MkdirTemp("", "geosense-lulc-")
+	if err != nil {
+		return nil, fmt.Errorf("failed to create work dir: %w", err)
+	}
+
+	sReq := sidecarRequest{
+		Action:         "lulc",
+		ModelDir:       r.modelDir, // unused for lulc, but kept for schema
+		PolygonGeoJSON: polygon,
+		MapBiomasPath:  mbPath,
+		WorkDir:        workDir,
+	}
+	reqBytes, err := json.Marshal(sReq)
+	if err != nil {
+		return nil, fmt.Errorf("failed to encode request: %w", err)
+	}
+
+	cmd := exec.CommandContext(ctx, r.pythonPath, r.sidecar)
+	cmd.Stdin = strings.NewReader(string(reqBytes))
+
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		return nil, err
+	}
+	stderr, err := cmd.StderrPipe()
+	if err != nil {
+		return nil, err
+	}
+
+	if err := cmd.Start(); err != nil {
+		return nil, fmt.Errorf("failed to start sidecar: %w", err)
+	}
+
+	var wg sync.WaitGroup
+	var lastError string
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		scanner := bufio.NewScanner(stderr)
+		scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
+		for scanner.Scan() {
+			line := strings.TrimSpace(scanner.Text())
+			if line == "" {
+				continue
+			}
+			var ev struct {
+				Progress *int   `json:"progress"`
+				Msg      string `json:"msg"`
+				Error    string `json:"error"`
+			}
+			if err := json.Unmarshal([]byte(line), &ev); err != nil {
+				wruntime.EventsEmit(ctx, "predict:progress", ProgressEvent{Progress: -1, Msg: line})
+				continue
+			}
+			if ev.Error != "" {
+				lastError = ev.Error
+				continue
+			}
+			p := -1
+			if ev.Progress != nil {
+				p = *ev.Progress
+			}
+			wruntime.EventsEmit(ctx, "predict:progress", ProgressEvent{Progress: p, Msg: ev.Msg})
+		}
+	}()
+
+	var out strings.Builder
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		scanner := bufio.NewScanner(stdout)
+		scanner.Buffer(make([]byte, 0, 1024*1024), 16*1024*1024)
+		for scanner.Scan() {
+			out.WriteString(scanner.Text())
+		}
+	}()
+
+	wg.Wait()
+	waitErr := cmd.Wait()
+	if waitErr != nil {
+		if lastError != "" {
+			return nil, fmt.Errorf("%s", lastError)
+		}
+		return nil, fmt.Errorf("sidecar failed: %w", waitErr)
+	}
+
+	raw := strings.TrimSpace(out.String())
+	if raw == "" {
+		if lastError != "" {
+			return nil, fmt.Errorf("%s", lastError)
+		}
+		return nil, fmt.Errorf("sidecar produced no output")
+	}
+
+	var wrapped struct {
+		LULC *lulcSidecarPayload `json:"lulc"`
+	}
+	if err := json.Unmarshal([]byte(raw), &wrapped); err != nil {
+		return nil, fmt.Errorf("failed to parse LULC result: %w", err)
+	}
+	if wrapped.LULC == nil {
+		return nil, fmt.Errorf("sidecar returned empty LULC payload")
+	}
+	return convertLULC(wrapped.LULC), nil
 }
 
 // pngToDataURI reads a PNG file and returns a base64 data URI.

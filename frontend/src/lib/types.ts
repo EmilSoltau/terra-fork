@@ -85,6 +85,61 @@ export interface PhenologyStatePoint {
   ndvi_mean: number | null
 }
 
+export interface LULCClassRow {
+  class_id: number
+  name: string
+  color: string
+  group: string
+  pixels: number
+  pct: number
+  area_ha: number
+}
+
+export interface LULCGroupRow {
+  group: string
+  color: string
+  pct: number
+  area_ha: number
+}
+
+export interface LULCMetrics {
+  area_ha: number
+  n_pixels: number
+  n_classes: number
+  shannon_h: number
+  pielou_j: number
+  dominant_class: string
+  dominant_pct: number
+  soja_pct: number
+  outras_lav_pct: number
+  agricola_pct: number
+}
+
+export interface LULCCompareRow {
+  class_id: number
+  name: string
+  color: string
+  pct_ref: number
+  pct_pred: number
+}
+
+export interface LULCAnalysis {
+  year: number
+  source: string
+  map_uri?: string
+  extent?: Bounds
+  metrics: LULCMetrics
+  composition: LULCClassRow[]
+  groups: LULCGroupRow[]
+  pred_vs_ref: LULCCompareRow[]
+}
+
+export interface LULCRequest {
+  area_id: string
+  polygon_geojson?: GeoJSONGeometry | null
+  mapbiomas_path?: string
+}
+
 export interface PredictResult {
   extent: Bounds
   overlay_uri: string
@@ -100,6 +155,7 @@ export interface PredictResult {
   vi_series: VISeriesPoint[]
   phenology: PhenologyMetrics
   phenology_states: PhenologyStatePoint[]
+  lulc?: LULCAnalysis | null
 }
 
 export interface ProgressEvent {

@@ -5,6 +5,7 @@ import {
   ListEmbeddedAreas,
   LoadAnalysis,
   Predict,
+  AnalyzeLULC,
   OpenExternal,
 } from "../wailsjs/go/main/App"
 import { EventsOn, EventsOff } from "../wailsjs/runtime/runtime"
@@ -17,6 +18,7 @@ import type {
   Preferences,
   ModelKind,
   InferenceRun,
+  LULCAnalysis,
 } from "@/lib/types"
 import { AuthProvider, useAuth } from "@/lib/auth"
 import { ThemeSync } from "@/components/ThemeSync"
@@ -65,6 +67,7 @@ function App() {
   const [progressMsg, setProgressMsg] = useState<string>("")
   const [result, setResult] = useState<PredictResult | null>(null)
   const [analysisLabel, setAnalysisLabel] = useState<string | undefined>()
+  const [lulcRunning, setLulcRunning] = useState(false)
   const { setTheme } = useTheme()
 
   const applyPrefs = useCallback(
@@ -208,6 +211,8 @@ function App() {
         setProgressMsg={setProgressMsg}
         setResult={setResult}
         setAnalysisLabel={setAnalysisLabel}
+        lulcRunning={lulcRunning}
+        setLulcRunning={setLulcRunning}
         onSelectExample={handleSelectExample}
         onClearArea={clearArea}
         onImportPolygon={handleImportPolygon}
@@ -255,11 +260,13 @@ function AppBody(props: {
   setProgressMsg: (v: string) => void
   setResult: (r: PredictResult | null) => void
   setAnalysisLabel: (v: string | undefined) => void
+  lulcRunning: boolean
+  setLulcRunning: (v: boolean) => void
   onSelectExample: (id: string) => void
   onClearArea: () => void
   onImportPolygon: () => void
 }) {
-  const { refreshRuns, screen, goAnalysis, runs } = useAuth()
+  const { refreshRuns, screen, goAnalysis, goMap, runs } = useAuth()
   const [loadingRun, setLoadingRun] = useState(false)
 
   const handleRun = async () => {
@@ -307,6 +314,87 @@ function AppBody(props: {
       toast.error("Inference error: " + e)
     } finally {
       props.setRunning(false)
+    }
+  }
+
+  const handleAnalyzeLULC = async () => {
+    const useExample =
+      !!props.activeExample && !!props.areas.find((a) => a.id === props.activeExample)
+    if (!useExample && !props.customPolygon) {
+      toast.error("Draw a polygon or select example A/B/C.")
+      return
+    }
+    props.setLulcRunning(true)
+    props.setProgress(0)
+    props.setProgressMsg(
+      useExample ? "analyzing MapBiomas" : "fetching MapBiomas COG"
+    )
+    try {
+      const lulc = (await AnalyzeLULC({
+        area_id: useExample ? props.activeExample : "",
+        polygon_geojson: useExample ? null : props.customPolygon,
+      } as never)) as unknown as LULCAnalysis
+      const label = useExample
+        ? props.areas.find((a) => a.id === props.activeExample)?.label
+        : "Custom AOI"
+      props.setAnalysisLabel(label)
+      const mapUri = lulc.map_uri ?? ""
+      const extent = lulc.extent ?? {
+        lon_min: 0,
+        lat_min: 0,
+        lon_max: 0,
+        lat_max: 0,
+      }
+      const classStats = (lulc.composition ?? []).map((c) => ({
+        class_id: c.class_id,
+        name: c.name,
+        color: c.color,
+        pixels: c.pixels,
+        pct: c.pct,
+        area_ha: c.area_ha,
+      }))
+      const emptyPheno = {
+        sos_doy: null,
+        pos_doy: null,
+        eos_doy: null,
+        los_days: null,
+        peak: null,
+        base: null,
+        amplitude: null,
+      }
+      // Keep prior classification if any; otherwise expose LULC as the map overlay.
+      const prev = props.result
+      const keepClassification = !!prev && ((prev.n_dates ?? 0) > 0 || !!prev.overlay_uri)
+      props.setResult({
+        extent: keepClassification && prev ? prev.extent : extent,
+        overlay_uri: keepClassification && prev?.overlay_uri ? prev.overlay_uri : mapUri,
+        confidence_uri: prev?.confidence_uri ?? "",
+        ndvi_mean_uri: prev?.ndvi_mean_uri ?? "",
+        reference_uri: mapUri || prev?.reference_uri || "",
+        raster_tif: prev?.raster_tif ?? "",
+        mean_confidence: prev?.mean_confidence ?? 0,
+        n_dates: prev?.n_dates ?? 0,
+        date_range: prev?.date_range ?? [],
+        class_stats:
+          keepClassification && prev?.class_stats?.length
+            ? prev.class_stats
+            : classStats,
+        temporal: prev?.temporal ?? [],
+        vi_series: prev?.vi_series ?? [],
+        phenology: prev?.phenology ?? emptyPheno,
+        phenology_states: prev?.phenology_states ?? [],
+        lulc,
+      })
+      toast.success("Land cover / land use ready on map.", {
+        action: { label: "Open analysis", onClick: () => goAnalysis() },
+      })
+      goMap()
+    } catch (e) {
+      toast.error("LULC analysis error: " + e)
+    } finally {
+      props.setLulcRunning(false)
+      props.setProgress(0)
+      props.setProgressMsg("")
     }
   }
 
@@ -390,6 +478,8 @@ function AppBody(props: {
               onOpacityChange={props.setOverlayOpacity}
               onShowConfidenceChange={props.setShowConfidence}
               onRun={handleRun}
+              onAnalyzeLULC={handleAnalyzeLULC}
+              lulcRunning={props.lulcRunning}
               onCloseResult={() => {
                 props.setResult(null)
                 props.setAnalysisLabel(undefined)
@@ -401,6 +491,7 @@ function AppBody(props: {
               result={props.result}
               modelKind={props.modelKind}
               areaLabel={areaLabel}
+              areaId={props.activeExample || undefined}
               loadingRun={loadingRun}
               onOpenRun={openSavedAnalysis}
             />

@@ -83,6 +83,16 @@ func (a *App) Predict(req backend.PredictRequest) (*backend.PredictResult, error
 	return res, nil
 }
 
+// AnalyzeLULC runs descriptive MapBiomas land-cover / land-use analysis
+// without Sentinel imagery. Embedded areas use local TIFFs; custom AOIs in
+// Brazil fetch a MapBiomas Collection 10 COG window on demand.
+func (a *App) AnalyzeLULC(req backend.LULCRequest) (*backend.LULCAnalysis, error) {
+	if a.runner == nil {
+		return nil, errors.New("runner not initialized")
+	}
+	return a.runner.AnalyzeLULC(a.ctx, req)
+}
+
 // ExportClassification copies the classification GeoTIFF to a user-chosen path.
 func (a *App) ExportClassification(rasterPath string) (string, error) {
 	if strings.TrimSpace(rasterPath) == "" {
@@ -146,6 +156,9 @@ func (a *App) persistAnalysis(req backend.PredictRequest, res *backend.PredictRe
 	_ = store.WriteDataURIFile(res.ConfidenceURI, filepath.Join(assetsDir, "confidence.png"))
 	_ = store.WriteDataURIFile(res.NDVIMeanURI, filepath.Join(assetsDir, "ndvi_mean.png"))
 	_ = store.WriteDataURIFile(res.ReferenceURI, filepath.Join(assetsDir, "reference.png"))
+	if res.LULC != nil && res.LULC.MapURI != "" {
+		_ = store.WriteDataURIFile(res.LULC.MapURI, filepath.Join(assetsDir, "lulc_map.png"))
+	}
 	rasterRel := ""
 	if strings.TrimSpace(res.RasterTIF) != "" {
 		dest := filepath.Join(assetsDir, "classification.tif")
@@ -160,6 +173,12 @@ func (a *App) persistAnalysis(req backend.PredictRequest, res *backend.PredictRe
 	stored.ConfidenceURI = ""
 	stored.NDVIMeanURI = ""
 	stored.ReferenceURI = ""
+	if stored.LULC != nil {
+		lulcCopy := *stored.LULC
+		lulcCopy.MapURI = ""
+		lulcCopy.MapPNG = ""
+		stored.LULC = &lulcCopy
+	}
 	if rasterRel != "" {
 		stored.RasterTIF = rasterRel
 	} else {
@@ -180,13 +199,13 @@ func (a *App) persistAnalysis(req backend.PredictRequest, res *backend.PredictRe
 		label = "Custom AOI"
 	}
 	summary, _ := json.Marshal(map[string]any{
-		"class_stats":      res.ClassStats,
-		"date_range":       res.DateRange,
-		"n_dates":          res.NDates,
-		"mean_confidence":  res.MeanConfidence,
-		"area_id":          req.AreaID,
-		"has_reference":    res.ReferenceURI != "",
-		"has_ndvi_mean":    res.NDVIMeanURI != "",
+		"class_stats":     res.ClassStats,
+		"date_range":      res.DateRange,
+		"n_dates":         res.NDates,
+		"mean_confidence": res.MeanConfidence,
+		"area_id":         req.AreaID,
+		"has_reference":   res.ReferenceURI != "",
+		"has_ndvi_mean":   res.NDVIMeanURI != "",
 	})
 
 	_, _ = st.SaveRun(store.InferenceRun{
@@ -259,6 +278,16 @@ func (a *App) LoadAnalysis(runID string) (*backend.PredictResult, error) {
 	}
 	if uri, err := store.ReadFileDataURI(filepath.Join(assetsDir, "reference.png"), "image/png"); err == nil {
 		res.ReferenceURI = uri
+	}
+	if res.LULC != nil {
+		if uri, err := store.ReadFileDataURI(filepath.Join(assetsDir, "lulc_map.png"), "image/png"); err == nil {
+			res.LULC.MapURI = uri
+		}
+	} else {
+		// Older saves may lack lulc block; map alone is optional.
+		if uri, err := store.ReadFileDataURI(filepath.Join(assetsDir, "lulc_map.png"), "image/png"); err == nil {
+			res.LULC = &backend.LULCAnalysis{MapURI: uri}
+		}
 	}
 	tif := filepath.Join(assetsDir, "classification.tif")
 	if _, err := os.Stat(tif); err == nil {

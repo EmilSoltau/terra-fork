@@ -45,6 +45,8 @@ export interface MapScreenProps {
   onOpacityChange: (v: number) => void
   onShowConfidenceChange: (v: boolean) => void
   onRun: () => void
+  onAnalyzeLULC: () => void
+  lulcRunning?: boolean
   onCloseResult: () => void
 }
 
@@ -94,6 +96,8 @@ export function MapScreen(props: MapScreenProps) {
         progress={props.progress}
         progressMsg={props.progressMsg}
         onRun={props.onRun}
+        onAnalyzeLULC={props.onAnalyzeLULC}
+        lulcRunning={props.lulcRunning}
       />
 
       <AnimatePresence>

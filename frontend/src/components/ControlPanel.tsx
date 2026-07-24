@@ -11,6 +11,7 @@ import {
   Layers,
   CheckCircle2,
   Circle,
+  Globe2,
 } from "lucide-react"
 import type { Area, GeoJSONGeometry, ModelKind } from "@/lib/types"
 import { cn } from "@/lib/utils"
@@ -43,6 +44,8 @@ interface ControlPanelProps {
   progress: number
   progressMsg: string
   onRun: () => void
+  onAnalyzeLULC: () => void
+  lulcRunning?: boolean
 }
 
 function Section({
@@ -94,10 +97,14 @@ export function ControlPanel(props: ControlPanelProps) {
     progress,
     progressMsg,
     onRun,
+    onAnalyzeLULC,
+    lulcRunning = false,
   } = props
 
   const [collapsed, setCollapsed] = useState(false)
   const [showExamples, setShowExamples] = useState(false)
+  const canLULC = hasArea
+  const busy = running || lulcRunning
 
   return (
     <AnimatePresence mode="wait" initial={false}>
@@ -143,7 +150,7 @@ export function ControlPanel(props: ControlPanelProps) {
         <div className="grid grid-cols-2 gap-2">
           <button
             onClick={onImportPolygon}
-            disabled={running}
+            disabled={busy}
             className="flex items-center justify-center gap-1.5 rounded-sm border border-border px-2 py-1.5 text-xs hover:bg-secondary disabled:opacity-50"
           >
             <Upload className="size-3.5" />
@@ -151,7 +158,7 @@ export function ControlPanel(props: ControlPanelProps) {
           </button>
           <button
             onClick={onClearArea}
-            disabled={running || !hasArea}
+            disabled={busy || !hasArea}
             className="flex items-center justify-center gap-1.5 rounded-sm border border-border px-2 py-1.5 text-xs hover:bg-secondary disabled:opacity-40"
           >
             <Trash2 className="size-3.5" />
@@ -197,7 +204,7 @@ export function ControlPanel(props: ControlPanelProps) {
               {areas.map((a) => (
                 <button
                   key={a.id}
-                  disabled={running}
+                  disabled={busy}
                   onClick={() => onSelectExample(a.id)}
                   title={a.label}
                   className={cn(
@@ -225,7 +232,7 @@ export function ControlPanel(props: ControlPanelProps) {
             <input
               type="date"
               value={start}
-              disabled={running}
+              disabled={busy}
               onChange={(e) => onStartChange(e.target.value)}
               className="telemetry rounded-sm border border-input bg-transparent px-2 py-1 text-xs disabled:opacity-50"
             />
@@ -235,7 +242,7 @@ export function ControlPanel(props: ControlPanelProps) {
             <input
               type="date"
               value={end}
-              disabled={running}
+              disabled={busy}
               onChange={(e) => onEndChange(e.target.value)}
               className="telemetry rounded-sm border border-input bg-transparent px-2 py-1 text-xs disabled:opacity-50"
             />
@@ -252,7 +259,7 @@ export function ControlPanel(props: ControlPanelProps) {
             max={100}
             step={5}
             value={maxCloud}
-            disabled={running}
+            disabled={busy}
             onChange={(e) => onMaxCloudChange(parseInt(e.target.value))}
             className="accent-[var(--primary)]"
           />
@@ -284,7 +291,7 @@ export function ControlPanel(props: ControlPanelProps) {
           ).map(([m, label, sub]) => (
             <button
               key={m}
-              disabled={running}
+              disabled={busy}
               onClick={() => onModelKindChange(m)}
               className={cn(
                 "rounded-sm border p-2 text-left text-xs disabled:opacity-50",
@@ -311,7 +318,7 @@ export function ControlPanel(props: ControlPanelProps) {
               ).map(([m, label, sub]) => (
                 <button
                   key={m}
-                  disabled={running}
+                  disabled={busy}
                   onClick={() => onPrithviModeChange(m)}
                   className={cn(
                     "rounded-sm border p-1.5 text-left text-[11px] disabled:opacity-50",
@@ -346,7 +353,7 @@ export function ControlPanel(props: ControlPanelProps) {
           ).map(([m, label, sub]) => (
             <button
               key={m}
-              disabled={running || (m === "temporal" && modelKind !== "spectral")}
+              disabled={busy || (m === "temporal" && modelKind !== "spectral")}
               onClick={() => onModeChange(m)}
               className={cn(
                 "rounded-sm border p-2 text-left text-xs disabled:opacity-50",
@@ -387,7 +394,7 @@ export function ControlPanel(props: ControlPanelProps) {
       </Section>
 
       <div className="mt-auto flex flex-col gap-2 pt-2">
-        {running && (
+        {(running || lulcRunning) && (
           <div className="flex flex-col gap-1">
             <div className="flex items-center justify-between text-[11px] text-muted-foreground">
               <span className="telemetry">{progressMsg || "processing"}</span>
@@ -404,8 +411,30 @@ export function ControlPanel(props: ControlPanelProps) {
           </div>
         )}
         <button
+          onClick={onAnalyzeLULC}
+          disabled={busy || !canLULC}
+          title={
+            canLULC
+              ? "MapBiomas land cover / land use (Brazil COG if needed)"
+              : "Draw or select an area first"
+          }
+          className="flex items-center justify-center gap-2 rounded-sm border border-border py-2 text-xs font-medium text-foreground transition-colors hover:bg-secondary disabled:opacity-40"
+        >
+          {lulcRunning ? (
+            <>
+              <Loader2 className="size-3.5 animate-spin" />
+              Analyzing LULC
+            </>
+          ) : (
+            <>
+              <Globe2 className="size-3.5" />
+              Analyze land cover
+            </>
+          )}
+        </button>
+        <button
           onClick={onRun}
-          disabled={running || !hasArea || !start || !end}
+          disabled={busy || !hasArea || !start || !end}
           className="flex items-center justify-center gap-2 rounded-sm bg-primary py-2.5 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-40"
         >
           {running ? (

@@ -20,6 +20,24 @@ export function ResultsPanel({
   const [collapsed, setCollapsed] = useState(false)
   const { goAnalysis } = useAuth()
 
+  const isLulcOnly =
+    !!result.lulc &&
+    !(result.n_dates > 0) &&
+    !(result.confidence_uri && result.confidence_uri.length > 0)
+
+  const stats = isLulcOnly
+    ? (result.lulc?.composition ?? []).map((c) => ({
+        class_id: c.class_id,
+        name: c.name,
+        color: c.color,
+        pct: c.pct,
+      }))
+    : result.class_stats
+
+  const subtitle = isLulcOnly
+    ? `MapBiomas ${result.lulc?.year ?? 2023} · ${result.lulc?.metrics.area_ha.toFixed(1) ?? "—"} ha`
+    : `${result.n_dates} scenes · ${result.date_range?.[0] ?? "—"} → ${result.date_range?.[1] ?? "—"}`
+
   return (
     <motion.div
       className="panel app-no-drag absolute bottom-3 left-[20.5rem] right-16 z-[1000] mx-auto max-w-[36rem] rounded-md"
@@ -30,10 +48,12 @@ export function ResultsPanel({
     >
       <div className="flex items-center justify-between px-3 py-2">
         <div className="flex items-baseline gap-2">
-          <span className="eyebrow !text-foreground">Result</span>
+          <span className="eyebrow !text-foreground">
+            {isLulcOnly ? "Land cover" : "Result"}
+          </span>
           <span className="telemetry text-[11px] text-muted-foreground">
-            {result.n_dates} scenes · {result.date_range[0]} → {result.date_range[1]}
-            {result.mean_confidence > 0 && (
+            {subtitle}
+            {!isLulcOnly && result.mean_confidence > 0 && (
               <> · conf {(result.mean_confidence * 100).toFixed(0)}%</>
             )}
           </span>
@@ -69,17 +89,19 @@ export function ResultsPanel({
         <>
           <hr className="hairline" />
           <div className="flex flex-col gap-3 p-3">
-            <label className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
-              <input
-                type="checkbox"
-                checked={showConfidence}
-                onChange={(e) => onShowConfidenceChange(e.target.checked)}
-                className="accent-primary"
-              />
-              Show confidence overlay
-            </label>
+            {!isLulcOnly && (
+              <label className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                <input
+                  type="checkbox"
+                  checked={showConfidence}
+                  onChange={(e) => onShowConfidenceChange(e.target.checked)}
+                  className="accent-primary"
+                />
+                Show confidence overlay
+              </label>
+            )}
             <ul className="flex flex-col gap-1.5">
-              {result.class_stats.slice(0, 5).map((s) => (
+              {stats.slice(0, 5).map((s) => (
                 <li key={s.class_id} className="flex items-center gap-2 text-xs">
                   <span
                     className="size-2.5 shrink-0 rounded-[2px]"
@@ -99,7 +121,9 @@ export function ResultsPanel({
               ))}
             </ul>
             <p className="text-[10px] text-muted-foreground">
-              Open Analysis for the 4-panel cover map, VI series and phenology.
+              {isLulcOnly
+                ? "MapBiomas cover on the map. Open Analysis for groups, diversity and details."
+                : "Open Analysis for land cover / use, cover map, VI series and phenology."}
             </p>
           </div>
         </>
