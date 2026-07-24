@@ -34,7 +34,7 @@ export function AuthPage() {
       <div className="mx-auto flex w-full max-w-md flex-1 flex-col justify-center gap-6 px-6 py-10">
         <div>
           <p className="telemetry text-[10px] text-primary">AUTH</p>
-          <h1 className="mt-1 text-xl font-semibold tracking-wide">
+          <h1 className="mt-1 font-display text-xl font-semibold tracking-wide">
             {mode === "login" ? "Sign in" : "Create account"}
           </h1>
           <p className="mt-1 text-xs text-muted-foreground">
