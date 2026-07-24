@@ -22,7 +22,7 @@ import {
 } from "../../wailsjs/go/main/App"
 import type { InferenceRun, Preferences, User } from "@/lib/types"
 
-export type AppScreen = "map" | "auth" | "profile"
+export type AppScreen = "map" | "auth" | "profile" | "analysis"
 
 interface AuthContextValue {
   user: User | null
@@ -33,6 +33,7 @@ interface AuthContextValue {
   goMap: () => void
   goAuth: () => void
   goProfile: () => void
+  goAnalysis: () => void
   navigate: (screen: AppScreen) => void
   login: (email: string, password: string) => Promise<void>
   register: (email: string, password: string, displayName: string) => Promise<void>
@@ -59,6 +60,15 @@ export function AuthProvider({
   const [loading, setLoading] = useState(true)
   const [screen, setScreen] = useState<AppScreen>("map")
 
+  const refreshRuns = useCallback(async () => {
+    try {
+      const r = (await ListRuns(20)) as unknown as InferenceRun[]
+      setRuns(r ?? [])
+    } catch {
+      setRuns([])
+    }
+  }, [])
+
   const loadPrefsAndRuns = useCallback(
     async (u: User) => {
       try {
@@ -68,15 +78,10 @@ export function AuthProvider({
       } catch {
         setPrefs(null)
       }
-      try {
-        const r = (await ListRuns(20)) as unknown as InferenceRun[]
-        setRuns(r ?? [])
-      } catch {
-        setRuns([])
-      }
+      await refreshRuns()
       void u
     },
-    [onPrefsApplied]
+    [onPrefsApplied, refreshRuns]
   )
 
   useEffect(() => {
@@ -86,10 +91,14 @@ export function AuthProvider({
         const next = raw?.id ? raw : null
         setUser(next)
         if (next) await loadPrefsAndRuns(next)
+        else await refreshRuns()
       })
-      .catch(() => setUser(null))
+      .catch(async () => {
+        setUser(null)
+        await refreshRuns()
+      })
       .finally(() => setLoading(false))
-  }, [loadPrefsAndRuns])
+  }, [loadPrefsAndRuns, refreshRuns])
 
   const login = useCallback(
     async (email: string, password: string) => {
@@ -117,10 +126,10 @@ export function AuthProvider({
     await Logout()
     setUser(null)
     setPrefs(null)
-    setRuns([])
     setScreen("map")
     toast.success("Signed out.")
-  }, [])
+    await refreshRuns()
+  }, [refreshRuns])
 
   const updateProfile = useCallback(async (displayName: string) => {
     const u = (await UpdateProfile(displayName)) as unknown as User
@@ -150,16 +159,6 @@ export function AuthProvider({
     [onPrefsApplied]
   )
 
-  const refreshRuns = useCallback(async () => {
-    if (!user) return
-    try {
-      const r = (await ListRuns(20)) as unknown as InferenceRun[]
-      setRuns(r ?? [])
-    } catch {
-      /* ignore */
-    }
-  }, [user])
-
   const goProfile = useCallback(() => {
     setScreen(user ? "profile" : "auth")
   }, [user])
@@ -174,6 +173,7 @@ export function AuthProvider({
       goMap: () => setScreen("map"),
       goAuth: () => setScreen("auth"),
       goProfile,
+      goAnalysis: () => setScreen("analysis"),
       navigate: setScreen,
       login,
       register,

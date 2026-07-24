@@ -12,7 +12,7 @@ import {
   CheckCircle2,
   Circle,
 } from "lucide-react"
-import type { Area, GeoJSONGeometry } from "@/lib/types"
+import type { Area, GeoJSONGeometry, ModelKind } from "@/lib/types"
 import { cn } from "@/lib/utils"
 
 interface ControlPanelProps {
@@ -33,8 +33,8 @@ interface ControlPanelProps {
   onMonthlyBestChange: (v: boolean) => void
   mode: "single" | "temporal"
   onModeChange: (m: "single" | "temporal") => void
-  modelKind: "spectral" | "prithvi"
-  onModelKindChange: (m: "spectral" | "prithvi") => void
+  modelKind: ModelKind
+  onModelKindChange: (m: ModelKind) => void
   prithviMode: "pixel" | "patch"
   onPrithviModeChange: (m: "pixel" | "patch") => void
   overlayOpacity: number
@@ -274,10 +274,11 @@ export function ControlPanel(props: ControlPanelProps) {
 
       {/* STEP 3 — model */}
       <Section step="03" title="Model">
-        <div className="grid grid-cols-2 gap-2">
+        <div className="grid grid-cols-1 gap-2">
           {(
             [
               ["spectral", "Random Forest", "spectro-temporal features"],
+              ["temporal_transformer", "Temporal Transformer", "lightweight series model"],
               ["prithvi", "Prithvi-EO 2.0", "embeddings (NASA/IBM)"],
             ] as const
           ).map(([m, label, sub]) => (
@@ -345,7 +346,7 @@ export function ControlPanel(props: ControlPanelProps) {
           ).map(([m, label, sub]) => (
             <button
               key={m}
-              disabled={running}
+              disabled={running || (m === "temporal" && modelKind !== "spectral")}
               onClick={() => onModeChange(m)}
               className={cn(
                 "rounded-sm border p-2 text-left text-xs disabled:opacity-50",
@@ -361,6 +362,11 @@ export function ControlPanel(props: ControlPanelProps) {
             </button>
           ))}
         </div>
+        {modelKind !== "spectral" && (
+          <p className="text-[10px] text-muted-foreground">
+            Cumulative temporal mode is available with Random Forest only.
+          </p>
+        )}
         <div className="flex flex-col gap-1">
           <div className="flex items-center justify-between">
             <span className="eyebrow">overlay opacity</span>

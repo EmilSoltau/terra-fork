@@ -25,6 +25,7 @@ interface MapViewProps {
   flyTo: { lat: number; lon: number; key: number } | null
   result: PredictResult | null
   overlayOpacity: number
+  showConfidence: boolean
   onViewChange: (v: { lat: number; lon: number; zoom: number }) => void
 }
 
@@ -190,6 +191,7 @@ export function MapView({
   flyTo,
   result,
   overlayOpacity,
+  showConfidence,
   onViewChange,
 }: MapViewProps) {
   const center = useMemo<[number, number]>(() => [-14.5, -52], [])
@@ -210,11 +212,18 @@ export function MapView({
     <MapContainer center={center} zoom={4} className="h-full w-full" zoomControl={false}>
       <ZoomControl position="bottomright" />
       <LayersControl position="topright">
-        <LayersControl.BaseLayer checked name="Satellite">
+        <LayersControl.BaseLayer checked name="Satellite (Esri)">
           <TileLayer
             attribution="Tiles &copy; Esri"
             url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
             maxZoom={19}
+          />
+        </LayersControl.BaseLayer>
+        <LayersControl.BaseLayer name="Sentinel-2 2025 (EOX)">
+          <TileLayer
+            attribution='&copy; <a href="https://cloudless.eox.at">EOX</a> &mdash; <a href="https://sentinel.esa.int/web/sentinel/user-guides/sentinel-2-msi">Contains modified Copernicus Sentinel data</a>'
+            url="https://tiles.maps.eox.at/wmts/1.0.0/s2cloudless-2025/default/GoogleMapsCompatible/{z}/{y}/{x}.jpg"
+            maxZoom={18}
           />
         </LayersControl.BaseLayer>
         <LayersControl.BaseLayer name="Map (OSM)">
@@ -243,6 +252,13 @@ export function MapView({
 
       {result && overlayBounds && (
         <ImageOverlay url={result.overlay_uri} bounds={overlayBounds} opacity={overlayOpacity} />
+      )}
+      {result && overlayBounds && showConfidence && result.confidence_uri && (
+        <ImageOverlay
+          url={result.confidence_uri}
+          bounds={overlayBounds}
+          opacity={Math.min(1, overlayOpacity + 0.15)}
+        />
       )}
 
       <DrawControl customPolygon={customPolygon} onPolygonDrawn={onPolygonDrawn} />
