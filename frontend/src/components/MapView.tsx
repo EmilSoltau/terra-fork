@@ -113,9 +113,22 @@ function DrawControl({
         polygon: {
           allowIntersection: false,
           showArea: true,
-          // Keep the in-progress shape from stealing mouseup/mousedown while
-          // placing vertices 4+ (filled triangle is a large hit target).
-          shapeOptions: { interactive: false },
+          // Non-interactive + light fill so rubber-band guides stay visible
+          // above the in-progress shape (see leafletDrawPatch guide pane).
+          shapeOptions: {
+            interactive: false,
+            // legacy leaflet-draw default; keep false so fill never steals events
+            clickable: false,
+            fill: true,
+            fillOpacity: 0.08,
+            weight: 2,
+            opacity: 0.9,
+            color: "#d8944a",
+          },
+          icon: new L.DivIcon({
+            iconSize: new L.Point(10, 10),
+            className: "leaflet-div-icon leaflet-editing-icon geosense-draw-vertex",
+          }),
         },
         polyline: false,
         rectangle: false,

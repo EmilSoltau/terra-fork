@@ -273,6 +273,24 @@
   background-color: rgb(var(--p-ink) / 0.9) !important;
   color: rgb(var(--p-text)) !important;
 }
+
+/* Draw guides must paint above the in-progress polygon SVG */
+.leaflet-draw-guides {
+  pointer-events: none;
+  z-index: 650;
+}
+.leaflet-draw-guide-dash {
+  pointer-events: none;
+}
+.geosense-draw-vertex {
+  background: rgb(var(--p-accent));
+  border: 1px solid rgb(var(--p-ink));
+  border-radius: 1px;
+  margin: -5px 0 0 -5px !important;
+  width: 10px !important;
+  height: 10px !important;
+}
+
 .leaflet-control-attribution {
   background: rgb(var(--p-ink) / 0.7) !important;
   color: rgb(var(--p-muted)) !important;
