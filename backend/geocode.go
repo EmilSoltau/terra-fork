@@ -37,7 +37,7 @@ func Geocode(ctx context.Context, query string) ([]GeocodeResult, error) {
 	if err != nil {
 		return nil, err
 	}
-	httpReq.Header.Set("User-Agent", "geosense-infer/1.0 (land-cover classification desktop app)")
+	httpReq.Header.Set("User-Agent", "TERRA/1.0 (land-cover classification desktop app)")
 	httpReq.Header.Set("Accept", "application/json")
 
 	client := &http.Client{Timeout: 15 * time.Second}

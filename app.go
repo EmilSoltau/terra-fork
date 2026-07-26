@@ -103,7 +103,7 @@ func (a *App) ExportClassification(rasterPath string) (string, error) {
 	}
 	dest, err := wruntime.SaveFileDialog(a.ctx, wruntime.SaveDialogOptions{
 		Title:           "Export classification GeoTIFF",
-		DefaultFilename: "geosense_classification.tif",
+		DefaultFilename: "terra_classification.tif",
 		Filters: []wruntime.FileFilter{
 			{DisplayName: "GeoTIFF", Pattern: "*.tif;*.tiff"},
 		},

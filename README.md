@@ -1,6 +1,6 @@
-# geosense-infer
+# TERRA
 
-Desktop application for land-cover classification from Sentinel-2 time series.
+Desktop application (`geosense-infer`) for land-cover classification from Sentinel-2 time series.
 It runs a trained Random Forest classifier over spectro-temporal features and
 renders the result as a georeferenced overlay on an interactive map.
 
@@ -15,7 +15,7 @@ The classifier and feature engineering reproduce the method described in:
 > Series.* XLIV Brazilian Symposium on Telecommunications and Signal Processing
 > (SBrT 2026), Salvador, BA, Brazil.
 
-![geosense-infer classifying a custom area drawn over José de Freitas, Piauí, Brazil](docs/img/screenshot.jpeg)
+![TERRA classifying a custom area drawn over José de Freitas, Piauí, Brazil](docs/img/screenshot.jpeg)
 
 ## Overview
 

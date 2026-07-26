@@ -33,7 +33,7 @@ export function TitleBar({ view, result }: TitleBarProps) {
             className="h-7 w-7 object-contain"
           />
           <span className="font-display text-sm font-semibold tracking-[0.14em]">
-            GEOSENSE
+            TERRA
           </span>
         </div>
         <span className="hairline h-4 w-px self-center border-l" />
