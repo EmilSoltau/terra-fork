@@ -6,7 +6,7 @@ import "./index.css"
 import App from "./App"
 
 function dismissSplash(opts: { minMs?: number } = {}): void {
-  const minMs = opts.minMs ?? 900
+  const minMs = opts.minMs ?? 180
   const el = document.getElementById("splash")
   if (!el) return
 
@@ -20,12 +20,10 @@ function dismissSplash(opts: { minMs?: number } = {}): void {
       }
       el.addEventListener("transitionend", onDone, { once: true })
       el.classList.add("is-done")
-      // Fallback if transitionend never fires (display/visibility edge cases).
-      window.setTimeout(onDone, 600)
+      window.setTimeout(onDone, 400)
     }, wait)
   }
 
-  // Prefer first paint of the React tree before fading.
   requestAnimationFrame(() => requestAnimationFrame(finish))
 }
 
@@ -48,4 +46,5 @@ root.render(
   </ThemeProvider>
 )
 
-dismissSplash({ minMs: 900 })
+// Hand off HTML boot strip to React SplashScreen as soon as the tree paints.
+dismissSplash({ minMs: 180 })

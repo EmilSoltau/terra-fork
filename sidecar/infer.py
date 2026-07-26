@@ -841,6 +841,16 @@ def main():
     work_dir = Path(req.get('work_dir', '.'))
     work_dir.mkdir(parents=True, exist_ok=True)
 
+    # Lightweight health check used by the desktop boot footer.
+    if action == 'ping':
+        sys.stdout.write(json.dumps({
+            'ok': True,
+            'python': sys.version.split()[0],
+            'sidecar': 'infer.py',
+        }))
+        sys.stdout.flush()
+        return
+
     # Standalone MapBiomas land-cover / land-use analysis (no Sentinel / model).
     if action == 'lulc':
         emit_progress(10, 'resolving MapBiomas for AOI')

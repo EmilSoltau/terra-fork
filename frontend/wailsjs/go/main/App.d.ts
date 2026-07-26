@@ -13,6 +13,10 @@ export function ExportClassification(arg1:string):Promise<string>;
 
 export function GeocodeSearch(arg1:string):Promise<Array<backend.GeocodeResult>>;
 
+export function GetBootLogs():Promise<Array<string>>;
+
+export function RevealMainWindow():Promise<void>;
+
 export function GetPreferences():Promise<store.Preferences>;
 
 export function ListEmbeddedAreas():Promise<Array<backend.Area>>;

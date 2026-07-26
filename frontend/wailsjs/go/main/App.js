@@ -22,6 +22,14 @@ export function GeocodeSearch(arg1) {
   return window['go']['main']['App']['GeocodeSearch'](arg1);
 }
 
+export function GetBootLogs() {
+  return window['go']['main']['App']['GetBootLogs']();
+}
+
+export function RevealMainWindow() {
+  return window['go']['main']['App']['RevealMainWindow']();
+}
+
 export function GetPreferences() {
   return window['go']['main']['App']['GetPreferences']();
 }

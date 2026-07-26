@@ -91,6 +91,46 @@ func NewRunner(appDir string) (*Runner, error) {
 	return r, nil
 }
 
+// Probe checks that the Python interpreter runs and the sidecar script exists.
+// Intentionally avoids importing infer.py (heavy deps) so boot stays fast.
+func (r *Runner) Probe(ctx context.Context) (string, error) {
+	if r == nil {
+		return "", fmt.Errorf("runner not initialized")
+	}
+	if _, err := os.Stat(r.sidecar); err != nil {
+		return "", fmt.Errorf("sidecar missing: %s", r.sidecar)
+	}
+	cmd := exec.CommandContext(ctx, r.pythonPath, "-c", "import sys; print(sys.version.split()[0], flush=True)")
+	out, err := cmd.Output()
+	if err != nil {
+		if ee, ok := err.(*exec.ExitError); ok && len(ee.Stderr) > 0 {
+			return "", fmt.Errorf("%s", strings.TrimSpace(string(ee.Stderr)))
+		}
+		return "", err
+	}
+	ver := strings.TrimSpace(string(out))
+	if ver == "" {
+		return "", fmt.Errorf("empty python version")
+	}
+	return fmt.Sprintf("sidecar ready · python %s · %s", ver, filepath.Base(r.sidecar)), nil
+}
+
+// PythonPath returns the resolved interpreter path (for boot logs).
+func (r *Runner) PythonPath() string {
+	if r == nil {
+		return ""
+	}
+	return r.pythonPath
+}
+
+// ModelDir returns the resolved model directory (for boot logs).
+func (r *Runner) ModelDir() string {
+	if r == nil {
+		return ""
+	}
+	return r.modelDir
+}
+
 // ListAreas loads the embedded area GeoJSONs (A/B/C).
 func (r *Runner) ListAreas() []Area {
 	areas := []Area{}

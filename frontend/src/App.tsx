@@ -7,6 +7,7 @@ import {
   Predict,
   AnalyzeLULC,
   OpenExternal,
+  RevealMainWindow,
 } from "../wailsjs/go/main/App"
 import { EventsOn, EventsOff } from "../wailsjs/runtime/runtime"
 import type {
@@ -23,6 +24,7 @@ import type {
 import { AuthProvider, useAuth } from "@/lib/auth"
 import { ThemeSync } from "@/components/ThemeSync"
 import { TitleBar } from "@/components/TitleBar"
+import { SplashScreen } from "@/components/SplashScreen"
 import { AppSidebar } from "@/components/AppSidebar"
 import { MapScreen } from "@/pages/MapScreen"
 import { AuthPage } from "@/pages/AuthPage"
@@ -68,6 +70,8 @@ function App() {
   const [result, setResult] = useState<PredictResult | null>(null)
   const [analysisLabel, setAnalysisLabel] = useState<string | undefined>()
   const [lulcRunning, setLulcRunning] = useState(false)
+  const [booting, setBooting] = useState(true)
+  const [splashExiting, setSplashExiting] = useState(false)
   const { setTheme } = useTheme()
 
   const applyPrefs = useCallback(
@@ -101,6 +105,42 @@ function App() {
       if (ev.msg) setProgressMsg(ev.msg)
     })
     return () => EventsOff("predict:progress")
+  }, [])
+
+  useEffect(() => {
+    let cancelled = false
+    let started = false
+    let exitTimer: number | undefined
+    let revealTimer: number | undefined
+
+    const finish = async () => {
+      if (cancelled || started) return
+      started = true
+      setSplashExiting(true)
+      // Match .splash-screen--exit transition (~480ms).
+      exitTimer = window.setTimeout(async () => {
+        if (cancelled) return
+        try {
+          await RevealMainWindow()
+        } catch {
+          /* ignore */
+        }
+        // Let the OS settle the maximised frame before mounting the shell.
+        revealTimer = window.setTimeout(() => {
+          if (!cancelled) setBooting(false)
+        }, 120)
+      }, 480)
+    }
+
+    EventsOn("boot:ready", finish)
+    const safety = window.setTimeout(finish, 20_000)
+    return () => {
+      cancelled = true
+      EventsOff("boot:ready")
+      window.clearTimeout(safety)
+      if (exitTimer) window.clearTimeout(exitTimer)
+      if (revealTimer) window.clearTimeout(revealTimer)
+    }
   }, [])
 
   const hasArea = !!customPolygon || !!activeExample
@@ -172,51 +212,57 @@ function App() {
   return (
     <AuthProvider onPrefsApplied={applyPrefs}>
       <ThemeSync />
-      <AppBody
-        areas={areas}
-        activeExample={activeExample}
-        customPolygon={customPolygon}
-        flyTo={flyTo}
-        view={view}
-        start={start}
-        end={end}
-        maxCloud={maxCloud}
-        monthlyBest={monthlyBest}
-        mode={mode}
-        modelKind={modelKind}
-        prithviMode={prithviMode}
-        overlayOpacity={overlayOpacity}
-        showConfidence={showConfidence}
-        running={running}
-        progress={progress}
-        progressMsg={progressMsg}
-        result={result}
-        analysisLabel={analysisLabel}
-        hasArea={hasArea}
-        setView={setView}
-        setCustomPolygon={setCustomPolygon}
-        setActiveExample={setActiveExample}
-        setFlyTo={setFlyTo}
-        setStart={setStart}
-        setEnd={setEnd}
-        setMaxCloud={setMaxCloud}
-        setMonthlyBest={setMonthlyBest}
-        setMode={setMode}
-        setModelKind={setModelKind}
-        setPrithviMode={setPrithviMode}
-        setOverlayOpacity={setOverlayOpacity}
-        setShowConfidence={setShowConfidence}
-        setRunning={setRunning}
-        setProgress={setProgress}
-        setProgressMsg={setProgressMsg}
-        setResult={setResult}
-        setAnalysisLabel={setAnalysisLabel}
-        lulcRunning={lulcRunning}
-        setLulcRunning={setLulcRunning}
-        onSelectExample={handleSelectExample}
-        onClearArea={clearArea}
-        onImportPolygon={handleImportPolygon}
-      />
+      {booting ? (
+        <SplashScreen exiting={splashExiting} />
+      ) : (
+        <div className="app-shell-enter h-full w-full">
+          <AppBody
+            areas={areas}
+            activeExample={activeExample}
+            customPolygon={customPolygon}
+            flyTo={flyTo}
+            view={view}
+            start={start}
+            end={end}
+            maxCloud={maxCloud}
+            monthlyBest={monthlyBest}
+            mode={mode}
+            modelKind={modelKind}
+            prithviMode={prithviMode}
+            overlayOpacity={overlayOpacity}
+            showConfidence={showConfidence}
+            running={running}
+            progress={progress}
+            progressMsg={progressMsg}
+            result={result}
+            analysisLabel={analysisLabel}
+            hasArea={hasArea}
+            setView={setView}
+            setCustomPolygon={setCustomPolygon}
+            setActiveExample={setActiveExample}
+            setFlyTo={setFlyTo}
+            setStart={setStart}
+            setEnd={setEnd}
+            setMaxCloud={setMaxCloud}
+            setMonthlyBest={setMonthlyBest}
+            setMode={setMode}
+            setModelKind={setModelKind}
+            setPrithviMode={setPrithviMode}
+            setOverlayOpacity={setOverlayOpacity}
+            setShowConfidence={setShowConfidence}
+            setRunning={setRunning}
+            setProgress={setProgress}
+            setProgressMsg={setProgressMsg}
+            setResult={setResult}
+            setAnalysisLabel={setAnalysisLabel}
+            lulcRunning={lulcRunning}
+            setLulcRunning={setLulcRunning}
+            onSelectExample={handleSelectExample}
+            onClearArea={clearArea}
+            onImportPolygon={handleImportPolygon}
+          />
+        </div>
+      )}
     </AuthProvider>
   )
 }

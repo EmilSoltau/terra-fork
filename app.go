@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"time"
 
 	"geosense-infer/backend"
 	"geosense-infer/backend/store"
@@ -27,6 +28,10 @@ type App struct {
 	mu           sync.RWMutex
 	sessionToken string
 	currentUser  *store.User
+
+	bootMu      sync.Mutex
+	bootLogs    []string
+	bootStarted time.Time
 }
 
 // NewApp creates a new App.
@@ -34,32 +39,149 @@ func NewApp() *App {
 	return &App{}
 }
 
+func (a *App) bootLog(msg string) {
+	msg = strings.TrimSpace(msg)
+	if msg == "" {
+		return
+	}
+	a.bootMu.Lock()
+	a.bootLogs = append(a.bootLogs, msg)
+	if len(a.bootLogs) > 64 {
+		a.bootLogs = a.bootLogs[len(a.bootLogs)-64:]
+	}
+	a.bootMu.Unlock()
+	if a.ctx != nil {
+		wruntime.EventsEmit(a.ctx, "boot:log", msg)
+	}
+}
+
+// GetBootLogs returns buffered startup lines for the splash screen.
+func (a *App) GetBootLogs() []string {
+	a.bootMu.Lock()
+	defer a.bootMu.Unlock()
+	out := make([]string, len(a.bootLogs))
+	copy(out, a.bootLogs)
+	return out
+}
+
+// RevealMainWindow expands from the splash size into the main app chrome
+// and forces the window to the front (macOS otherwise keeps the previous app focused).
+func (a *App) RevealMainWindow() {
+	if a.ctx == nil {
+		return
+	}
+	// Stay floating while we expand so another app cannot cover us mid-transition.
+	wruntime.WindowSetAlwaysOnTop(a.ctx, true)
+	wruntime.WindowSetMinSize(a.ctx, 1000, 700)
+	wruntime.WindowSetMaxSize(a.ctx, 0, 0)
+	wruntime.WindowUnminimise(a.ctx)
+	wruntime.WindowMaximise(a.ctx)
+	// WindowShow → makeKeyAndOrderFront + activateIgnoringOtherApps on Darwin.
+	wruntime.WindowShow(a.ctx)
+	focusApp()
+
+	ctx := a.ctx
+	go func() {
+		time.Sleep(250 * time.Millisecond)
+		if ctx == nil {
+			return
+		}
+		wruntime.WindowSetAlwaysOnTop(ctx, false)
+		wruntime.WindowShow(ctx)
+		focusApp()
+	}()
+}
+
 // startup is called when the app starts; it saves the context and builds the runner.
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
-	wruntime.WindowMaximise(ctx)
+	wruntime.WindowCenter(ctx)
+	a.bootLog("splash ready")
+
 	appDir, err := os.Getwd()
 	if err != nil {
 		appDir = "."
 	}
+	a.bootLog("resolving sidecar paths…")
 	runner, err := backend.NewRunner(appDir)
 	if err != nil {
+		a.bootLog("runner init failed: " + err.Error())
 		wruntime.LogError(ctx, "failed to init runner: "+err.Error())
+	} else {
+		a.runner = runner
+		a.bootLog("python · " + filepath.Base(runner.PythonPath()))
+		a.bootLog("model · " + filepath.Base(runner.ModelDir()))
 	}
-	a.runner = runner
 
+	a.bootLog("opening local store…")
 	st, err := store.Open()
 	if err != nil {
+		a.bootLog("store open failed: " + err.Error())
 		wruntime.LogError(ctx, "failed to open user store: "+err.Error())
 		return
 	}
 	a.store = st
+	a.bootLog("store ready")
 	if u, token, err := st.RestoreSession(); err == nil {
 		a.mu.Lock()
 		a.currentUser = u
 		a.sessionToken = token
 		a.mu.Unlock()
+		a.bootLog("session restored")
+	} else {
+		a.bootLog("local guest session")
 	}
+}
+
+// domReady runs after the frontend can receive events — re-emit boot lines and probe sidecar.
+func (a *App) domReady(ctx context.Context) {
+	a.ctx = ctx
+	a.bootStarted = time.Now()
+	wruntime.WindowCenter(ctx)
+	a.bootMu.Lock()
+	lines := append([]string{}, a.bootLogs...)
+	a.bootMu.Unlock()
+	for _, msg := range lines {
+		wruntime.EventsEmit(ctx, "boot:log", msg)
+	}
+	go a.probeSidecar(ctx)
+}
+
+func (a *App) probeSidecar(ctx context.Context) {
+	a.bootLog("probing sidecar…")
+	ok := true
+	if a.runner == nil {
+		a.bootLog("sidecar unavailable")
+		ok = false
+	} else {
+		probeCtx, cancel := context.WithTimeout(ctx, 8*time.Second)
+		defer cancel()
+		line, err := a.runner.Probe(probeCtx)
+		if err != nil {
+			a.bootLog("sidecar probe: " + err.Error())
+			ok = false
+		} else {
+			a.bootLog(line)
+		}
+	}
+
+	// Keep the splash visible for at least 5s so it reads as a real boot screen.
+	const minSplash = 5 * time.Second
+	if a.bootStarted.IsZero() {
+		a.bootStarted = time.Now()
+	}
+	if wait := minSplash - time.Since(a.bootStarted); wait > 0 {
+		a.bootLog("warming up…")
+		timer := time.NewTimer(wait)
+		select {
+		case <-timer.C:
+		case <-ctx.Done():
+			timer.Stop()
+		}
+	}
+	a.bootLog("ready")
+	// Frontend fades the splash out, then calls RevealMainWindow.
+	wruntime.EventsEmit(ctx, "boot:ready", ok)
 }
 
 // ListEmbeddedAreas returns the embedded study areas (A/B/C).
