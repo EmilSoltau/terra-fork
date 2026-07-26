@@ -16,7 +16,7 @@ func main() {
 	app := NewApp()
 
 	err := wails.Run(&options.App{
-		Title:            "geosense-infer",
+		Title:            "TERRA",
 		Width:            1280,
 		Height:           860,
 		MinWidth:         1000,
@@ -25,7 +25,7 @@ func main() {
 		AssetServer: &assetserver.Options{
 			Assets: assets,
 		},
-		BackgroundColour: &options.RGBA{R: 11, G: 13, B: 17, A: 1},
+		BackgroundColour: &options.RGBA{R: 8, G: 7, B: 6, A: 1},
 		Frameless:        true,
 		OnStartup:        app.startup,
 		Bind: []interface{}{
@@ -35,7 +35,7 @@ func main() {
 			TitleBar:   mac.TitleBarHiddenInset(),
 			Appearance: mac.NSAppearanceNameDarkAqua,
 			About: &mac.AboutInfo{
-				Title:   "geosense-infer",
+				Title:   "TERRA",
 				Message: "Classificacao de cobertura de solo - Sentinel-2 / MapBiomas",
 			},
 		},
