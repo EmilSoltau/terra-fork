@@ -1,23 +1,31 @@
-import { Map, UserRound, LogIn, Github } from "lucide-react"
+import { Map, UserRound, LogIn, Github, ChartColumn } from "lucide-react"
 import { useAuth } from "@/lib/auth"
 import { cn } from "@/lib/utils"
 import { AvatarCircle } from "@/components/AvatarCircle"
 
 interface AppSidebarProps {
   onOpenRepo: () => void
+  hasAnalysis?: boolean
 }
 
-export function AppSidebar({ onOpenRepo }: AppSidebarProps) {
-  const { user, loading, screen, goMap, goAuth, goProfile } = useAuth()
+export function AppSidebar({ onOpenRepo, hasAnalysis = false }: AppSidebarProps) {
+  const { user, loading, screen, goMap, goAuth, goProfile, goAnalysis } = useAuth()
 
   return (
-    <aside className="app-no-drag flex w-14 shrink-0 flex-col items-center border-r border-border bg-card/50 py-3 backdrop-blur">
+    <aside className="app-no-drag flex w-14 shrink-0 flex-col items-center bg-ink/30 py-3 backdrop-blur-md">
       <nav className="flex flex-1 flex-col items-center gap-1">
         <NavItem
           active={screen === "map"}
           title="Map"
           onClick={goMap}
           icon={<Map className="h-4 w-4" />}
+        />
+        <NavItem
+          active={screen === "analysis"}
+          title="Analysis"
+          onClick={goAnalysis}
+          icon={<ChartColumn className="h-4 w-4" />}
+          badge={hasAnalysis}
         />
       </nav>
 
@@ -54,11 +62,13 @@ function NavItem({
   title,
   onClick,
   icon,
+  badge,
 }: {
   active: boolean
   title: string
   onClick: () => void
   icon: React.ReactNode
+  badge?: boolean
 }) {
   return (
     <button
@@ -66,16 +76,16 @@ function NavItem({
       title={title}
       onClick={onClick}
       className={cn(
-        "relative flex h-10 w-10 items-center justify-center rounded-sm transition-colors",
+        "relative flex h-10 w-10 items-center justify-center rounded-md transition-colors",
         active
-          ? "bg-primary/15 text-primary"
-          : "text-muted-foreground hover:bg-secondary hover:text-foreground"
+          ? "bg-surface-raised/90 text-foreground"
+          : "text-muted-foreground hover:bg-surface/50 hover:text-foreground"
       )}
     >
-      {active && (
-        <span className="absolute left-0 top-1/2 h-5 w-0.5 -translate-y-1/2 rounded-r bg-primary" />
-      )}
       {icon}
+      {badge && !active && (
+        <span className="absolute right-1.5 top-1.5 size-1.5 rounded-[1px] bg-primary" />
+      )}
     </button>
   )
 }

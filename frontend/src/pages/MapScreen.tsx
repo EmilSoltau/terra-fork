@@ -2,6 +2,7 @@ import { AnimatePresence } from "motion/react"
 import type {
   Area,
   GeoJSONGeometry,
+  ModelKind,
   PredictResult,
 } from "@/lib/types"
 import { MapView } from "@/components/MapView"
@@ -16,13 +17,14 @@ export interface MapScreenProps {
   flyTo: { lat: number; lon: number; key: number } | null
   result: PredictResult | null
   overlayOpacity: number
+  showConfidence: boolean
   hasArea: boolean
   start: string
   end: string
   maxCloud: number
   monthlyBest: boolean
   mode: "single" | "temporal"
-  modelKind: "spectral" | "prithvi"
+  modelKind: ModelKind
   prithviMode: "pixel" | "patch"
   running: boolean
   progress: number
@@ -38,10 +40,13 @@ export interface MapScreenProps {
   onMaxCloudChange: (v: number) => void
   onMonthlyBestChange: (v: boolean) => void
   onModeChange: (m: "single" | "temporal") => void
-  onModelKindChange: (m: "spectral" | "prithvi") => void
+  onModelKindChange: (m: ModelKind) => void
   onPrithviModeChange: (m: "pixel" | "patch") => void
   onOpacityChange: (v: number) => void
+  onShowConfidenceChange: (v: boolean) => void
   onRun: () => void
+  onAnalyzeLULC: () => void
+  lulcRunning?: boolean
   onCloseResult: () => void
 }
 
@@ -57,6 +62,7 @@ export function MapScreen(props: MapScreenProps) {
         flyTo={props.flyTo}
         result={props.result}
         overlayOpacity={props.overlayOpacity}
+        showConfidence={props.showConfidence}
         onViewChange={props.onViewChange}
       />
 
@@ -90,11 +96,18 @@ export function MapScreen(props: MapScreenProps) {
         progress={props.progress}
         progressMsg={props.progressMsg}
         onRun={props.onRun}
+        onAnalyzeLULC={props.onAnalyzeLULC}
+        lulcRunning={props.lulcRunning}
       />
 
       <AnimatePresence>
         {props.result && (
-          <ResultsPanel result={props.result} onClose={props.onCloseResult} />
+          <ResultsPanel
+            result={props.result}
+            showConfidence={props.showConfidence}
+            onShowConfidenceChange={props.onShowConfidenceChange}
+            onClose={props.onCloseResult}
+          />
         )}
       </AnimatePresence>
     </div>

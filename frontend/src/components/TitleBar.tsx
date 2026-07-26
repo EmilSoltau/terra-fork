@@ -24,7 +24,7 @@ export function TitleBar({ view, result }: TitleBarProps) {
   const onMap = screen === "map"
 
   return (
-    <header className="app-draggable flex h-11 shrink-0 items-center justify-between border-b border-border bg-card/60 pl-20 pr-2 backdrop-blur">
+    <header className="titlebar-terra app-draggable relative flex h-11 shrink-0 items-center justify-between bg-ink/40 pl-20 pr-2 backdrop-blur-md">
       <div className="flex items-center gap-3">
         <div className="flex items-center gap-2">
           <img
@@ -32,7 +32,9 @@ export function TitleBar({ view, result }: TitleBarProps) {
             alt=""
             className="h-7 w-7 object-contain"
           />
-          <span className="text-sm font-semibold tracking-[0.18em]">GEOSENSE</span>
+          <span className="font-display text-sm font-semibold tracking-[0.14em]">
+            TERRA
+          </span>
         </div>
         <span className="hairline h-4 w-px self-center border-l" />
         <span className="eyebrow hidden sm:inline">
@@ -40,7 +42,9 @@ export function TitleBar({ view, result }: TitleBarProps) {
             ? "land cover · sentinel-2"
             : screen === "auth"
               ? "sign in"
-              : "profile"}
+              : screen === "analysis"
+                ? "analysis"
+                : "profile"}
         </span>
       </div>
 
@@ -59,8 +63,12 @@ export function TitleBar({ view, result }: TitleBarProps) {
             {result && (
               <>
                 <span className="hairline h-4 w-px self-center border-l" />
-                <span>
-                  CENAS <span className="text-primary">{result.n_dates}</span>
+                <span className="status-pill text-place/80">
+                  {result.n_dates > 0
+                    ? `${result.n_dates} scenes · active`
+                    : result.lulc
+                      ? "MapBiomas · active"
+                      : "overlay · active"}
                 </span>
               </>
             )}

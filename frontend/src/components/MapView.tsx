@@ -25,6 +25,7 @@ interface MapViewProps {
   flyTo: { lat: number; lon: number; key: number } | null
   result: PredictResult | null
   overlayOpacity: number
+  showConfidence: boolean
   onViewChange: (v: { lat: number; lon: number; zoom: number }) => void
 }
 
@@ -74,6 +75,12 @@ function FitBounds({
   useEffect(() => {
     if (result) {
       const e = result.extent
+      if (
+        !e ||
+        (e.lon_min === 0 && e.lon_max === 0 && e.lat_min === 0 && e.lat_max === 0)
+      ) {
+        return
+      }
       map.fitBounds(
         [
           [e.lat_min, e.lon_min],
@@ -112,9 +119,22 @@ function DrawControl({
         polygon: {
           allowIntersection: false,
           showArea: true,
-          // Keep the in-progress shape from stealing mouseup/mousedown while
-          // placing vertices 4+ (filled triangle is a large hit target).
-          shapeOptions: { interactive: false },
+          // Non-interactive + light fill so rubber-band guides stay visible
+          // above the in-progress shape (see leafletDrawPatch guide pane).
+          shapeOptions: {
+            interactive: false,
+            // legacy leaflet-draw default; keep false so fill never steals events
+            clickable: false,
+            fill: true,
+            fillOpacity: 0.08,
+            weight: 2,
+            opacity: 0.9,
+            color: "#d8944a",
+          },
+          icon: new L.DivIcon({
+            iconSize: new L.Point(10, 10),
+            className: "leaflet-div-icon leaflet-editing-icon geosense-draw-vertex",
+          }),
         },
         polyline: false,
         rectangle: false,
@@ -190,16 +210,27 @@ export function MapView({
   flyTo,
   result,
   overlayOpacity,
+  showConfidence,
   onViewChange,
 }: MapViewProps) {
   const center = useMemo<[number, number]>(() => [-14.5, -52], [])
 
+  const overlayUrl =
+    result?.overlay_uri || result?.lulc?.map_uri || result?.reference_uri || ""
   const overlayBounds: LatLngBoundsExpression | null = result
     ? [
         [result.extent.lat_min, result.extent.lon_min],
         [result.extent.lat_max, result.extent.lon_max],
       ]
     : null
+  const hasValidExtent =
+    !!result?.extent &&
+    !(
+      result.extent.lon_min === 0 &&
+      result.extent.lon_max === 0 &&
+      result.extent.lat_min === 0 &&
+      result.extent.lat_max === 0
+    )
 
   // Example outlines are shown only when no custom polygon is active, as faint
   // clickable shortcuts to the article's validated sites.
@@ -210,11 +241,18 @@ export function MapView({
     <MapContainer center={center} zoom={4} className="h-full w-full" zoomControl={false}>
       <ZoomControl position="bottomright" />
       <LayersControl position="topright">
-        <LayersControl.BaseLayer checked name="Satellite">
+        <LayersControl.BaseLayer checked name="Satellite (Esri)">
           <TileLayer
             attribution="Tiles &copy; Esri"
             url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
             maxZoom={19}
+          />
+        </LayersControl.BaseLayer>
+        <LayersControl.BaseLayer name="Sentinel-2 2025 (EOX)">
+          <TileLayer
+            attribution='&copy; <a href="https://cloudless.eox.at">EOX</a> &mdash; <a href="https://sentinel.esa.int/web/sentinel/user-guides/sentinel-2-msi">Contains modified Copernicus Sentinel data</a>'
+            url="https://tiles.maps.eox.at/wmts/1.0.0/s2cloudless-2025/default/GoogleMapsCompatible/{z}/{y}/{x}.jpg"
+            maxZoom={18}
           />
         </LayersControl.BaseLayer>
         <LayersControl.BaseLayer name="Map (OSM)">
@@ -241,8 +279,15 @@ export function MapView({
           />
         ))}
 
-      {result && overlayBounds && (
-        <ImageOverlay url={result.overlay_uri} bounds={overlayBounds} opacity={overlayOpacity} />
+      {result && hasValidExtent && overlayBounds && overlayUrl && (
+        <ImageOverlay url={overlayUrl} bounds={overlayBounds} opacity={overlayOpacity} />
+      )}
+      {result && hasValidExtent && overlayBounds && showConfidence && result.confidence_uri && (
+        <ImageOverlay
+          url={result.confidence_uri}
+          bounds={overlayBounds}
+          opacity={Math.min(1, overlayOpacity + 0.15)}
+        />
       )}
 
       <DrawControl customPolygon={customPolygon} onPolygonDrawn={onPolygonDrawn} />

@@ -25,6 +25,8 @@ export interface Area {
   geometry: GeoJSONGeometry
 }
 
+export type ModelKind = "spectral" | "prithvi" | "temporal_transformer"
+
 export interface PredictRequest {
   area_id: string
   polygon_geojson: GeoJSONGeometry | null
@@ -34,7 +36,7 @@ export interface PredictRequest {
   monthly_best: boolean
   tiles: string[]
   mode: "single" | "temporal"
-  model_kind: "spectral" | "prithvi"
+  model_kind: ModelKind
   prithvi_mode: "pixel" | "patch"
 }
 
@@ -55,14 +57,105 @@ export interface TemporalPoint {
   dominant: string | null
 }
 
+export interface VISeriesPoint {
+  date: string
+  ndvi_mean: number
+  ndvi_std: number
+  evi_mean: number
+  evi_std: number
+  savi_mean: number
+  savi_std: number
+}
+
+export interface PhenologyMetrics {
+  sos_doy: number | null
+  pos_doy: number | null
+  eos_doy: number | null
+  los_days: number | null
+  peak: number | null
+  base: number | null
+  amplitude: number | null
+}
+
+export interface PhenologyStatePoint {
+  date: string
+  state: number
+  state_name: string
+  color: string
+  ndvi_mean: number | null
+}
+
+export interface LULCClassRow {
+  class_id: number
+  name: string
+  color: string
+  group: string
+  pixels: number
+  pct: number
+  area_ha: number
+}
+
+export interface LULCGroupRow {
+  group: string
+  color: string
+  pct: number
+  area_ha: number
+}
+
+export interface LULCMetrics {
+  area_ha: number
+  n_pixels: number
+  n_classes: number
+  shannon_h: number
+  pielou_j: number
+  dominant_class: string
+  dominant_pct: number
+  soja_pct: number
+  outras_lav_pct: number
+  agricola_pct: number
+}
+
+export interface LULCCompareRow {
+  class_id: number
+  name: string
+  color: string
+  pct_ref: number
+  pct_pred: number
+}
+
+export interface LULCAnalysis {
+  year: number
+  source: string
+  map_uri?: string
+  extent?: Bounds
+  metrics: LULCMetrics
+  composition: LULCClassRow[]
+  groups: LULCGroupRow[]
+  pred_vs_ref: LULCCompareRow[]
+}
+
+export interface LULCRequest {
+  area_id: string
+  polygon_geojson?: GeoJSONGeometry | null
+  mapbiomas_path?: string
+}
+
 export interface PredictResult {
   extent: Bounds
   overlay_uri: string
+  confidence_uri: string
+  ndvi_mean_uri: string
+  reference_uri: string
   raster_tif: string
+  mean_confidence: number
   n_dates: number
   date_range: string[]
   class_stats: ClassStat[]
   temporal: TemporalPoint[]
+  vi_series: VISeriesPoint[]
+  phenology: PhenologyMetrics
+  phenology_states: PhenologyStatePoint[]
+  lulc?: LULCAnalysis | null
 }
 
 export interface ProgressEvent {
@@ -105,6 +198,9 @@ export interface InferenceRun {
   polygon_geojson: string
   status: string
   summary: string
+  result_json?: string
   overlay_relpath?: string
+  assets_relpath?: string
   n_dates: number
+  label?: string
 }

@@ -1,12 +1,19 @@
 import { useEffect, useRef, useState } from "react"
-import { Camera, History, LogOut, Save, Trash2 } from "lucide-react"
+import { Camera, FolderOpen, History, LogOut, Save, Trash2 } from "lucide-react"
+import { useTheme } from "next-themes"
 import { useAuth } from "@/lib/auth"
 import { AvatarCircle } from "@/components/AvatarCircle"
-import type { Preferences } from "@/lib/types"
+import type { InferenceRun, Preferences } from "@/lib/types"
 
 const MAX_AVATAR_BYTES = 2_000_000
 
-export function ProfilePage() {
+export function ProfilePage({
+  loadingRun,
+  onOpenRun,
+}: {
+  loadingRun?: boolean
+  onOpenRun: (run: InferenceRun) => Promise<void>
+}) {
   const {
     user,
     runs,
@@ -19,6 +26,7 @@ export function ProfilePage() {
     refreshRuns,
     goAuth,
   } = useAuth()
+  const { setTheme: setNextTheme } = useTheme()
   const [name, setName] = useState("")
   const [model, setModel] = useState("spectral")
   const [opacity, setOpacity] = useState(0.75)
@@ -65,6 +73,9 @@ export function ProfilePage() {
         extras_json: prefs?.extras_json || "{}",
       }
       await savePrefs(next)
+      if (theme === "dark" || theme === "light" || theme === "system") {
+        setNextTheme(theme)
+      }
     } finally {
       setBusy(false)
     }
@@ -91,7 +102,7 @@ export function ProfilePage() {
           <AvatarCircle uri={user.avatar_uri} size="lg" />
           <div>
             <p className="telemetry text-[10px] text-primary">PROFILE</p>
-            <h1 className="mt-1 text-xl font-semibold tracking-wide">{user.display_name}</h1>
+            <h1 className="mt-1 font-display text-xl font-semibold tracking-wide">{user.display_name}</h1>
             <p className="mt-1 text-xs text-muted-foreground">{user.email}</p>
           </div>
         </div>
@@ -168,6 +179,7 @@ export function ProfilePage() {
                 onChange={(e) => setModel(e.target.value)}
               >
                 <option value="spectral">Random Forest (spectral)</option>
+                <option value="temporal_transformer">Temporal Transformer</option>
                 <option value="prithvi">Prithvi-EO 2.0</option>
               </select>
             </label>
@@ -193,6 +205,7 @@ export function ProfilePage() {
                 onChange={(e) => setTheme(e.target.value)}
               >
                 <option value="dark">Dark</option>
+                <option value="light">Light</option>
                 <option value="system">System</option>
               </select>
             </label>
@@ -212,29 +225,44 @@ export function ProfilePage() {
         <section className="rounded-md border border-border bg-card/40 p-5">
           <div className="mb-3 flex items-center gap-2">
             <History className="h-3.5 w-3.5 text-primary" />
-            <p className="eyebrow !text-foreground">Recent classification runs</p>
+            <p className="eyebrow !text-foreground">Saved analyses</p>
           </div>
           {runs.length === 0 ? (
             <p className="text-xs text-muted-foreground">
-              No saved runs yet. Classify an area on the map while signed in.
+              No saved analyses yet. Classify an area on the map — results are stored locally.
             </p>
           ) : (
             <ul className="flex flex-col gap-2">
               {runs.map((r) => (
                 <li
                   key={r.id}
-                  className="rounded-sm border border-border/60 bg-secondary/30 px-3 py-2.5 text-xs"
+                  className="flex items-center justify-between gap-3 rounded-sm border border-border/60 bg-secondary/30 px-3 py-2.5 text-xs"
                 >
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="font-medium text-foreground">{r.model_kind}</span>
-                    <span className="telemetry text-muted-foreground">{r.n_dates} scenes</span>
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="truncate font-medium text-foreground">
+                        {r.label || r.model_kind}
+                      </span>
+                      <span className="telemetry shrink-0 text-muted-foreground">
+                        {r.n_dates} scenes
+                      </span>
+                    </div>
+                    <div className="mt-0.5 text-muted-foreground">
+                      {r.model_kind} · {r.period_start} → {r.period_end}
+                    </div>
+                    <div className="telemetry mt-1 text-[10px] text-muted-foreground/80">
+                      {new Date(r.created_at).toLocaleString()}
+                    </div>
                   </div>
-                  <div className="mt-0.5 text-muted-foreground">
-                    {r.period_start} → {r.period_end}
-                  </div>
-                  <div className="telemetry mt-1 text-[10px] text-muted-foreground/80">
-                    {new Date(r.created_at).toLocaleString()}
-                  </div>
+                  <button
+                    type="button"
+                    disabled={!!loadingRun}
+                    onClick={() => void onOpenRun(r)}
+                    className="flex h-8 shrink-0 items-center gap-1.5 rounded-sm border border-border px-3 text-[11px] text-muted-foreground hover:bg-secondary hover:text-foreground disabled:opacity-60"
+                  >
+                    <FolderOpen className="h-3 w-3" />
+                    Open
+                  </button>
                 </li>
               ))}
             </ul>

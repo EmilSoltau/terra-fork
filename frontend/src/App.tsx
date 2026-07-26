@@ -1,9 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { toast } from "sonner"
+import { useTheme } from "next-themes"
 import {
   ListEmbeddedAreas,
+  LoadAnalysis,
   Predict,
+  AnalyzeLULC,
   OpenExternal,
+  RevealMainWindow,
 } from "../wailsjs/go/main/App"
 import { EventsOn, EventsOff } from "../wailsjs/runtime/runtime"
 import type {
@@ -13,13 +17,19 @@ import type {
   ProgressEvent,
   GeoJSONGeometry,
   Preferences,
+  ModelKind,
+  InferenceRun,
+  LULCAnalysis,
 } from "@/lib/types"
 import { AuthProvider, useAuth } from "@/lib/auth"
+import { ThemeSync } from "@/components/ThemeSync"
 import { TitleBar } from "@/components/TitleBar"
+import { SplashScreen } from "@/components/SplashScreen"
 import { AppSidebar } from "@/components/AppSidebar"
 import { MapScreen } from "@/pages/MapScreen"
 import { AuthPage } from "@/pages/AuthPage"
 import { ProfilePage } from "@/pages/ProfilePage"
+import { AnalysisPage } from "@/pages/AnalysisPage"
 
 function defaultPeriod(): { start: string; end: string } {
   const now = new Date()
@@ -28,6 +38,10 @@ function defaultPeriod(): { start: string; end: string } {
   past.setFullYear(past.getFullYear() - 1)
   const start = past.toISOString().slice(0, 10)
   return { start, end }
+}
+
+function isModelKind(v: string): v is ModelKind {
+  return v === "spectral" || v === "prithvi" || v === "temporal_transformer"
 }
 
 function App() {
@@ -46,22 +60,38 @@ function App() {
   const [maxCloud, setMaxCloud] = useState<number>(40)
   const [monthlyBest, setMonthlyBest] = useState<boolean>(true)
   const [mode, setMode] = useState<"single" | "temporal">("single")
-  const [modelKind, setModelKind] = useState<"spectral" | "prithvi">("spectral")
+  const [modelKind, setModelKind] = useState<ModelKind>("spectral")
   const [prithviMode, setPrithviMode] = useState<"pixel" | "patch">("pixel")
   const [overlayOpacity, setOverlayOpacity] = useState<number>(0.75)
+  const [showConfidence, setShowConfidence] = useState(false)
   const [running, setRunning] = useState<boolean>(false)
   const [progress, setProgress] = useState<number>(0)
   const [progressMsg, setProgressMsg] = useState<string>("")
   const [result, setResult] = useState<PredictResult | null>(null)
+  const [analysisLabel, setAnalysisLabel] = useState<string | undefined>()
+  const [lulcRunning, setLulcRunning] = useState(false)
+  const [booting, setBooting] = useState(true)
+  const [splashExiting, setSplashExiting] = useState(false)
+  const { setTheme } = useTheme()
 
-  const applyPrefs = useCallback((p: Preferences) => {
-    if (p.default_model === "spectral" || p.default_model === "prithvi") {
-      setModelKind(p.default_model)
-    }
-    if (typeof p.overlay_opacity === "number" && p.overlay_opacity > 0) {
-      setOverlayOpacity(p.overlay_opacity)
-    }
-  }, [])
+  const applyPrefs = useCallback(
+    (p: Preferences) => {
+      if (
+        p.default_model === "spectral" ||
+        p.default_model === "prithvi" ||
+        p.default_model === "temporal_transformer"
+      ) {
+        setModelKind(p.default_model)
+      }
+      if (typeof p.overlay_opacity === "number" && p.overlay_opacity > 0) {
+        setOverlayOpacity(p.overlay_opacity)
+      }
+      if (p.theme === "dark" || p.theme === "light" || p.theme === "system") {
+        setTheme(p.theme)
+      }
+    },
+    [setTheme]
+  )
 
   useEffect(() => {
     ListEmbeddedAreas()
@@ -77,6 +107,42 @@ function App() {
     return () => EventsOff("predict:progress")
   }, [])
 
+  useEffect(() => {
+    let cancelled = false
+    let started = false
+    let exitTimer: number | undefined
+    let revealTimer: number | undefined
+
+    const finish = async () => {
+      if (cancelled || started) return
+      started = true
+      setSplashExiting(true)
+      // Match .splash-screen--exit transition (~480ms).
+      exitTimer = window.setTimeout(async () => {
+        if (cancelled) return
+        try {
+          await RevealMainWindow()
+        } catch {
+          /* ignore */
+        }
+        // Let the OS settle the maximised frame before mounting the shell.
+        revealTimer = window.setTimeout(() => {
+          if (!cancelled) setBooting(false)
+        }, 120)
+      }, 480)
+    }
+
+    EventsOn("boot:ready", finish)
+    const safety = window.setTimeout(finish, 20_000)
+    return () => {
+      cancelled = true
+      EventsOff("boot:ready")
+      window.clearTimeout(safety)
+      if (exitTimer) window.clearTimeout(exitTimer)
+      if (revealTimer) window.clearTimeout(revealTimer)
+    }
+  }, [])
+
   const hasArea = !!customPolygon || !!activeExample
 
   const handleSelectExample = (id: string) => {
@@ -85,6 +151,7 @@ function App() {
     setActiveExample(id)
     setCustomPolygon(area.geometry)
     setResult(null)
+    setAnalysisLabel(undefined)
   }
 
   const clearArea = () => {
@@ -144,45 +211,58 @@ function App() {
 
   return (
     <AuthProvider onPrefsApplied={applyPrefs}>
-      <AppBody
-        areas={areas}
-        activeExample={activeExample}
-        customPolygon={customPolygon}
-        flyTo={flyTo}
-        view={view}
-        start={start}
-        end={end}
-        maxCloud={maxCloud}
-        monthlyBest={monthlyBest}
-        mode={mode}
-        modelKind={modelKind}
-        prithviMode={prithviMode}
-        overlayOpacity={overlayOpacity}
-        running={running}
-        progress={progress}
-        progressMsg={progressMsg}
-        result={result}
-        hasArea={hasArea}
-        setView={setView}
-        setCustomPolygon={setCustomPolygon}
-        setActiveExample={setActiveExample}
-        setFlyTo={setFlyTo}
-        setStart={setStart}
-        setEnd={setEnd}
-        setMaxCloud={setMaxCloud}
-        setMonthlyBest={setMonthlyBest}
-        setMode={setMode}
-        setModelKind={setModelKind}
-        setPrithviMode={setPrithviMode}
-        setOverlayOpacity={setOverlayOpacity}
-        setRunning={setRunning}
-        setProgress={setProgress}
-        setProgressMsg={setProgressMsg}
-        setResult={setResult}
-        onSelectExample={handleSelectExample}
-        onClearArea={clearArea}
-        onImportPolygon={handleImportPolygon}
-      />
+      <ThemeSync />
+      {booting ? (
+        <SplashScreen exiting={splashExiting} />
+      ) : (
+        <div className="app-shell-enter h-full w-full">
+          <AppBody
+            areas={areas}
+            activeExample={activeExample}
+            customPolygon={customPolygon}
+            flyTo={flyTo}
+            view={view}
+            start={start}
+            end={end}
+            maxCloud={maxCloud}
+            monthlyBest={monthlyBest}
+            mode={mode}
+            modelKind={modelKind}
+            prithviMode={prithviMode}
+            overlayOpacity={overlayOpacity}
+            showConfidence={showConfidence}
+            running={running}
+            progress={progress}
+            progressMsg={progressMsg}
+            result={result}
+            analysisLabel={analysisLabel}
+            hasArea={hasArea}
+            setView={setView}
+            setCustomPolygon={setCustomPolygon}
+            setActiveExample={setActiveExample}
+            setFlyTo={setFlyTo}
+            setStart={setStart}
+            setEnd={setEnd}
+            setMaxCloud={setMaxCloud}
+            setMonthlyBest={setMonthlyBest}
+            setMode={setMode}
+            setModelKind={setModelKind}
+            setPrithviMode={setPrithviMode}
+            setOverlayOpacity={setOverlayOpacity}
+            setShowConfidence={setShowConfidence}
+            setRunning={setRunning}
+            setProgress={setProgress}
+            setProgressMsg={setProgressMsg}
+            setResult={setResult}
+            setAnalysisLabel={setAnalysisLabel}
+            lulcRunning={lulcRunning}
+            setLulcRunning={setLulcRunning}
+            onSelectExample={handleSelectExample}
+            onClearArea={clearArea}
+            onImportPolygon={handleImportPolygon}
+          />
+        </div>
+      )}
     </AuthProvider>
   )
 }
@@ -198,13 +278,15 @@ function AppBody(props: {
   maxCloud: number
   monthlyBest: boolean
   mode: "single" | "temporal"
-  modelKind: "spectral" | "prithvi"
+  modelKind: ModelKind
   prithviMode: "pixel" | "patch"
   overlayOpacity: number
+  showConfidence: boolean
   running: boolean
   progress: number
   progressMsg: string
   result: PredictResult | null
+  analysisLabel?: string
   hasArea: boolean
   setView: (v: { lat: number; lon: number; zoom: number }) => void
   setCustomPolygon: (g: GeoJSONGeometry | null) => void
@@ -215,18 +297,23 @@ function AppBody(props: {
   setMaxCloud: (v: number) => void
   setMonthlyBest: (v: boolean) => void
   setMode: (m: "single" | "temporal") => void
-  setModelKind: (m: "spectral" | "prithvi") => void
+  setModelKind: (m: ModelKind) => void
   setPrithviMode: (m: "pixel" | "patch") => void
   setOverlayOpacity: (v: number) => void
+  setShowConfidence: (v: boolean) => void
   setRunning: (v: boolean) => void
   setProgress: (v: number) => void
   setProgressMsg: (v: string) => void
   setResult: (r: PredictResult | null) => void
+  setAnalysisLabel: (v: string | undefined) => void
+  lulcRunning: boolean
+  setLulcRunning: (v: boolean) => void
   onSelectExample: (id: string) => void
   onClearArea: () => void
   onImportPolygon: () => void
 }) {
-  const { user, refreshRuns, screen } = useAuth()
+  const { refreshRuns, screen, goAnalysis, goMap, runs } = useAuth()
+  const [loadingRun, setLoadingRun] = useState(false)
 
   const handleRun = async () => {
     if (!props.start || !props.end) {
@@ -258,14 +345,133 @@ function AppBody(props: {
     try {
       const res = (await Predict(req as never)) as unknown as PredictResult
       props.setResult(res)
-      toast.success(`Classification complete — ${res.n_dates} scenes.`)
-      if (user) void refreshRuns()
+      const label = useExample
+        ? props.areas.find((a) => a.id === props.activeExample)?.label
+        : "Custom AOI"
+      props.setAnalysisLabel(label)
+      toast.success(`Classification complete — ${res.n_dates} scenes (saved).`, {
+        action: {
+          label: "View analysis",
+          onClick: () => goAnalysis(),
+        },
+      })
+      void refreshRuns()
     } catch (e) {
       toast.error("Inference error: " + e)
     } finally {
       props.setRunning(false)
     }
   }
+
+  const handleAnalyzeLULC = async () => {
+    const useExample =
+      !!props.activeExample && !!props.areas.find((a) => a.id === props.activeExample)
+    if (!useExample && !props.customPolygon) {
+      toast.error("Draw a polygon or select example A/B/C.")
+      return
+    }
+    props.setLulcRunning(true)
+    props.setProgress(0)
+    props.setProgressMsg(
+      useExample ? "analyzing MapBiomas" : "fetching MapBiomas COG"
+    )
+    try {
+      const lulc = (await AnalyzeLULC({
+        area_id: useExample ? props.activeExample : "",
+        polygon_geojson: useExample ? null : props.customPolygon,
+      } as never)) as unknown as LULCAnalysis
+      const label = useExample
+        ? props.areas.find((a) => a.id === props.activeExample)?.label
+        : "Custom AOI"
+      props.setAnalysisLabel(label)
+      const mapUri = lulc.map_uri ?? ""
+      const extent = lulc.extent ?? {
+        lon_min: 0,
+        lat_min: 0,
+        lon_max: 0,
+        lat_max: 0,
+      }
+      const classStats = (lulc.composition ?? []).map((c) => ({
+        class_id: c.class_id,
+        name: c.name,
+        color: c.color,
+        pixels: c.pixels,
+        pct: c.pct,
+        area_ha: c.area_ha,
+      }))
+      const emptyPheno = {
+        sos_doy: null,
+        pos_doy: null,
+        eos_doy: null,
+        los_days: null,
+        peak: null,
+        base: null,
+        amplitude: null,
+      }
+      // Keep prior classification if any; otherwise expose LULC as the map overlay.
+      const prev = props.result
+      const keepClassification = !!prev && ((prev.n_dates ?? 0) > 0 || !!prev.overlay_uri)
+      props.setResult({
+        extent: keepClassification && prev ? prev.extent : extent,
+        overlay_uri: keepClassification && prev?.overlay_uri ? prev.overlay_uri : mapUri,
+        confidence_uri: prev?.confidence_uri ?? "",
+        ndvi_mean_uri: prev?.ndvi_mean_uri ?? "",
+        reference_uri: mapUri || prev?.reference_uri || "",
+        raster_tif: prev?.raster_tif ?? "",
+        mean_confidence: prev?.mean_confidence ?? 0,
+        n_dates: prev?.n_dates ?? 0,
+        date_range: prev?.date_range ?? [],
+        class_stats:
+          keepClassification && prev?.class_stats?.length
+            ? prev.class_stats
+            : classStats,
+        temporal: prev?.temporal ?? [],
+        vi_series: prev?.vi_series ?? [],
+        phenology: prev?.phenology ?? emptyPheno,
+        phenology_states: prev?.phenology_states ?? [],
+        lulc,
+      })
+      toast.success("Land cover / land use ready on map.", {
+        action: { label: "Open analysis", onClick: () => goAnalysis() },
+      })
+      goMap()
+    } catch (e) {
+      toast.error("LULC analysis error: " + e)
+    } finally {
+      props.setLulcRunning(false)
+      props.setProgress(0)
+      props.setProgressMsg("")
+    }
+  }
+
+  const openSavedAnalysis = useCallback(
+    async (run: InferenceRun) => {
+      setLoadingRun(true)
+      try {
+        const res = (await LoadAnalysis(run.id)) as unknown as PredictResult
+        props.setResult(res)
+        if (isModelKind(run.model_kind)) props.setModelKind(run.model_kind)
+        props.setAnalysisLabel(run.label || "Saved analysis")
+        goAnalysis()
+        toast.success("Analysis restored.")
+      } catch (e) {
+        toast.error("Could not load analysis: " + e)
+      } finally {
+        setLoadingRun(false)
+      }
+    },
+    // props setters are stable from useState in parent
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [goAnalysis, props.setResult, props.setModelKind, props.setAnalysisLabel]
+  )
+
+  const areaLabel = useMemo(() => {
+    if (props.analysisLabel) return props.analysisLabel
+    if (props.activeExample) {
+      return props.areas.find((a) => a.id === props.activeExample)?.label
+    }
+    return props.customPolygon ? "Custom AOI" : undefined
+  }, [props.analysisLabel, props.activeExample, props.areas, props.customPolygon])
 
   return (
     <div className="flex h-screen w-screen flex-col overflow-hidden bg-background text-foreground">
@@ -274,6 +480,7 @@ function AppBody(props: {
       <div className="flex min-h-0 flex-1">
         <AppSidebar
           onOpenRepo={() => OpenExternal("https://github.com/rexionmars")}
+          hasAnalysis={!!props.result || runs.length > 0}
         />
         <div className="relative min-h-0 min-w-0 flex-1">
           {screen === "map" && (
@@ -284,6 +491,7 @@ function AppBody(props: {
               flyTo={props.flyTo}
               result={props.result}
               overlayOpacity={props.overlayOpacity}
+              showConfidence={props.showConfidence}
               hasArea={props.hasArea}
               start={props.start}
               end={props.end}
@@ -314,12 +522,30 @@ function AppBody(props: {
               onModelKindChange={props.setModelKind}
               onPrithviModeChange={props.setPrithviMode}
               onOpacityChange={props.setOverlayOpacity}
+              onShowConfidenceChange={props.setShowConfidence}
               onRun={handleRun}
-              onCloseResult={() => props.setResult(null)}
+              onAnalyzeLULC={handleAnalyzeLULC}
+              lulcRunning={props.lulcRunning}
+              onCloseResult={() => {
+                props.setResult(null)
+                props.setAnalysisLabel(undefined)
+              }}
+            />
+          )}
+          {screen === "analysis" && (
+            <AnalysisPage
+              result={props.result}
+              modelKind={props.modelKind}
+              areaLabel={areaLabel}
+              areaId={props.activeExample || undefined}
+              loadingRun={loadingRun}
+              onOpenRun={openSavedAnalysis}
             />
           )}
           {screen === "auth" && <AuthPage />}
-          {screen === "profile" && <ProfilePage />}
+          {screen === "profile" && (
+            <ProfilePage loadingRun={loadingRun} onOpenRun={openSavedAnalysis} />
+          )}
         </div>
       </div>
     </div>

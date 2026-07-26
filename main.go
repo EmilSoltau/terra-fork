@@ -16,17 +16,20 @@ func main() {
 	app := NewApp()
 
 	err := wails.Run(&options.App{
-		Title:     "geosense-infer",
-		Width:     1280,
-		Height:    860,
-		MinWidth:  1000,
-		MinHeight: 700,
+		Title:  "TERRA",
+		Width:  420,
+		Height: 280,
+		// Splash-sized mins; RevealMainWindow raises these after boot.
+		MinWidth:         360,
+		MinHeight:        220,
+		AlwaysOnTop:      true,
+		BackgroundColour: &options.RGBA{R: 8, G: 7, B: 6, A: 1},
+		Frameless:        true,
 		AssetServer: &assetserver.Options{
 			Assets: assets,
 		},
-		BackgroundColour: &options.RGBA{R: 11, G: 13, B: 17, A: 1},
-		Frameless:        true,
-		OnStartup:        app.startup,
+		OnStartup:  app.startup,
+		OnDomReady: app.domReady,
 		Bind: []interface{}{
 			app,
 		},
@@ -34,7 +37,7 @@ func main() {
 			TitleBar:   mac.TitleBarHiddenInset(),
 			Appearance: mac.NSAppearanceNameDarkAqua,
 			About: &mac.AboutInfo{
-				Title:   "geosense-infer",
+				Title:   "TERRA",
 				Message: "Classificacao de cobertura de solo - Sentinel-2 / MapBiomas",
 			},
 		},

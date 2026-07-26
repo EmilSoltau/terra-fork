@@ -22,8 +22,8 @@ type Bounds struct {
 
 // GeoJSONGeometry is a minimal GeoJSON geometry (Polygon) passed to the sidecar.
 type GeoJSONGeometry struct {
-	Type        string          `json:"type"`
-	Coordinates [][][]float64   `json:"coordinates"`
+	Type        string        `json:"type"`
+	Coordinates [][][]float64 `json:"coordinates"`
 }
 
 // PredictRequest is the request issued from the frontend. Imagery is fetched
@@ -44,8 +44,7 @@ type PredictRequest struct {
 	Tiles []string `json:"tiles"`
 	// Mode is "single" (full stack) or "temporal" (cumulative retention).
 	Mode string `json:"mode"`
-	// ModelKind is "spectral" (Random Forest on spectro-temporal features) or
-	// "prithvi" (Random Forest on frozen Prithvi-EO 2.0 embeddings).
+	// ModelKind is "spectral", "prithvi", or "temporal_transformer".
 	ModelKind string `json:"model_kind"`
 	// PrithviMode is "pixel" or "patch" (used when ModelKind is "prithvi").
 	PrithviMode string `json:"prithvi_mode"`
@@ -53,6 +52,7 @@ type PredictRequest struct {
 
 // sidecarRequest is the JSON contract written to the Python sidecar stdin.
 type sidecarRequest struct {
+	Action         string           `json:"action,omitempty"`
 	ModelDir       string           `json:"model_dir"`
 	Source         string           `json:"source"`
 	Start          string           `json:"start,omitempty"`
@@ -80,34 +80,155 @@ type ClassStat struct {
 
 // TemporalPoint is one cumulative-stack step from temporal mode.
 type TemporalPoint struct {
-	Date            string   `json:"date"`
-	NDatesStack     int      `json:"n_dates_stack"`
-	SojaNDVIMean    *float64 `json:"soja_ndvi_mean"`
+	Date             string   `json:"date"`
+	NDatesStack      int      `json:"n_dates_stack"`
+	SojaNDVIMean     *float64 `json:"soja_ndvi_mean"`
 	SojaRetentionPct *float64 `json:"soja_retention_pct"`
-	Dominant        *string  `json:"dominant"`
+	Dominant         *string  `json:"dominant"`
+}
+
+// VISeriesPoint is AOI mean ± std vegetation indices for one acquisition date.
+type VISeriesPoint struct {
+	Date     string  `json:"date"`
+	NDVIMean float64 `json:"ndvi_mean"`
+	NDVIStd  float64 `json:"ndvi_std"`
+	EVIMean  float64 `json:"evi_mean"`
+	EVIStd   float64 `json:"evi_std"`
+	SAVIMean float64 `json:"savi_mean"`
+	SAVIStd  float64 `json:"savi_std"`
+}
+
+// PhenologyMetrics are SOS/POS/EOS style metrics on the AOI NDVI curve.
+type PhenologyMetrics struct {
+	SOSDOY    *float64 `json:"sos_doy"`
+	POSDOY    *float64 `json:"pos_doy"`
+	EOSDOY    *float64 `json:"eos_doy"`
+	LOSDays   *float64 `json:"los_days"`
+	Peak      *float64 `json:"peak"`
+	Base      *float64 `json:"base"`
+	Amplitude *float64 `json:"amplitude"`
+}
+
+// PhenologyStatePoint is the discrete phenological state at one date.
+type PhenologyStatePoint struct {
+	Date      string   `json:"date"`
+	State     int      `json:"state"`
+	StateName string   `json:"state_name"`
+	Color     string   `json:"color"`
+	NDVIMean  *float64 `json:"ndvi_mean"`
+}
+
+// LULCClassRow is one MapBiomas class in the descriptive composition.
+type LULCClassRow struct {
+	ClassID int     `json:"class_id"`
+	Name    string  `json:"name"`
+	Color   string  `json:"color"`
+	Group   string  `json:"group"`
+	Pixels  int     `json:"pixels"`
+	Pct     float64 `json:"pct"`
+	AreaHa  float64 `json:"area_ha"`
+}
+
+// LULCGroupRow aggregates classes into land-use groups.
+type LULCGroupRow struct {
+	Group  string  `json:"group"`
+	Color  string  `json:"color"`
+	Pct    float64 `json:"pct"`
+	AreaHa float64 `json:"area_ha"`
+}
+
+// LULCMetrics summarizes diversity and dominance of the AOI composition.
+type LULCMetrics struct {
+	AreaHa        float64 `json:"area_ha"`
+	NPixels       int     `json:"n_pixels"`
+	NClasses      int     `json:"n_classes"`
+	ShannonH      float64 `json:"shannon_h"`
+	PielouJ       float64 `json:"pielou_j"`
+	DominantClass string  `json:"dominant_class"`
+	DominantPct   float64 `json:"dominant_pct"`
+	SojaPct       float64 `json:"soja_pct"`
+	OutrasLavPct  float64 `json:"outras_lav_pct"`
+	AgricolaPct   float64 `json:"agricola_pct"`
+}
+
+// LULCCompareRow compares MapBiomas vs predicted composition for one class.
+type LULCCompareRow struct {
+	ClassID int     `json:"class_id"`
+	Name    string  `json:"name"`
+	Color   string  `json:"color"`
+	PctRef  float64 `json:"pct_ref"`
+	PctPred float64 `json:"pct_pred"`
+}
+
+// LULCAnalysis is the descriptive land cover / land use payload.
+type LULCAnalysis struct {
+	Year        int              `json:"year"`
+	Source      string           `json:"source"`
+	MapURI      string           `json:"map_uri,omitempty"`
+	MapPNG      string           `json:"map_png,omitempty"`
+	Extent      Bounds           `json:"extent"`
+	Metrics     LULCMetrics      `json:"metrics"`
+	Composition []LULCClassRow   `json:"composition"`
+	Groups      []LULCGroupRow   `json:"groups"`
+	PredVsRef   []LULCCompareRow `json:"pred_vs_ref"`
+}
+
+// LULCRequest selects an embedded area (or explicit polygon + MapBiomas path).
+type LULCRequest struct {
+	AreaID         string           `json:"area_id"`
+	PolygonGeoJSON *GeoJSONGeometry `json:"polygon_geojson,omitempty"`
+	MapBiomasPath  string           `json:"mapbiomas_path,omitempty"`
 }
 
 // sidecarResult is the raw JSON returned by the sidecar on stdout.
 type sidecarResult struct {
-	Extent     Bounds          `json:"extent"`
-	OverlayPNG string          `json:"overlay_png"`
-	RasterTIF  string          `json:"raster_tif"`
-	NDates     int             `json:"n_dates"`
-	DateRange  []string        `json:"date_range"`
-	ClassStats []ClassStat     `json:"class_stats"`
-	Temporal   []TemporalPoint `json:"temporal"`
+	Extent          Bounds                `json:"extent"`
+	OverlayPNG      string                `json:"overlay_png"`
+	RasterTIF       string                `json:"raster_tif"`
+	ConfidencePNG   string                `json:"confidence_png"`
+	NDVIMeanPNG     string                `json:"ndvi_mean_png"`
+	ReferencePNG    string                `json:"reference_png"`
+	MeanConfidence  float64               `json:"mean_confidence"`
+	NDates          int                   `json:"n_dates"`
+	DateRange       []string              `json:"date_range"`
+	ClassStats      []ClassStat           `json:"class_stats"`
+	Temporal        []TemporalPoint       `json:"temporal"`
+	VISeries        []VISeriesPoint       `json:"vi_series"`
+	Phenology       PhenologyMetrics      `json:"phenology"`
+	PhenologyStates []PhenologyStatePoint `json:"phenology_states"`
+	LULC            *lulcSidecarPayload   `json:"lulc"`
+}
+
+// lulcSidecarPayload is the raw LULC block from Python (map as file path).
+type lulcSidecarPayload struct {
+	Year        int              `json:"year"`
+	Source      string           `json:"source"`
+	MapPNG      string           `json:"map_png"`
+	Extent      Bounds           `json:"extent"`
+	Metrics     LULCMetrics      `json:"metrics"`
+	Composition []LULCClassRow   `json:"composition"`
+	Groups      []LULCGroupRow   `json:"groups"`
+	PredVsRef   []LULCCompareRow `json:"pred_vs_ref"`
 }
 
 // PredictResult is returned to the frontend. The overlay is delivered as a
 // base64 data URI so Leaflet can render it without an asset-server path.
 type PredictResult struct {
-	Extent     Bounds          `json:"extent"`
-	OverlayURI string          `json:"overlay_uri"`
-	RasterTIF  string          `json:"raster_tif"`
-	NDates     int             `json:"n_dates"`
-	DateRange  []string        `json:"date_range"`
-	ClassStats []ClassStat     `json:"class_stats"`
-	Temporal   []TemporalPoint `json:"temporal"`
+	Extent          Bounds                `json:"extent"`
+	OverlayURI      string                `json:"overlay_uri"`
+	ConfidenceURI   string                `json:"confidence_uri"`
+	NDVIMeanURI     string                `json:"ndvi_mean_uri"`
+	ReferenceURI    string                `json:"reference_uri"`
+	RasterTIF       string                `json:"raster_tif"`
+	MeanConfidence  float64               `json:"mean_confidence"`
+	NDates          int                   `json:"n_dates"`
+	DateRange       []string              `json:"date_range"`
+	ClassStats      []ClassStat           `json:"class_stats"`
+	Temporal        []TemporalPoint       `json:"temporal"`
+	VISeries        []VISeriesPoint       `json:"vi_series"`
+	Phenology       PhenologyMetrics      `json:"phenology"`
+	PhenologyStates []PhenologyStatePoint `json:"phenology_states"`
+	LULC            *LULCAnalysis         `json:"lulc,omitempty"`
 }
 
 // ProgressEvent is emitted to the frontend as "predict:progress".

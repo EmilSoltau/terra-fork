@@ -4,12 +4,18 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"io"
 	"os"
+	"path/filepath"
+	"strings"
 	"sync"
+	"time"
 
 	"geosense-infer/backend"
 	"geosense-infer/backend/store"
 
+	"github.com/google/uuid"
 	wruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
@@ -22,6 +28,10 @@ type App struct {
 	mu           sync.RWMutex
 	sessionToken string
 	currentUser  *store.User
+
+	bootMu      sync.Mutex
+	bootLogs    []string
+	bootStarted time.Time
 }
 
 // NewApp creates a new App.
@@ -29,31 +39,149 @@ func NewApp() *App {
 	return &App{}
 }
 
+func (a *App) bootLog(msg string) {
+	msg = strings.TrimSpace(msg)
+	if msg == "" {
+		return
+	}
+	a.bootMu.Lock()
+	a.bootLogs = append(a.bootLogs, msg)
+	if len(a.bootLogs) > 64 {
+		a.bootLogs = a.bootLogs[len(a.bootLogs)-64:]
+	}
+	a.bootMu.Unlock()
+	if a.ctx != nil {
+		wruntime.EventsEmit(a.ctx, "boot:log", msg)
+	}
+}
+
+// GetBootLogs returns buffered startup lines for the splash screen.
+func (a *App) GetBootLogs() []string {
+	a.bootMu.Lock()
+	defer a.bootMu.Unlock()
+	out := make([]string, len(a.bootLogs))
+	copy(out, a.bootLogs)
+	return out
+}
+
+// RevealMainWindow expands from the splash size into the main app chrome
+// and forces the window to the front (macOS otherwise keeps the previous app focused).
+func (a *App) RevealMainWindow() {
+	if a.ctx == nil {
+		return
+	}
+	// Stay floating while we expand so another app cannot cover us mid-transition.
+	wruntime.WindowSetAlwaysOnTop(a.ctx, true)
+	wruntime.WindowSetMinSize(a.ctx, 1000, 700)
+	wruntime.WindowSetMaxSize(a.ctx, 0, 0)
+	wruntime.WindowUnminimise(a.ctx)
+	wruntime.WindowMaximise(a.ctx)
+	// WindowShow → makeKeyAndOrderFront + activateIgnoringOtherApps on Darwin.
+	wruntime.WindowShow(a.ctx)
+	focusApp()
+
+	ctx := a.ctx
+	go func() {
+		time.Sleep(250 * time.Millisecond)
+		if ctx == nil {
+			return
+		}
+		wruntime.WindowSetAlwaysOnTop(ctx, false)
+		wruntime.WindowShow(ctx)
+		focusApp()
+	}()
+}
+
 // startup is called when the app starts; it saves the context and builds the runner.
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
+	wruntime.WindowCenter(ctx)
+	a.bootLog("splash ready")
+
 	appDir, err := os.Getwd()
 	if err != nil {
 		appDir = "."
 	}
+	a.bootLog("resolving sidecar paths…")
 	runner, err := backend.NewRunner(appDir)
 	if err != nil {
+		a.bootLog("runner init failed: " + err.Error())
 		wruntime.LogError(ctx, "failed to init runner: "+err.Error())
+	} else {
+		a.runner = runner
+		a.bootLog("python · " + filepath.Base(runner.PythonPath()))
+		a.bootLog("model · " + filepath.Base(runner.ModelDir()))
 	}
-	a.runner = runner
 
+	a.bootLog("opening local store…")
 	st, err := store.Open()
 	if err != nil {
+		a.bootLog("store open failed: " + err.Error())
 		wruntime.LogError(ctx, "failed to open user store: "+err.Error())
 		return
 	}
 	a.store = st
+	a.bootLog("store ready")
 	if u, token, err := st.RestoreSession(); err == nil {
 		a.mu.Lock()
 		a.currentUser = u
 		a.sessionToken = token
 		a.mu.Unlock()
+		a.bootLog("session restored")
+	} else {
+		a.bootLog("local guest session")
 	}
+}
+
+// domReady runs after the frontend can receive events — re-emit boot lines and probe sidecar.
+func (a *App) domReady(ctx context.Context) {
+	a.ctx = ctx
+	a.bootStarted = time.Now()
+	wruntime.WindowCenter(ctx)
+	a.bootMu.Lock()
+	lines := append([]string{}, a.bootLogs...)
+	a.bootMu.Unlock()
+	for _, msg := range lines {
+		wruntime.EventsEmit(ctx, "boot:log", msg)
+	}
+	go a.probeSidecar(ctx)
+}
+
+func (a *App) probeSidecar(ctx context.Context) {
+	a.bootLog("probing sidecar…")
+	ok := true
+	if a.runner == nil {
+		a.bootLog("sidecar unavailable")
+		ok = false
+	} else {
+		probeCtx, cancel := context.WithTimeout(ctx, 8*time.Second)
+		defer cancel()
+		line, err := a.runner.Probe(probeCtx)
+		if err != nil {
+			a.bootLog("sidecar probe: " + err.Error())
+			ok = false
+		} else {
+			a.bootLog(line)
+		}
+	}
+
+	// Keep the splash visible for at least 5s so it reads as a real boot screen.
+	const minSplash = 5 * time.Second
+	if a.bootStarted.IsZero() {
+		a.bootStarted = time.Now()
+	}
+	if wait := minSplash - time.Since(a.bootStarted); wait > 0 {
+		a.bootLog("warming up…")
+		timer := time.NewTimer(wait)
+		select {
+		case <-timer.C:
+		case <-ctx.Done():
+			timer.Stop()
+		}
+	}
+	a.bootLog("ready")
+	// Frontend fades the splash out, then calls RevealMainWindow.
+	wruntime.EventsEmit(ctx, "boot:ready", ok)
 }
 
 // ListEmbeddedAreas returns the embedded study areas (A/B/C).
@@ -77,35 +205,223 @@ func (a *App) Predict(req backend.PredictRequest) (*backend.PredictResult, error
 	return res, nil
 }
 
+// AnalyzeLULC runs descriptive MapBiomas land-cover / land-use analysis
+// without Sentinel imagery. Embedded areas use local TIFFs; custom AOIs in
+// Brazil fetch a MapBiomas Collection 10 COG window on demand.
+func (a *App) AnalyzeLULC(req backend.LULCRequest) (*backend.LULCAnalysis, error) {
+	if a.runner == nil {
+		return nil, errors.New("runner not initialized")
+	}
+	return a.runner.AnalyzeLULC(a.ctx, req)
+}
+
+// ExportClassification copies the classification GeoTIFF to a user-chosen path.
+func (a *App) ExportClassification(rasterPath string) (string, error) {
+	if strings.TrimSpace(rasterPath) == "" {
+		return "", errors.New("no raster to export")
+	}
+	if _, err := os.Stat(rasterPath); err != nil {
+		return "", errors.New("classification raster not found (run Classify first)")
+	}
+	dest, err := wruntime.SaveFileDialog(a.ctx, wruntime.SaveDialogOptions{
+		Title:           "Export classification GeoTIFF",
+		DefaultFilename: "terra_classification.tif",
+		Filters: []wruntime.FileFilter{
+			{DisplayName: "GeoTIFF", Pattern: "*.tif;*.tiff"},
+		},
+	})
+	if err != nil {
+		return "", err
+	}
+	if dest == "" {
+		return "", nil
+	}
+	in, err := os.Open(rasterPath)
+	if err != nil {
+		return "", err
+	}
+	defer in.Close()
+	out, err := os.Create(dest)
+	if err != nil {
+		return "", err
+	}
+	defer out.Close()
+	if _, err := io.Copy(out, in); err != nil {
+		return "", err
+	}
+	return dest, nil
+}
+
 func (a *App) persistRunIfLoggedIn(req backend.PredictRequest, res *backend.PredictResult) {
+	a.persistAnalysis(req, res)
+}
+
+func (a *App) persistAnalysis(req backend.PredictRequest, res *backend.PredictResult) {
 	a.mu.RLock()
 	user := a.currentUser
 	st := a.store
 	a.mu.RUnlock()
-	if user == nil || st == nil || res == nil {
+	if st == nil || res == nil {
 		return
 	}
+	userID := store.LocalUserID
+	if user != nil {
+		userID = user.ID
+	}
+
+	runID := uuid.NewString()
+	assetsRel := filepath.Join("runs", runID)
+	assetsDir := st.RunsDir(runID)
+	_ = os.MkdirAll(assetsDir, 0o700)
+
+	_ = store.WriteDataURIFile(res.OverlayURI, filepath.Join(assetsDir, "overlay.png"))
+	_ = store.WriteDataURIFile(res.ConfidenceURI, filepath.Join(assetsDir, "confidence.png"))
+	_ = store.WriteDataURIFile(res.NDVIMeanURI, filepath.Join(assetsDir, "ndvi_mean.png"))
+	_ = store.WriteDataURIFile(res.ReferenceURI, filepath.Join(assetsDir, "reference.png"))
+	if res.LULC != nil && res.LULC.MapURI != "" {
+		_ = store.WriteDataURIFile(res.LULC.MapURI, filepath.Join(assetsDir, "lulc_map.png"))
+	}
+	rasterRel := ""
+	if strings.TrimSpace(res.RasterTIF) != "" {
+		dest := filepath.Join(assetsDir, "classification.tif")
+		if err := store.WriteDataURIFile(res.RasterTIF, dest); err == nil {
+			rasterRel = filepath.Join(assetsRel, "classification.tif")
+		}
+	}
+
+	// Persist result without bulky data URIs; assets restored on load.
+	stored := *res
+	stored.OverlayURI = ""
+	stored.ConfidenceURI = ""
+	stored.NDVIMeanURI = ""
+	stored.ReferenceURI = ""
+	if stored.LULC != nil {
+		lulcCopy := *stored.LULC
+		lulcCopy.MapURI = ""
+		lulcCopy.MapPNG = ""
+		stored.LULC = &lulcCopy
+	}
+	if rasterRel != "" {
+		stored.RasterTIF = rasterRel
+	} else {
+		stored.RasterTIF = ""
+	}
+	resultBytes, _ := json.Marshal(stored)
+
 	poly := ""
 	if req.PolygonGeoJSON != nil {
 		if b, err := json.Marshal(req.PolygonGeoJSON); err == nil {
 			poly = string(b)
 		}
+	} else if req.AreaID != "" {
+		poly = fmt.Sprintf(`{"area_id":%q}`, req.AreaID)
+	}
+	label := req.AreaID
+	if label == "" {
+		label = "Custom AOI"
 	}
 	summary, _ := json.Marshal(map[string]any{
-		"class_stats": res.ClassStats,
-		"date_range":  res.DateRange,
-		"n_dates":     res.NDates,
+		"class_stats":     res.ClassStats,
+		"date_range":      res.DateRange,
+		"n_dates":         res.NDates,
+		"mean_confidence": res.MeanConfidence,
+		"area_id":         req.AreaID,
+		"has_reference":   res.ReferenceURI != "",
+		"has_ndvi_mean":   res.NDVIMeanURI != "",
 	})
+
 	_, _ = st.SaveRun(store.InferenceRun{
-		UserID:         user.ID,
+		ID:             runID,
+		UserID:         userID,
 		ModelKind:      req.ModelKind,
 		PeriodStart:    req.Start,
 		PeriodEnd:      req.End,
 		PolygonGeoJSON: poly,
 		Status:         "ok",
 		SummaryJSON:    string(summary),
+		ResultJSON:     string(resultBytes),
+		OverlayRelPath: filepath.Join(assetsRel, "overlay.png"),
+		AssetsRelPath:  assetsRel,
 		NDates:         res.NDates,
+		Label:          label,
 	})
+}
+
+// ListRuns returns recent inference runs (signed-in user, or local guest).
+func (a *App) ListRuns(limit int) ([]store.InferenceRun, error) {
+	if err := a.requireStore(); err != nil {
+		return nil, err
+	}
+	a.mu.RLock()
+	u := a.currentUser
+	a.mu.RUnlock()
+	userID := store.LocalUserID
+	if u != nil {
+		userID = u.ID
+	}
+	return a.store.ListRuns(userID, limit)
+}
+
+// LoadAnalysis restores a saved PredictResult (with image data URIs) by run id.
+func (a *App) LoadAnalysis(runID string) (*backend.PredictResult, error) {
+	if err := a.requireStore(); err != nil {
+		return nil, err
+	}
+	a.mu.RLock()
+	u := a.currentUser
+	a.mu.RUnlock()
+	userID := store.LocalUserID
+	if u != nil {
+		userID = u.ID
+	}
+	run, err := a.store.GetRun(userID, runID)
+	if err != nil {
+		// Also try local bucket if signed-in user has no match (legacy local saves).
+		if u != nil {
+			run, err = a.store.GetRun(store.LocalUserID, runID)
+		}
+		if err != nil {
+			return nil, mapStoreErr(err)
+		}
+	}
+	var res backend.PredictResult
+	if run.ResultJSON != "" && run.ResultJSON != "{}" {
+		_ = json.Unmarshal([]byte(run.ResultJSON), &res)
+	}
+	assetsDir := a.store.RunsDir(run.ID)
+	if uri, err := store.ReadFileDataURI(filepath.Join(assetsDir, "overlay.png"), "image/png"); err == nil {
+		res.OverlayURI = uri
+	}
+	if uri, err := store.ReadFileDataURI(filepath.Join(assetsDir, "confidence.png"), "image/png"); err == nil {
+		res.ConfidenceURI = uri
+	}
+	if uri, err := store.ReadFileDataURI(filepath.Join(assetsDir, "ndvi_mean.png"), "image/png"); err == nil {
+		res.NDVIMeanURI = uri
+	}
+	if uri, err := store.ReadFileDataURI(filepath.Join(assetsDir, "reference.png"), "image/png"); err == nil {
+		res.ReferenceURI = uri
+	}
+	if res.LULC != nil {
+		if uri, err := store.ReadFileDataURI(filepath.Join(assetsDir, "lulc_map.png"), "image/png"); err == nil {
+			res.LULC.MapURI = uri
+		}
+	} else {
+		// Older saves may lack lulc block; map alone is optional.
+		if uri, err := store.ReadFileDataURI(filepath.Join(assetsDir, "lulc_map.png"), "image/png"); err == nil {
+			res.LULC = &backend.LULCAnalysis{MapURI: uri}
+		}
+	}
+	tif := filepath.Join(assetsDir, "classification.tif")
+	if _, err := os.Stat(tif); err == nil {
+		res.RasterTIF = tif
+	}
+	if res.DateRange == nil {
+		res.DateRange = []string{run.PeriodStart, run.PeriodEnd}
+	}
+	if res.NDates == 0 {
+		res.NDates = run.NDates
+	}
+	return &res, nil
 }
 
 // GeocodeSearch resolves a place name to candidate locations (OSM Nominatim).
@@ -278,20 +594,6 @@ func (a *App) SavePreferences(prefs store.Preferences) error {
 	}
 	prefs.UserID = u.ID
 	return a.store.SavePreferences(prefs)
-}
-
-// ListRuns returns recent inference runs for the logged-in user.
-func (a *App) ListRuns(limit int) ([]store.InferenceRun, error) {
-	if err := a.requireStore(); err != nil {
-		return nil, err
-	}
-	a.mu.RLock()
-	u := a.currentUser
-	a.mu.RUnlock()
-	if u == nil {
-		return nil, store.ErrUnauthorized
-	}
-	return a.store.ListRuns(u.ID, limit)
 }
 
 func mapStoreErr(err error) error {

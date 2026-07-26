@@ -494,15 +494,176 @@ def build_feature_matrix(products, polygon, ref_prof, n_dates_model):
 # --- Classification --------------------------------------------------------
 
 def classify_from_features(feature_matrix, valid_mask, model, scaler, label_encoder):
-    """Apply the trained model; return a (H, W) map of class IDs (-1 = invalid)."""
+    """Apply the trained model; return (H,W) class map and confidence map."""
     height, width = valid_mask.shape
     classification_map = np.full((height, width), -1, dtype=np.int32)
+    confidence_map = np.zeros((height, width), dtype=np.float32)
     X_scaled = scaler.transform(feature_matrix)
-    pred_encoded = model.predict(X_scaled)
+    if hasattr(model, "predict_proba"):
+        proba = model.predict_proba(X_scaled)
+        conf = proba.max(axis=1).astype(np.float32)
+        pred_encoded = proba.argmax(axis=1)
+    else:
+        pred_encoded = model.predict(X_scaled)
+        conf = np.ones(len(pred_encoded), dtype=np.float32)
     pred_classes = label_encoder.inverse_transform(pred_encoded)
     rows, cols = np.where(valid_mask)
     classification_map[rows, cols] = pred_classes
-    return classification_map
+    confidence_map[rows, cols] = conf
+    return classification_map, confidence_map
+
+
+def write_confidence_png(confidence_map, valid_mask, out_path):
+    """Write a single-band confidence overlay as RGBA (cyan heat, alpha=conf)."""
+    h, w = confidence_map.shape
+    rgba = np.zeros((h, w, 4), dtype=np.uint8)
+    conf = np.clip(confidence_map, 0, 1)
+    mask = valid_mask & (conf > 0)
+    # Map confidence to a cool→hot ramp (blue→cyan→yellow).
+    r = np.clip((conf - 0.5) * 2.0, 0, 1)
+    g = np.clip(conf * 1.2, 0, 1)
+    b = np.clip(1.0 - conf * 0.5, 0, 1)
+    rgba[..., 0] = (r * 255).astype(np.uint8)
+    rgba[..., 1] = (g * 255).astype(np.uint8)
+    rgba[..., 2] = (b * 255).astype(np.uint8)
+    rgba[..., 3] = (conf * 200).astype(np.uint8)
+    rgba[~mask, 3] = 0
+    with rasterio.open(
+        out_path, "w", driver="PNG", height=h, width=w, count=4, dtype="uint8"
+    ) as dst:
+        for i in range(4):
+            dst.write(rgba[:, :, i], i + 1)
+
+
+def write_ndvi_mean_png(ndvi_mean, valid_mask, out_path):
+    """Write temporal-mean NDVI as RGBA using a yellow→green ramp."""
+    h, w = ndvi_mean.shape
+    rgba = np.zeros((h, w, 4), dtype=np.uint8)
+    v = np.clip(ndvi_mean, 0.0, 1.0)
+    # YlGn-ish: low = #ffffcc, mid = #78c679, high = #006837
+    r = np.clip(1.0 - v * 0.85, 0, 1)
+    g = np.clip(0.80 + v * 0.15, 0, 1)
+    b = np.clip(0.45 * (1.0 - v), 0, 1)
+    rgba[..., 0] = (r * 255).astype(np.uint8)
+    rgba[..., 1] = (g * 255).astype(np.uint8)
+    rgba[..., 2] = (b * 255).astype(np.uint8)
+    rgba[..., 3] = 255
+    rgba[~valid_mask, 3] = 0
+    with rasterio.open(
+        out_path, "w", driver="PNG", height=h, width=w, count=4, dtype="uint8"
+    ) as dst:
+        for i in range(4):
+            dst.write(rgba[:, :, i], i + 1)
+
+
+def compute_aoi_vi_series(products, polygon, ref_prof):
+    """Mean ± std NDVI/EVI/SAVI per date; also spatial NDVI temporal mean."""
+    series = []
+    dates = []
+    ndvi_means = []
+    ndvi_stack = []
+    for product in products:
+        try:
+            blue = load_band_to_reference_grid(product, "B02", polygon, ref_prof) / 10000.0
+            red = load_band_to_reference_grid(product, "B04", polygon, ref_prof) / 10000.0
+            nir = load_band_to_reference_grid(product, "B08", polygon, ref_prof) / 10000.0
+            ndvi = calculate_ndvi(nir, red)
+            evi = calculate_evi(nir, red, blue)
+            savi = calculate_savi(nir, red)
+            valid = ndvi != 0
+            if not np.any(valid):
+                continue
+            date_str = product["date"].strftime("%Y-%m-%d")
+            dates.append(product["date"])
+            ndvi_means.append(float(np.mean(ndvi[valid])))
+            ndvi_stack.append(ndvi.astype(np.float32))
+            series.append(
+                {
+                    "date": date_str,
+                    "ndvi_mean": round(float(np.mean(ndvi[valid])), 4),
+                    "ndvi_std": round(float(np.std(ndvi[valid])), 4),
+                    "evi_mean": round(float(np.mean(evi[valid])), 4),
+                    "evi_std": round(float(np.std(evi[valid])), 4),
+                    "savi_mean": round(float(np.mean(savi[valid])), 4),
+                    "savi_std": round(float(np.std(savi[valid])), 4),
+                }
+            )
+        except Exception as e:
+            sys.stderr.write(json.dumps({"progress": -1, "msg": f"VI series: {e}"}) + "\n")
+            continue
+
+    ndvi_mean_map = None
+    valid_mask = None
+    if ndvi_stack:
+        stack = np.stack(ndvi_stack, axis=0)
+        # Mean over dates where NDVI != 0
+        nonzero = stack != 0
+        with np.errstate(invalid="ignore"):
+            ndvi_mean_map = np.where(
+                nonzero.any(axis=0),
+                stack.sum(axis=0) / np.maximum(nonzero.sum(axis=0), 1),
+                0.0,
+            ).astype(np.float32)
+        valid_mask = nonzero.any(axis=0)
+    return series, dates, ndvi_means, ndvi_mean_map, valid_mask
+
+
+def classify_temporal_transformer(products, polygon, ref_profile, model_dir):
+    """Classify with the mestrado Temporal Transformer (T×6 reflectance)."""
+    import torch
+    import temporal_transformer as tt
+
+    ckpt_path = Path(model_dir) / "tt_mapbiomas.pt"
+    if not ckpt_path.exists():
+        fail(f"Temporal Transformer checkpoint missing: {ckpt_path.name}")
+
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    if device.type == "cpu" and hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
+        device = torch.device("mps")
+    model, scaler, classes = tt.load_checkpoint(ckpt_path, device=device)
+
+    band_specs = [
+        ("B02", "10m"),
+        ("B03", "10m"),
+        ("B04", "10m"),
+        ("B8A", "20m"),
+        ("B11", "20m"),
+        ("B12", "20m"),
+    ]
+    frames = []
+    for product in products:
+        bands = []
+        try:
+            for name, res in band_specs:
+                arr = load_band_to_reference_grid(
+                    product, name, polygon, ref_profile, resolution=res
+                )
+                bands.append(np.clip(arr / 10000.0, 0, 1).astype(np.float32))
+            frames.append(np.stack(bands, axis=0))
+        except Exception as e:
+            sys.stderr.write(json.dumps({"progress": -1, "msg": f"TT band error: {e}"}) + "\n")
+            continue
+    if not frames:
+        fail("no valid Sentinel-2 frames for Temporal Transformer")
+
+    stack = np.stack(frames, axis=0)  # (T, 6, H, W)
+    stack = tt.pad_temporal(stack, tt.NUM_FRAMES)
+    t, c, height, width = stack.shape
+    valid = stack[:, 2].mean(axis=0) > 0  # mean red > 0
+    rows, cols = np.where(valid)
+    if rows.size == 0:
+        fail("no valid pixels for Temporal Transformer")
+
+    x = np.stack([stack[:, :, r, c] for r, c in zip(rows, cols)], axis=0).astype(np.float32)
+    x = np.clip(x, 0.0, 1.0)
+
+    emit_progress(70, f"Temporal Transformer inference ({len(x)} pixels)")
+    pred_idx, conf = tt.predict_pixels(model, scaler, x, device)
+    cls_map = np.full((height, width), -1, dtype=np.int32)
+    conf_map = np.zeros((height, width), dtype=np.float32)
+    cls_map[rows, cols] = classes[pred_idx]
+    conf_map[rows, cols] = conf.astype(np.float32)
+    return cls_map, conf_map
 
 
 # --- MapBiomas (soja mask for temporal retention) --------------------------
@@ -643,10 +804,19 @@ def classify_prithvi(products, polygon, ref_profile, model_dir, mode):
         X = pv.embed_pixels(band_stack, valid)
 
     emit_progress(85, 'classifying embeddings')
-    pred = le.inverse_transform(rf.predict(sc.transform(X)))
+    X_scaled = sc.transform(X)
+    if hasattr(rf, "predict_proba"):
+        proba = rf.predict_proba(X_scaled)
+        conf = proba.max(axis=1).astype(np.float32)
+        pred = le.inverse_transform(proba.argmax(axis=1))
+    else:
+        pred = le.inverse_transform(rf.predict(X_scaled))
+        conf = np.ones(len(pred), dtype=np.float32)
     rows, cols = np.where(valid)
     cls_map[rows, cols] = pred
-    return cls_map
+    conf_map = np.zeros((height, width), dtype=np.float32)
+    conf_map[rows, cols] = conf
+    return cls_map, conf_map
 
 
 # --- Main ------------------------------------------------------------------
@@ -667,23 +837,47 @@ def main():
     except Exception as e:
         fail(f'invalid request JSON: {e}')
 
+    action = req.get('action', 'predict')
+    work_dir = Path(req.get('work_dir', '.'))
+    work_dir.mkdir(parents=True, exist_ok=True)
+
+    # Lightweight health check used by the desktop boot footer.
+    if action == 'ping':
+        sys.stdout.write(json.dumps({
+            'ok': True,
+            'python': sys.version.split()[0],
+            'sidecar': 'infer.py',
+        }))
+        sys.stdout.flush()
+        return
+
+    # Standalone MapBiomas land-cover / land-use analysis (no Sentinel / model).
+    if action == 'lulc':
+        emit_progress(10, 'resolving MapBiomas for AOI')
+        try:
+            import lulc as lulc_mod
+            lulc = lulc_mod.analyze_from_request(req)
+        except Exception as e:
+            fail(f'LULC analysis failed: {e}')
+        emit_progress(100, 'done')
+        sys.stdout.write(json.dumps({'lulc': lulc}))
+        sys.stdout.flush()
+        return
+
     model_dir = Path(req.get('model_dir', ''))
     source = req.get('source', 'stac')  # 'stac' (cloud COG) or 'local' (.SAFE)
     sentinel_dir = Path(req.get('sentinel_dir', '')) if req.get('sentinel_dir') else None
     tiles = req.get('tiles') or None
     mode = req.get('mode', 'single')
-    work_dir = Path(req.get('work_dir', '.'))
     mapbiomas_path = req.get('mapbiomas_path')
     # STAC parameters (used when source == 'stac').
     start = req.get('start')
     end = req.get('end')
     max_cloud = float(req.get('max_cloud', 100.0))
     monthly_best = bool(req.get('monthly_best', True))
-    # Model selection: 'spectral' (Random Forest on spectro-temporal features,
-    # default) or 'prithvi' (Random Forest on frozen Prithvi-EO 2.0 embeddings).
+    # Model selection: 'spectral', 'prithvi', or 'temporal_transformer'.
     model_kind = req.get('model_kind', 'spectral')
     prithvi_mode = req.get('prithvi_mode', 'pixel')  # 'pixel' or 'patch'
-    work_dir.mkdir(parents=True, exist_ok=True)
 
     if source == 'stac':
         configure_gdal_for_cog()
@@ -747,21 +941,41 @@ def main():
     except Exception as e:
         fail(f'failed to build reference grid: {e}')
 
-    # Optional MapBiomas soja mask for temporal retention.
+    # Optional MapBiomas full map for reference panel + soja mask for retention.
+    # Embedded areas ship a local TIFF; custom AOIs in Brazil fetch the COG window.
     soja_mask = None
-    if mapbiomas_path and Path(mapbiomas_path).exists():
-        try:
-            mb = reproject_mapbiomas_to_grid(mapbiomas_path, ref_profile, ref_band)
-            soja_mask = mb == SOJA_CLASS_ID
-            emit_progress(18, f'soja reference pixels: {int(np.sum(soja_mask))}')
-        except Exception as e:
-            sys.stderr.write(json.dumps({'progress': -1, 'msg': f'mapbiomas error: {e}'}) + '\n')
+    mb_map = None
+    try:
+        import lulc as lulc_mod
+        if mapbiomas_path and Path(mapbiomas_path).exists():
+            resolved_mb = mapbiomas_path
+        elif lulc_mod.polygon_in_brazil(polygon):
+            emit_progress(18, 'fetching MapBiomas COG for AOI')
+            resolved_mb = str(lulc_mod.fetch_mapbiomas_window(polygon, work_dir))
+            mapbiomas_path = resolved_mb
+        else:
+            resolved_mb = None
+        if resolved_mb:
+            mb_map = reproject_mapbiomas_to_grid(resolved_mb, ref_profile, ref_band)
+            soja_mask = mb_map == SOJA_CLASS_ID
+            emit_progress(20, f'soja reference pixels: {int(np.sum(soja_mask))}')
+    except Exception as e:
+        sys.stderr.write(json.dumps({'progress': -1, 'msg': f'mapbiomas error: {e}'}) + '\n')
+        sys.stderr.flush()
+        mb_map = None
+        soja_mask = None
 
     temporal = []
+    confidence_map = None
 
     if model_kind == 'prithvi':
-        classification_map = classify_prithvi(
+        classification_map, confidence_map = classify_prithvi(
             products, polygon, ref_profile, model_dir, prithvi_mode
+        )
+    elif model_kind == 'temporal_transformer':
+        emit_progress(40, f'building Temporal Transformer stack ({len(products)} dates)')
+        classification_map, confidence_map = classify_temporal_transformer(
+            products, polygon, ref_profile, model_dir
         )
     elif mode == 'temporal':
         n = len(products)
@@ -775,7 +989,7 @@ def main():
             fm, vmask = build_feature_matrix(cumulative, polygon, ref_profile, n_dates_model)
             if fm is None:
                 continue
-            cls_map = classify_from_features(fm, vmask, rf_model, scaler, label_encoder)
+            cls_map, conf_map = classify_from_features(fm, vmask, rf_model, scaler, label_encoder)
 
             # NDVI of the target date over the soja reference pixels.
             soja_ndvi_mean = None
@@ -810,20 +1024,81 @@ def main():
         fm, vmask = build_feature_matrix(products, polygon, ref_profile, n_dates_model)
         if fm is None:
             fail('no valid Sentinel-2 data for the selected area')
-        classification_map = classify_from_features(fm, vmask, rf_model, scaler, label_encoder)
+        classification_map, confidence_map = classify_from_features(
+            fm, vmask, rf_model, scaler, label_encoder
+        )
     else:
         emit_progress(40, f'building features ({len(products)} dates)')
         fm, vmask = build_feature_matrix(products, polygon, ref_profile, n_dates_model)
         if fm is None:
             fail('no valid Sentinel-2 data for the selected area')
         emit_progress(80, 'classifying')
-        classification_map = classify_from_features(fm, vmask, rf_model, scaler, label_encoder)
+        classification_map, confidence_map = classify_from_features(
+            fm, vmask, rf_model, scaler, label_encoder
+        )
+
+    emit_progress(88, 'computing vegetation index series and phenology')
+    import phenology as pheno
+    vi_series, vi_dates, ndvi_means, ndvi_mean_map, ndvi_valid = compute_aoi_vi_series(
+        products, polygon, ref_profile
+    )
+    phenology = pheno.phenology_metrics(ndvi_means, vi_dates) if vi_dates else {
+        'sos_doy': None, 'pos_doy': None, 'eos_doy': None, 'los_days': None,
+        'peak': None, 'base': None, 'amplitude': None,
+    }
+    phenology_states = pheno.state_timeline(ndvi_means, vi_dates) if vi_dates else []
 
     emit_progress(92, 'writing overlay and GeoTIFF')
     overlay_png = work_dir / 'overlay.png'
     raster_tif = work_dir / 'classification_map.tif'
+    confidence_png = work_dir / 'confidence.png'
+    ndvi_mean_png = work_dir / 'ndvi_mean.png'
+    reference_png = work_dir / 'reference.png'
     write_overlay_png(classification_map, overlay_png)
     write_classification_tif(classification_map, ref_profile, raster_tif)
+    if confidence_map is None:
+        confidence_map = (classification_map >= 0).astype(np.float32)
+    write_confidence_png(confidence_map, classification_map >= 0, confidence_png)
+    ndvi_mean_path = ''
+    if ndvi_mean_map is not None and ndvi_valid is not None:
+        write_ndvi_mean_png(ndvi_mean_map, ndvi_valid, ndvi_mean_png)
+        ndvi_mean_path = str(ndvi_mean_png)
+    reference_path = ''
+    if mb_map is not None:
+        # Mask reference to AOI footprint (same as classification valid pixels).
+        ref_cls = mb_map.astype(np.int32).copy()
+        ref_cls[ref_band <= 0] = -1
+        # Keep only known MapBiomas legend classes.
+        known = np.isin(ref_cls, list(MAPBIOMAS_COLORS.keys()))
+        ref_cls[~known] = -1
+        write_overlay_png(ref_cls, reference_png)
+        reference_path = str(reference_png)
+    mean_conf = float(confidence_map[classification_map >= 0].mean()) if np.any(classification_map >= 0) else 0.0
+
+    lulc_payload = None
+    if mapbiomas_path and Path(mapbiomas_path).exists():
+        emit_progress(96, 'analyzing MapBiomas land cover / land use')
+        try:
+            import lulc as lulc_mod
+            # Prefer native MapBiomas clip for composition; attach pred-vs-ref
+            # when the reprojected reference grid is available.
+            ref_grid = mb_map if mb_map is not None else None
+            lulc_payload = lulc_mod.analyze_mapbiomas(
+                mapbiomas_path,
+                polygon,
+                work_dir=work_dir,
+                pred_map=classification_map if ref_grid is not None else None,
+                ref_on_pred_grid=None,  # composition from native clip
+            )
+            if ref_grid is not None:
+                # Overlay comparison on Sentinel grid (10 m → 0.01 ha/px).
+                compare = lulc_mod.pred_vs_ref_composition(classification_map, ref_grid)
+                lulc_payload['pred_vs_ref'] = compare
+        except Exception as e:
+            sys.stderr.write(json.dumps({
+                'progress': -1, 'msg': f'lulc analysis skipped: {e}'
+            }) + '\n')
+            sys.stderr.flush()
 
     lon_min, lon_max, lat_min, lat_max = get_map_extent(ref_profile)
 
@@ -834,6 +1109,10 @@ def main():
         },
         'overlay_png': str(overlay_png),
         'raster_tif': str(raster_tif),
+        'confidence_png': str(confidence_png),
+        'ndvi_mean_png': ndvi_mean_path,
+        'reference_png': reference_path,
+        'mean_confidence': round(mean_conf, 4),
         'n_dates': len(products),
         'date_range': [
             products[0]['date'].strftime('%Y-%m-%d'),
@@ -841,6 +1120,10 @@ def main():
         ],
         'class_stats': class_statistics(classification_map),
         'temporal': temporal,
+        'vi_series': vi_series,
+        'phenology': phenology,
+        'phenology_states': phenology_states,
+        'lulc': lulc_payload,
     }
 
     emit_progress(100, 'done')

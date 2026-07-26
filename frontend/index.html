@@ -1,16 +1,105 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
     <meta charset="UTF-8"/>
     <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
-    <title>geosense-infer</title>
+    <title>TERRA</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com"/>
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&family=Space+Grotesk:wght@500;600;700&display=swap"
+      rel="stylesheet"
+    />
     <!-- Must run before Leaflet loads: PointerEvent exists in WKWebView/desktop
          and would otherwise set L.Browser.touch=true, closing polygons at 3 pts. -->
     <script>window.L_NO_TOUCH = true</script>
+    <style>
+      html, body {
+        margin: 0;
+        height: 100%;
+        background: rgb(8, 7, 6);
+        overflow: hidden;
+      }
+      /* Compact centered splash until React SplashScreen mounts */
+      #splash {
+        position: fixed;
+        inset: 0;
+        z-index: 9999;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 0.85rem;
+        padding: 1.25rem;
+        box-sizing: border-box;
+        background:
+          radial-gradient(ellipse 90% 55% at 50% -5%,
+            rgba(196, 148, 96, 0.16),
+            rgba(196, 148, 96, 0.04) 32%,
+            transparent 62%),
+          rgb(8, 7, 6);
+        opacity: 1;
+        transition: opacity 280ms ease;
+        pointer-events: none;
+      }
+      #splash.is-done {
+        opacity: 0;
+      }
+      #splash .splash-logo {
+        width: 56px;
+        height: 56px;
+        object-fit: contain;
+      }
+      #splash .splash-brand {
+        margin: 0;
+        font-family: "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
+        font-weight: 600;
+        font-size: 1.05rem;
+        letter-spacing: 0.18em;
+        color: rgb(236, 230, 220);
+      }
+      #splash .splash-eyebrow {
+        margin: 0;
+        font-family: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+        font-size: 0.62rem;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        color: rgb(148, 136, 120);
+      }
+      #splash .splash-log {
+        margin: 0.35rem 0 0;
+        max-width: 320px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        font-family: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+        font-size: 0.62rem;
+        letter-spacing: 0.04em;
+        color: rgb(148, 136, 120);
+      }
+      #splash .splash-led {
+        width: 6px;
+        height: 6px;
+        margin-top: 0.25rem;
+        border-radius: 1px;
+        background: rgb(216, 148, 74);
+        animation: splash-blink 1.2s ease-in-out infinite;
+      }
+      @keyframes splash-blink {
+        0%, 100% { opacity: 0.35; }
+        50% { opacity: 1; }
+      }
+    </style>
 </head>
 <body>
+<div id="splash" aria-hidden="true">
+  <img class="splash-logo" src="/terra-logo.png" alt="" width="56" height="56"/>
+  <p class="splash-brand">TERRA</p>
+  <p class="splash-eyebrow">land cover · sentinel-2</p>
+  <p class="splash-log" id="splash-log">booting…</p>
+  <div class="splash-led" aria-hidden="true"></div>
+</div>
 <div id="root"></div>
 <script src="./src/main.tsx" type="module"></script>
 </body>
 </html>
-

@@ -3,14 +3,91 @@
 @import "leaflet/dist/leaflet.css";
 @import "leaflet-draw/dist/leaflet.draw.css";
 
-@custom-variant dark (&:is(.dark *));
-
 /*
-  geosense-infer visual identity: "Earth-observation instrument" x "technical atlas".
-  Deep graphite-blue night-satellite ground, frosted-glass instrument panels over a
-  full-bleed map, cyan-NIR signal accent, topographic terracotta secondary, and a
-  monospace telemetry voice for all measured data (coordinates, dates, areas, counts).
+  Scixiv / Perseverance — docs/DESIGN.md
+
+  Channels live ONLY on --p-* (R G B). Never store channels on --color-*
+  because @theme inline also owns --color-* and would overwrite them,
+  breaking rgb(var(--color-line) / …) into invalid CSS (white/fallback borders).
 */
+
+@custom-variant dark (&:is([data-theme="dark"] *));
+
+:root,
+:root[data-theme="dark"] {
+  --p-ink: 8 7 6;
+  --p-surface: 22 18 15;
+  --p-surface-raised: 32 26 22;
+  --p-line: 74 64 54;
+  --p-line-strong: 108 92 74;
+  --p-text: 236 230 220;
+  --p-muted: 148 136 120;
+  --p-accent: 216 148 74;
+  --p-accent-dim: 72 48 28;
+  --p-place: 120 138 148;
+  --p-haze: 196 148 96;
+}
+
+:root[data-theme="light"] {
+  --p-ink: 247 242 234;
+  --p-surface: 252 249 244;
+  --p-surface-raised: 238 232 222;
+  --p-line: 180 168 150;
+  --p-line-strong: 148 132 110;
+  --p-text: 36 28 22;
+  --p-muted: 110 96 80;
+  --p-accent: 154 84 28;
+  --p-accent-dim: 232 208 176;
+  --p-place: 90 110 122;
+  --p-haze: 180 160 130;
+}
+
+:root {
+  --radius: 4px;
+  --background: rgb(var(--p-ink));
+  --foreground: rgb(var(--p-text));
+
+  --panel: rgb(var(--p-ink) / 0.55);
+  --panel-solid: rgb(var(--p-ink));
+  --card: rgb(var(--p-ink) / 0.45);
+  --card-foreground: rgb(var(--p-text));
+  --popover: rgb(12 11 10);
+  --popover-foreground: rgb(var(--p-text));
+
+  --primary: rgb(var(--p-accent));
+  --primary-foreground: rgb(var(--p-ink));
+
+  --secondary: rgb(var(--p-surface-raised) / 0.85);
+  --secondary-foreground: rgb(var(--p-text));
+  --muted-bg: rgb(var(--p-surface) / 0.55);
+  --muted-foreground: rgb(var(--p-muted));
+
+  --accent: rgb(var(--p-accent));
+  --accent-foreground: rgb(var(--p-ink));
+  --terra: rgb(var(--p-accent));
+  --destructive: #c45c3a;
+
+  /* Dust lines — quiet, never bright/white */
+  --border: rgb(var(--p-line) / 0.28);
+  --hairline: rgb(var(--p-line) / 0.22);
+  --input: rgb(var(--p-line) / 0.4);
+  --ring: rgb(var(--p-accent) / 0.55);
+
+  --font-display: "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-telemetry: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
+
+:root[data-theme="light"] {
+  --destructive: #b33a1a;
+  --panel: rgb(var(--p-surface) / 0.72);
+  --card: rgb(var(--p-surface) / 0.65);
+  --panel-solid: rgb(var(--p-surface));
+  --popover: rgb(var(--p-surface));
+  --border: rgb(var(--p-line) / 0.45);
+  --hairline: rgb(var(--p-line) / 0.35);
+  --input: rgb(var(--p-line-strong) / 0.5);
+}
 
 @theme inline {
   --color-background: var(--background);
@@ -25,7 +102,7 @@
   --color-primary-foreground: var(--primary-foreground);
   --color-secondary: var(--secondary);
   --color-secondary-foreground: var(--secondary-foreground);
-  --color-muted: var(--muted);
+  --color-muted: var(--muted-bg);
   --color-muted-foreground: var(--muted-foreground);
   --color-accent: var(--accent);
   --color-accent-foreground: var(--accent-foreground);
@@ -35,158 +112,248 @@
   --color-hairline: var(--hairline);
   --color-input: var(--input);
   --color-ring: var(--ring);
+
+  --color-ink: rgb(var(--p-ink) / <alpha-value>);
+  --color-surface: rgb(var(--p-surface) / <alpha-value>);
+  --color-surface-raised: rgb(var(--p-surface-raised) / <alpha-value>);
+  --color-line: rgb(var(--p-line) / <alpha-value>);
+  --color-line-strong: rgb(var(--p-line-strong) / <alpha-value>);
+  --color-text: rgb(var(--p-text) / <alpha-value>);
+  --color-place: rgb(var(--p-place) / <alpha-value>);
+  --color-haze: rgb(var(--p-haze) / <alpha-value>);
+  --color-accent-dim: rgb(var(--p-accent-dim) / <alpha-value>);
+
   --radius-sm: 2px;
   --radius-md: 3px;
   --radius-lg: 4px;
   --radius-xl: 6px;
+  --font-sans: var(--font-sans);
   --font-mono: var(--font-telemetry);
-}
-
-:root {
-  --radius: 4px;
-
-  /* Night-satellite graphite-blue ground */
-  --background: oklch(0.17 0.012 240);
-  --foreground: oklch(0.94 0.01 90);
-
-  /* Frosted instrument panels (with alpha; backdrop-blur applied per element) */
-  --panel: oklch(0.215 0.014 240 / 0.82);
-  --panel-solid: oklch(0.215 0.014 240);
-  --card: oklch(0.215 0.014 240 / 0.82);
-  --card-foreground: oklch(0.94 0.01 90);
-  --popover: oklch(0.2 0.014 240);
-  --popover-foreground: oklch(0.94 0.01 90);
-
-  /* Cyan-NIR signal: the instrument accent */
-  --primary: oklch(0.8 0.13 195);
-  --primary-foreground: oklch(0.17 0.012 240);
-  --accent: oklch(0.8 0.13 195);
-  --accent-foreground: oklch(0.17 0.012 240);
-
-  /* Topographic terracotta: secondary / contour */
-  --terra: oklch(0.66 0.12 48);
-
-  --secondary: oklch(0.27 0.014 240);
-  --secondary-foreground: oklch(0.94 0.01 90);
-  --muted: oklch(0.27 0.012 240);
-  --muted-foreground: oklch(0.68 0.012 240);
-
-  --destructive: oklch(0.62 0.2 25);
-
-  /* Hairlines: thin cartographic rules */
-  --border: oklch(0.42 0.012 240 / 0.55);
-  --hairline: oklch(0.5 0.012 240 / 0.4);
-  --input: oklch(0.38 0.012 240 / 0.6);
-  --ring: oklch(0.8 0.13 195 / 0.6);
-
-  --font-telemetry: ui-monospace, "SF Mono", "JetBrains Mono", "Menlo", monospace;
-  --font-display: ui-sans-serif, system-ui, "Inter", "Segoe UI", sans-serif;
+  --font-display: var(--font-display);
 }
 
 @layer base {
   * {
     border-color: var(--border);
   }
-  html, body, #root {
+  html,
+  body,
+  #root {
     height: 100%;
     margin: 0;
   }
   body {
-    background-color: var(--background);
-    color: var(--foreground);
-    font-family: var(--font-display);
+    background-color: rgb(var(--p-ink));
+    background-image: radial-gradient(
+      ellipse 130% 60% at 50% -12%,
+      rgb(var(--p-haze) / 0.18),
+      rgb(var(--p-haze) / 0.05) 32%,
+      transparent 62%
+    );
+    background-attachment: fixed;
+    color: rgb(var(--p-text));
+    font-family: var(--font-sans);
     overflow: hidden;
     -webkit-font-smoothing: antialiased;
   }
+  h1,
+  h2,
+  h3,
+  .font-display {
+    font-family: var(--font-display);
+  }
 }
 
-/* Wails draggable region */
-.app-draggable { --wails-draggable: drag; }
-.app-no-drag { --wails-draggable: no-drag; }
+.app-draggable {
+  --wails-draggable: drag;
+}
+.app-no-drag {
+  --wails-draggable: no-drag;
+}
 
-/* Atlas eyebrow: uppercase, tracked, hairline-feel section labels */
+/* Splash → main window handoff */
+.splash-screen {
+  opacity: 1;
+  transform: scale(1);
+  transition:
+    opacity 480ms ease,
+    transform 480ms ease;
+}
+.splash-screen--exit {
+  opacity: 0;
+  transform: scale(0.96);
+  pointer-events: none;
+}
+
+.app-shell-enter {
+  animation: app-shell-enter 520ms ease both;
+}
+@keyframes app-shell-enter {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
 .eyebrow {
   font-family: var(--font-telemetry);
   text-transform: uppercase;
-  letter-spacing: 0.18em;
+  letter-spacing: 0.13em;
   font-size: 10px;
-  color: var(--muted-foreground);
+  color: rgb(var(--p-muted));
 }
 
-/* Telemetry readout: measured values in mono */
 .telemetry {
   font-family: var(--font-telemetry);
   font-variant-numeric: tabular-nums;
   letter-spacing: 0.01em;
 }
 
-/* Frosted instrument panel */
 .panel {
   background: var(--panel);
-  border: 1px solid var(--border);
-  backdrop-filter: blur(16px) saturate(1.2);
-  -webkit-backdrop-filter: blur(16px) saturate(1.2);
-  box-shadow: 0 8px 30px oklch(0 0 0 / 0.35);
+  border: 1px solid rgb(var(--p-line) / 0.28);
+  backdrop-filter: blur(18px) saturate(1.05);
+  -webkit-backdrop-filter: blur(18px) saturate(1.05);
 }
 
-/* Hairline divider */
 .hairline {
   border: none;
   border-top: 1px solid var(--hairline);
 }
 
-/* Leaflet surface tuned to the dark instrument ground */
+/* Title bar bottom edge — terra gradient (haze → ochre → dust → fade) */
+.titlebar-terra::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 1px;
+  pointer-events: none;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgb(var(--p-haze) / 0.35) 12%,
+    rgb(var(--p-accent) / 0.75) 42%,
+    rgb(var(--p-line-strong) / 0.55) 68%,
+    rgb(var(--p-haze) / 0.25) 88%,
+    transparent 100%
+  );
+}
+
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-family: var(--font-telemetry);
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  color: rgb(var(--p-muted));
+}
+.status-pill::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 1px;
+  background: rgb(var(--p-accent));
+}
+
+.edge-fade-x {
+  -webkit-mask-image: linear-gradient(
+    to right,
+    transparent 0%,
+    #000 8%,
+    #000 92%,
+    transparent 100%
+  );
+  mask-image: linear-gradient(
+    to right,
+    transparent 0%,
+    #000 8%,
+    #000 92%,
+    transparent 100%
+  );
+}
+
 .leaflet-container {
-  background: oklch(0.13 0.012 240);
-  font-family: var(--font-display);
+  background: rgb(var(--p-ink));
+  font-family: var(--font-sans);
 }
 .leaflet-control-zoom a,
 .leaflet-draw-toolbar a {
-  background-color: var(--panel-solid) !important;
-  color: var(--foreground) !important;
-  border-color: var(--border) !important;
+  background-color: rgb(var(--p-ink) / 0.85) !important;
+  color: rgb(var(--p-text)) !important;
+  border-color: rgb(var(--p-line) / 0.35) !important;
 }
 .leaflet-control-zoom a:hover,
 .leaflet-draw-toolbar a:hover {
-  background-color: var(--secondary) !important;
+  background-color: rgb(var(--p-surface-raised) / 0.9) !important;
 }
 .leaflet-bar {
-  border: 1px solid var(--border) !important;
-  box-shadow: 0 4px 16px oklch(0 0 0 / 0.4) !important;
+  border: 1px solid rgb(var(--p-line) / 0.35) !important;
+  box-shadow: none !important;
 }
 .leaflet-draw-actions a {
-  background-color: var(--panel-solid) !important;
-  color: var(--foreground) !important;
+  background-color: rgb(var(--p-ink) / 0.9) !important;
+  color: rgb(var(--p-text)) !important;
 }
-.leaflet-control-attribution {
-  background: oklch(0.17 0.012 240 / 0.7) !important;
-  color: var(--muted-foreground) !important;
-}
-.leaflet-control-attribution a { color: var(--primary) !important; }
 
-/* Custom scrollbar for panels */
-.panel-scroll::-webkit-scrollbar { width: 8px; }
+/* Draw guides must paint above the in-progress polygon SVG */
+.leaflet-draw-guides {
+  pointer-events: none;
+  z-index: 650;
+}
+.leaflet-draw-guide-dash {
+  pointer-events: none;
+}
+.geosense-draw-vertex {
+  background: rgb(var(--p-accent));
+  border: 1px solid rgb(var(--p-ink));
+  border-radius: 1px;
+  margin: -5px 0 0 -5px !important;
+  width: 10px !important;
+  height: 10px !important;
+}
+
+.leaflet-control-attribution {
+  background: rgb(var(--p-ink) / 0.7) !important;
+  color: rgb(var(--p-muted)) !important;
+}
+.leaflet-control-attribution a {
+  color: rgb(var(--p-accent)) !important;
+}
+
+.panel-scroll::-webkit-scrollbar {
+  width: 8px;
+}
 .panel-scroll::-webkit-scrollbar-thumb {
-  background: oklch(0.4 0.012 240 / 0.5);
+  background: rgb(var(--p-line) / 0.4);
   border-radius: 4px;
 }
-.panel-scroll::-webkit-scrollbar-track { background: transparent; }
+.panel-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
 
-/* Shared form field for auth/profile panels */
 .field-input {
   height: 2rem;
   width: 100%;
   border-radius: var(--radius-sm);
-  border: 1px solid var(--input);
+  border: 1px solid rgb(var(--p-line) / 0.4);
   background: transparent;
   padding: 0 0.5rem;
   font-size: 0.75rem;
-  color: var(--foreground);
+  color: rgb(var(--p-text));
   outline: none;
 }
 .field-input:focus {
-  border-color: var(--ring);
+  border-color: rgb(var(--p-accent) / 0.55);
 }
 .field-input::placeholder {
-  color: var(--muted-foreground);
+  color: rgb(var(--p-muted));
+}
+.field-input option {
+  background: rgb(var(--p-surface));
+  color: rgb(var(--p-text));
 }
