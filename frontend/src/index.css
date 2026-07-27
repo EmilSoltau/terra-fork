@@ -185,6 +185,73 @@
   pointer-events: none;
 }
 
+/* Sliding zoom (Ken Burns) behind the splash boot card */
+.splash-kenburns {
+  position: absolute;
+  inset: -8%;
+  background-position: center;
+  background-size: cover;
+  background-repeat: no-repeat;
+  opacity: 0;
+  transform: scale(1.04);
+  transition: opacity 1.35s ease;
+  will-change: transform, opacity;
+}
+.splash-kenburns.is-active {
+  opacity: 1;
+  z-index: 1;
+}
+.splash-kenburns.is-active.splash-kenburns--1 {
+  animation: splash-kenburns-a 16s ease-in-out forwards;
+}
+.splash-kenburns.is-active.splash-kenburns--2 {
+  animation: splash-kenburns-b 16s ease-in-out forwards;
+}
+.splash-kenburns.is-active.splash-kenburns--3 {
+  animation: splash-kenburns-c 16s ease-in-out forwards;
+}
+@keyframes splash-kenburns-a {
+  from {
+    transform: scale(1.05) translate(0%, 0%);
+  }
+  to {
+    transform: scale(1.22) translate(-3%, -2%);
+  }
+}
+@keyframes splash-kenburns-b {
+  from {
+    transform: scale(1.08) translate(2%, -1%);
+  }
+  to {
+    transform: scale(1.24) translate(-2%, 2%);
+  }
+}
+@keyframes splash-kenburns-c {
+  from {
+    transform: scale(1.06) translate(-2%, 1%);
+  }
+  to {
+    transform: scale(1.2) translate(2.5%, -1.5%);
+  }
+}
+.splash-kenburns-scrim {
+  z-index: 2;
+  background:
+    radial-gradient(
+      ellipse 70% 55% at 50% 42%,
+      rgb(var(--p-ink) / 0.18),
+      rgb(var(--p-ink) / 0.42) 55%,
+      rgb(var(--p-ink) / 0.62)
+    ),
+    linear-gradient(
+      to bottom,
+      rgb(var(--p-ink) / 0.2) 0%,
+      transparent 35%,
+      transparent 70%,
+      rgb(var(--p-ink) / 0.55) 100%
+    );
+}
+
 .app-shell-enter {
   animation: app-shell-enter 520ms ease both;
 }
