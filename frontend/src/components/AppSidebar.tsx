@@ -6,9 +6,15 @@ import { AvatarCircle } from "@/components/AvatarCircle"
 interface AppSidebarProps {
   onOpenRepo: () => void
   hasAnalysis?: boolean
+  /** If set, used instead of goAnalysis (e.g. back to list when already on detail). */
+  onAnalysisClick?: () => void
 }
 
-export function AppSidebar({ onOpenRepo, hasAnalysis = false }: AppSidebarProps) {
+export function AppSidebar({
+  onOpenRepo,
+  hasAnalysis = false,
+  onAnalysisClick,
+}: AppSidebarProps) {
   const { user, loading, screen, goMap, goAuth, goProfile, goAnalysis } = useAuth()
 
   return (
@@ -23,7 +29,7 @@ export function AppSidebar({ onOpenRepo, hasAnalysis = false }: AppSidebarProps)
         <NavItem
           active={screen === "analysis"}
           title="Analysis"
-          onClick={goAnalysis}
+          onClick={onAnalysisClick ?? goAnalysis}
           icon={<ChartColumn className="h-4 w-4" />}
           badge={hasAnalysis}
         />

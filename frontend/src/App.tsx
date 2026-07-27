@@ -44,6 +44,42 @@ function isModelKind(v: string): v is ModelKind {
   return v === "spectral" || v === "prithvi" || v === "temporal_transformer"
 }
 
+/** Restore AOI from a saved run's polygon_geojson (GeoJSON or {"area_id":"..."}). */
+function parseRunPolygon(
+  raw: string,
+  areas: Area[]
+): { exampleId: string; polygon: GeoJSONGeometry | null } {
+  const empty = { exampleId: "", polygon: null as GeoJSONGeometry | null }
+  if (!raw?.trim()) return empty
+  try {
+    const parsed = JSON.parse(raw) as Record<string, unknown>
+    if (typeof parsed.area_id === "string") {
+      const area = areas.find((a) => a.id === parsed.area_id)
+      if (area) return { exampleId: area.id, polygon: area.geometry }
+      return empty
+    }
+    if (parsed.type === "Polygon" || parsed.type === "MultiPolygon") {
+      return { exampleId: "", polygon: parsed as unknown as GeoJSONGeometry }
+    }
+    if (parsed.type === "Feature") {
+      const geom = (parsed as { geometry?: GeoJSONGeometry }).geometry
+      if (geom?.type === "Polygon" || geom?.type === "MultiPolygon") {
+        return { exampleId: "", polygon: geom }
+      }
+    }
+    if (parsed.type === "FeatureCollection") {
+      const features = (parsed as { features?: { geometry?: GeoJSONGeometry }[] }).features
+      const geom = features?.find(
+        (f) => f.geometry?.type === "Polygon" || f.geometry?.type === "MultiPolygon"
+      )?.geometry
+      if (geom) return { exampleId: "", polygon: geom }
+    }
+  } catch {
+    /* ignore malformed */
+  }
+  return empty
+}
+
 function App() {
   const period = useMemo(defaultPeriod, [])
   const [areas, setAreas] = useState<Area[]>([])
@@ -457,6 +493,25 @@ function AppBody(props: {
         props.setResult(res)
         if (isModelKind(run.model_kind)) props.setModelKind(run.model_kind)
         props.setAnalysisLabel(run.label || "Saved analysis")
+        const aoi = parseRunPolygon(run.polygon_geojson, props.areas)
+        props.setActiveExample(aoi.exampleId)
+        props.setCustomPolygon(aoi.polygon)
+        if (aoi.polygon?.type === "Polygon") {
+          const ring = aoi.polygon.coordinates?.[0]
+          if (ring?.length) {
+            let lat = 0
+            let lon = 0
+            for (const [x, y] of ring) {
+              lon += x
+              lat += y
+            }
+            props.setFlyTo({
+              lat: lat / ring.length,
+              lon: lon / ring.length,
+              key: Date.now(),
+            })
+          }
+        }
         goAnalysis()
         toast.success("Analysis restored.")
       } catch (e) {
@@ -467,8 +522,30 @@ function AppBody(props: {
     },
     // props setters are stable from useState in parent
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [goAnalysis, props.setResult, props.setModelKind, props.setAnalysisLabel]
+    [
+      goAnalysis,
+      props.areas,
+      props.setResult,
+      props.setModelKind,
+      props.setAnalysisLabel,
+      props.setActiveExample,
+      props.setCustomPolygon,
+      props.setFlyTo,
+    ]
   )
+
+  const backToAnalysesList = useCallback(() => {
+    props.setResult(null)
+    props.setAnalysisLabel(undefined)
+    goAnalysis()
+  }, [goAnalysis, props.setResult, props.setAnalysisLabel])
+
+  const startNewClassification = useCallback(() => {
+    props.setResult(null)
+    props.setAnalysisLabel(undefined)
+    props.onClearArea()
+    goMap()
+  }, [goMap, props.setResult, props.setAnalysisLabel, props.onClearArea])
 
   const areaLabel = useMemo(() => {
     if (props.analysisLabel) return props.analysisLabel
@@ -486,6 +563,10 @@ function AppBody(props: {
         <AppSidebar
           onOpenRepo={() => OpenExternal("https://github.com/rexionmars")}
           hasAnalysis={!!props.result || runs.length > 0}
+          onAnalysisClick={() => {
+            if (screen === "analysis" && props.result) backToAnalysesList()
+            else goAnalysis()
+          }}
         />
         <div className="relative min-h-0 min-w-0 flex-1">
           {screen === "map" && (
@@ -498,6 +579,7 @@ function AppBody(props: {
               overlayOpacity={props.overlayOpacity}
               showConfidence={props.showConfidence}
               smoothOverlay={props.smoothOverlay}
+              areaLabel={areaLabel}
               hasArea={props.hasArea}
               start={props.start}
               end={props.end}
@@ -537,6 +619,7 @@ function AppBody(props: {
                 props.setResult(null)
                 props.setAnalysisLabel(undefined)
               }}
+              onNewClassification={startNewClassification}
             />
           )}
           {screen === "analysis" && (
@@ -547,6 +630,8 @@ function AppBody(props: {
               areaId={props.activeExample || undefined}
               loadingRun={loadingRun}
               onOpenRun={openSavedAnalysis}
+              onBackToList={backToAnalysesList}
+              onNewClassification={startNewClassification}
             />
           )}
           {screen === "auth" && <AuthPage />}

@@ -51,6 +51,7 @@ export interface MapScreenProps {
   onAnalyzeLULC: () => void
   lulcRunning?: boolean
   onCloseResult: () => void
+  onNewClassification: () => void
 }
 
 export function MapScreen(props: MapScreenProps) {
@@ -116,6 +117,7 @@ export function MapScreen(props: MapScreenProps) {
             smoothOverlay={props.smoothOverlay}
             onSmoothOverlayChange={props.onSmoothOverlayChange}
             onClose={props.onCloseResult}
+            onNewClassification={props.onNewClassification}
           />
         )}
       </AnimatePresence>

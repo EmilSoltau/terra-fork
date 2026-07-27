@@ -1,4 +1,11 @@
-import { Download, FolderOpen, History, Map as MapIcon, Play } from "lucide-react"
+import {
+  ArrowLeft,
+  Download,
+  FolderOpen,
+  History,
+  Map as MapIcon,
+  Plus,
+} from "lucide-react"
 import { toast } from "sonner"
 import {
   LineChart,
@@ -30,6 +37,8 @@ interface AnalysisPageProps {
   areaId?: string
   loadingRun?: boolean
   onOpenRun: (run: InferenceRun) => Promise<void>
+  onBackToList: () => void
+  onNewClassification: () => void
 }
 
 export function AnalysisPage({
@@ -39,6 +48,8 @@ export function AnalysisPage({
   areaId,
   loadingRun,
   onOpenRun,
+  onBackToList,
+  onNewClassification,
 }: AnalysisPageProps) {
   const { goMap, runs, refreshRuns } = useAuth()
 
@@ -48,19 +59,29 @@ export function AnalysisPage({
         <div className="mx-auto flex w-full max-w-2xl flex-col gap-6 px-6 py-10">
           <div className="flex flex-col items-center gap-3 text-center">
             <p className="telemetry text-[10px] text-primary">ANALYSIS</p>
-            <h1 className="font-display text-xl font-semibold tracking-wide">No classification open</h1>
+            <h1 className="font-display text-xl font-semibold tracking-wide">Saved analyses</h1>
             <p className="max-w-md text-xs text-muted-foreground">
-              Run Classify on the map, or reopen a saved analysis below. Results persist
-              locally after you close the app.
+              Open a saved run below, or start a new classification on the map. Results
+              persist locally after you close the app.
             </p>
-            <button
-              type="button"
-              onClick={goMap}
-              className="flex h-9 items-center gap-1.5 rounded-sm bg-primary px-4 text-xs font-semibold text-primary-foreground"
-            >
-              <MapIcon className="h-3.5 w-3.5" />
-              Go to map
-            </button>
+            <div className="flex flex-wrap items-center justify-center gap-2">
+              <button
+                type="button"
+                onClick={onNewClassification}
+                className="flex h-9 items-center gap-1.5 rounded-sm bg-primary px-4 text-xs font-semibold text-primary-foreground"
+              >
+                <Plus className="h-3.5 w-3.5" />
+                New classification
+              </button>
+              <button
+                type="button"
+                onClick={goMap}
+                className="flex h-9 items-center gap-1.5 rounded-sm border border-border px-4 text-xs text-muted-foreground hover:bg-secondary hover:text-foreground"
+              >
+                <MapIcon className="h-3.5 w-3.5" />
+                Go to map
+              </button>
+            </div>
           </div>
           <SavedRunsPanel
             runs={runs}
@@ -137,11 +158,27 @@ export function AnalysisPage({
           <div className="flex flex-wrap gap-2">
             <button
               type="button"
+              onClick={onBackToList}
+              className="flex h-8 items-center gap-1.5 rounded-sm border border-border px-3 text-[11px] text-muted-foreground hover:bg-secondary hover:text-foreground"
+            >
+              <ArrowLeft className="h-3 w-3" />
+              Saved analyses
+            </button>
+            <button
+              type="button"
               onClick={goMap}
               className="flex h-8 items-center gap-1.5 rounded-sm border border-border px-3 text-[11px] text-muted-foreground hover:bg-secondary hover:text-foreground"
             >
-              <Play className="h-3 w-3" />
-              Back to map
+              <MapIcon className="h-3 w-3" />
+              View on map
+            </button>
+            <button
+              type="button"
+              onClick={onNewClassification}
+              className="flex h-8 items-center gap-1.5 rounded-sm border border-border px-3 text-[11px] text-muted-foreground hover:bg-secondary hover:text-foreground"
+            >
+              <Plus className="h-3 w-3" />
+              New classification
             </button>
             {hasClassification && result.raster_tif && (
               <button

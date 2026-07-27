@@ -1,6 +1,6 @@
 import { useState } from "react"
 import { motion } from "motion/react"
-import { X, ChevronDown, ChevronUp, ChartColumn } from "lucide-react"
+import { X, ChevronDown, ChevronUp, ChartColumn, Plus } from "lucide-react"
 import type { PredictResult } from "@/lib/types"
 import { useAuth } from "@/lib/auth"
 
@@ -11,6 +11,7 @@ interface ResultsPanelProps {
   smoothOverlay: boolean
   onSmoothOverlayChange: (v: boolean) => void
   onClose: () => void
+  onNewClassification: () => void
 }
 
 export function ResultsPanel({
@@ -20,6 +21,7 @@ export function ResultsPanel({
   smoothOverlay,
   onSmoothOverlayChange,
   onClose,
+  onNewClassification,
 }: ResultsPanelProps) {
   const [collapsed, setCollapsed] = useState(false)
   const { goAnalysis } = useAuth()
@@ -73,6 +75,15 @@ export function ResultsPanel({
             Analysis
           </button>
           <button
+            type="button"
+            onClick={onNewClassification}
+            className="flex items-center gap-1 rounded-sm px-2 py-1 text-[11px] text-muted-foreground hover:bg-secondary hover:text-foreground"
+            title="Start a new classification"
+          >
+            <Plus className="size-3.5" />
+            New
+          </button>
+          <button
             onClick={() => setCollapsed((c) => !c)}
             className="text-muted-foreground hover:text-foreground"
             title={collapsed ? "Expand" : "Collapse"}
@@ -82,7 +93,7 @@ export function ResultsPanel({
           <button
             onClick={onClose}
             className="text-muted-foreground hover:text-foreground"
-            title="Close"
+            title="Close result"
           >
             <X className="size-4" />
           </button>
