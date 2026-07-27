@@ -1,6 +1,7 @@
 import { AnimatePresence } from "motion/react"
 import type {
   Area,
+  DataCubeResult,
   GeoJSONGeometry,
   ModelKind,
   PredictResult,
@@ -9,6 +10,7 @@ import { MapView } from "@/components/MapView"
 import { SearchBar } from "@/components/SearchBar"
 import { ControlPanel } from "@/components/ControlPanel"
 import { ResultsPanel } from "@/components/ResultsPanel"
+import { DataCubeModal } from "@/components/DataCubeModal"
 
 export interface MapScreenProps {
   areas: Area[]
@@ -52,6 +54,12 @@ export interface MapScreenProps {
   lulcRunning?: boolean
   onCloseResult: () => void
   onNewClassification: () => void
+  onViewDataCube: () => void
+  dataCubeLoading?: boolean
+  dataCubeOpen?: boolean
+  dataCubeError?: string | null
+  dataCubeResult?: DataCubeResult | null
+  onCloseDataCube: () => void
 }
 
 export function MapScreen(props: MapScreenProps) {
@@ -105,7 +113,9 @@ export function MapScreen(props: MapScreenProps) {
         progressMsg={props.progressMsg}
         onRun={props.onRun}
         onAnalyzeLULC={props.onAnalyzeLULC}
+        onViewDataCube={props.onViewDataCube}
         lulcRunning={props.lulcRunning}
+        dataCubeLoading={props.dataCubeLoading}
       />
 
       <AnimatePresence>
@@ -121,6 +131,14 @@ export function MapScreen(props: MapScreenProps) {
           />
         )}
       </AnimatePresence>
+
+      <DataCubeModal
+        open={!!props.dataCubeOpen}
+        loading={!!props.dataCubeLoading}
+        error={props.dataCubeError ?? null}
+        result={props.dataCubeResult ?? null}
+        onClose={props.onCloseDataCube}
+      />
     </div>
   )
 }

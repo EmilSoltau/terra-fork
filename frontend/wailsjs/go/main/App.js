@@ -38,6 +38,10 @@ export function ListEmbeddedAreas() {
   return window['go']['main']['App']['ListEmbeddedAreas']();
 }
 
+export function ListDataCube(arg1) {
+  return window['go']['main']['App']['ListDataCube'](arg1);
+}
+
 export function ListRuns(arg1) {
   return window['go']['main']['App']['ListRuns'](arg1);
 }

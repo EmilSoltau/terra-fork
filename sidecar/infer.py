@@ -272,6 +272,12 @@ def list_stac_products(polygon, start, end, tile_list=None, max_cloud=100.0,
             'tile': tile_id,
             'doy': date_obj.timetuple().tm_yday,
             'cloud_cover': cloud,
+            'id': item.id,
+            'preview_uri': (
+                item.assets['rendered_preview'].href
+                if 'rendered_preview' in item.assets
+                else ''
+            ),
         }
 
     result = sorted(products.values(), key=lambda x: x['date'])
@@ -861,6 +867,56 @@ def main():
             fail(f'LULC analysis failed: {e}')
         emit_progress(100, 'done')
         sys.stdout.write(json.dumps({'lulc': lulc}))
+        sys.stdout.flush()
+        return
+
+    # Inventory Sentinel-2 scenes for the AOI (no classification / band reads).
+    if action == 'list_datacube':
+        start = req.get('start')
+        end = req.get('end')
+        max_cloud = float(req.get('max_cloud', 100.0))
+        monthly_best = bool(req.get('monthly_best', True))
+        tiles = req.get('tiles') or None
+        if not start or not end:
+            fail('list_datacube requires start and end dates (YYYY-MM-DD)')
+        if req.get('polygon_geojson'):
+            polygon = polygon_from_geojson(req['polygon_geojson'])
+        elif req.get('kml_path'):
+            area = parse_kml_coordinates(Path(req['kml_path']), req.get('kml_target'))
+            if area is None:
+                fail('polygon not found in KML')
+            polygon = area['polygon']
+        else:
+            fail('no polygon provided (polygon_geojson or kml_path required)')
+        emit_progress(20, 'querying STAC catalog (Planetary Computer)')
+        try:
+            products = list_stac_products(
+                polygon, start, end, tile_list=tiles, max_cloud=max_cloud,
+                monthly_best=monthly_best,
+            )
+        except Exception as e:
+            fail(f'STAC query failed: {e}')
+        scenes = []
+        for p in products:
+            scenes.append({
+                'id': p.get('id') or '',
+                'date': p['date'].strftime('%Y-%m-%d'),
+                'cloud_cover': round(float(p.get('cloud_cover', 0.0)), 2),
+                'tile': p.get('tile') or '',
+                'satellite': p.get('satellite') or 'S2',
+                'preview_uri': p.get('preview_uri') or '',
+            })
+        date_range = []
+        if scenes:
+            date_range = [scenes[0]['date'], scenes[-1]['date']]
+        emit_progress(100, f'{len(scenes)} scenes')
+        sys.stdout.write(json.dumps({
+            'n_scenes': len(scenes),
+            'scenes': scenes,
+            'date_range': date_range,
+            'monthly_best': monthly_best,
+            'max_cloud': max_cloud,
+        }))
         sys.stdout.flush()
         return
 

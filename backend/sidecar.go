@@ -557,6 +557,150 @@ func (r *Runner) AnalyzeLULC(ctx context.Context, req LULCRequest) (*LULCAnalysi
 	return convertLULC(wrapped.LULC), nil
 }
 
+// ListDataCube queries Planetary Computer STAC for scenes covering the AOI
+// (same filters as Predict) without running classification.
+func (r *Runner) ListDataCube(ctx context.Context, req DataCubeRequest) (*DataCubeResult, error) {
+	if _, err := os.Stat(r.sidecar); err != nil {
+		return nil, fmt.Errorf("sidecar not found at %s", r.sidecar)
+	}
+	if strings.TrimSpace(req.Start) == "" || strings.TrimSpace(req.End) == "" {
+		return nil, fmt.Errorf("set the acquisition period (start and end dates)")
+	}
+
+	maxCloud := req.MaxCloud
+	if maxCloud <= 0 {
+		maxCloud = 100
+	}
+
+	var polygon *GeoJSONGeometry
+	tiles := req.Tiles
+	if req.AreaID != "" {
+		area, ok := r.loadArea(req.AreaID)
+		if !ok {
+			return nil, fmt.Errorf("unknown area: %s", req.AreaID)
+		}
+		geom := area.Geometry
+		polygon = &geom
+		if len(tiles) == 0 {
+			tiles = []string{"T22JBT", "T21JZN"}
+		}
+	} else if req.PolygonGeoJSON != nil {
+		polygon = req.PolygonGeoJSON
+	} else {
+		return nil, fmt.Errorf("no area or polygon provided")
+	}
+
+	workDir, err := os.MkdirTemp("", "geosense-cube-")
+	if err != nil {
+		return nil, fmt.Errorf("failed to create work dir: %w", err)
+	}
+	defer os.RemoveAll(workDir)
+
+	sReq := sidecarRequest{
+		Action:         "list_datacube",
+		ModelDir:       r.modelDir,
+		Source:         "stac",
+		Start:          req.Start,
+		End:            req.End,
+		MaxCloud:       maxCloud,
+		MonthlyBest:    req.MonthlyBest,
+		Tiles:          tiles,
+		PolygonGeoJSON: polygon,
+		WorkDir:        workDir,
+	}
+	reqBytes, err := json.Marshal(sReq)
+	if err != nil {
+		return nil, fmt.Errorf("failed to encode request: %w", err)
+	}
+
+	cmd := exec.CommandContext(ctx, r.pythonPath, r.sidecar)
+	cmd.Stdin = strings.NewReader(string(reqBytes))
+
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		return nil, err
+	}
+	stderr, err := cmd.StderrPipe()
+	if err != nil {
+		return nil, err
+	}
+
+	if err := cmd.Start(); err != nil {
+		return nil, fmt.Errorf("failed to start sidecar: %w", err)
+	}
+
+	var wg sync.WaitGroup
+	var lastError string
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		scanner := bufio.NewScanner(stderr)
+		scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
+		for scanner.Scan() {
+			line := strings.TrimSpace(scanner.Text())
+			if line == "" {
+				continue
+			}
+			var ev struct {
+				Progress *int   `json:"progress"`
+				Msg      string `json:"msg"`
+				Error    string `json:"error"`
+			}
+			if err := json.Unmarshal([]byte(line), &ev); err != nil {
+				wruntime.EventsEmit(ctx, "predict:progress", ProgressEvent{Progress: -1, Msg: line})
+				continue
+			}
+			if ev.Error != "" {
+				lastError = ev.Error
+				continue
+			}
+			p := -1
+			if ev.Progress != nil {
+				p = *ev.Progress
+			}
+			wruntime.EventsEmit(ctx, "predict:progress", ProgressEvent{Progress: p, Msg: ev.Msg})
+		}
+	}()
+
+	var out strings.Builder
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		scanner := bufio.NewScanner(stdout)
+		scanner.Buffer(make([]byte, 0, 1024*1024), 16*1024*1024)
+		for scanner.Scan() {
+			out.WriteString(scanner.Text())
+		}
+	}()
+
+	wg.Wait()
+	waitErr := cmd.Wait()
+	if waitErr != nil {
+		if lastError != "" {
+			return nil, fmt.Errorf("%s", lastError)
+		}
+		return nil, fmt.Errorf("sidecar failed: %w", waitErr)
+	}
+
+	raw := strings.TrimSpace(out.String())
+	if raw == "" {
+		if lastError != "" {
+			return nil, fmt.Errorf("%s", lastError)
+		}
+		return nil, fmt.Errorf("sidecar produced no output")
+	}
+
+	var result DataCubeResult
+	if err := json.Unmarshal([]byte(raw), &result); err != nil {
+		return nil, fmt.Errorf("failed to parse data cube result: %w", err)
+	}
+	if result.Scenes == nil {
+		result.Scenes = []DataCubeScene{}
+	}
+	return &result, nil
+}
+
 // pngToDataURI reads a PNG file and returns a base64 data URI.
 func pngToDataURI(path string) (string, error) {
 	data, err := os.ReadFile(path)

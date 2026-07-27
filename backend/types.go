@@ -180,6 +180,36 @@ type LULCRequest struct {
 	MapBiomasPath  string           `json:"mapbiomas_path,omitempty"`
 }
 
+// DataCubeRequest lists Sentinel-2 scenes for an AOI before Classify.
+type DataCubeRequest struct {
+	AreaID         string           `json:"area_id"`
+	PolygonGeoJSON *GeoJSONGeometry `json:"polygon_geojson"`
+	Start          string           `json:"start"`
+	End            string           `json:"end"`
+	MaxCloud       float64          `json:"max_cloud"`
+	MonthlyBest    bool             `json:"monthly_best"`
+	Tiles          []string         `json:"tiles"`
+}
+
+// DataCubeScene is one STAC scene in the data-cube inventory.
+type DataCubeScene struct {
+	ID          string  `json:"id"`
+	Date        string  `json:"date"`
+	CloudCover  float64 `json:"cloud_cover"`
+	Tile        string  `json:"tile"`
+	Satellite   string  `json:"satellite"`
+	PreviewURI  string  `json:"preview_uri,omitempty"`
+}
+
+// DataCubeResult is the inventory returned by ListDataCube.
+type DataCubeResult struct {
+	NScenes     int             `json:"n_scenes"`
+	Scenes      []DataCubeScene `json:"scenes"`
+	DateRange   []string        `json:"date_range"`
+	MonthlyBest bool            `json:"monthly_best"`
+	MaxCloud    float64         `json:"max_cloud"`
+}
+
 // sidecarResult is the raw JSON returned by the sidecar on stdout.
 type sidecarResult struct {
 	Extent          Bounds                `json:"extent"`

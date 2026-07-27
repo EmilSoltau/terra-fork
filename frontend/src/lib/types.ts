@@ -204,3 +204,30 @@ export interface InferenceRun {
   n_dates: number
   label?: string
 }
+
+export interface DataCubeRequest {
+  area_id: string
+  polygon_geojson: GeoJSONGeometry | null
+  start: string
+  end: string
+  max_cloud: number
+  monthly_best: boolean
+  tiles: string[]
+}
+
+export interface DataCubeScene {
+  id: string
+  date: string
+  cloud_cover: number
+  tile: string
+  satellite: string
+  preview_uri?: string
+}
+
+export interface DataCubeResult {
+  n_scenes: number
+  scenes: DataCubeScene[]
+  date_range: string[]
+  monthly_best: boolean
+  max_cloud: number
+}

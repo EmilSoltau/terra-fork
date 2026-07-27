@@ -6,6 +6,7 @@ import {
   LoadAnalysis,
   Predict,
   AnalyzeLULC,
+  ListDataCube,
   OpenExternal,
   RevealMainWindow,
 } from "../wailsjs/go/main/App"
@@ -20,6 +21,8 @@ import type {
   ModelKind,
   InferenceRun,
   LULCAnalysis,
+  DataCubeResult,
+  DataCubeRequest,
 } from "@/lib/types"
 import { AuthProvider, useAuth } from "@/lib/auth"
 import { ThemeSync } from "@/components/ThemeSync"
@@ -355,6 +358,46 @@ function AppBody(props: {
 }) {
   const { refreshRuns, screen, goAnalysis, goMap, runs } = useAuth()
   const [loadingRun, setLoadingRun] = useState(false)
+  const [dataCubeOpen, setDataCubeOpen] = useState(false)
+  const [dataCubeLoading, setDataCubeLoading] = useState(false)
+  const [dataCubeError, setDataCubeError] = useState<string | null>(null)
+  const [dataCubeResult, setDataCubeResult] = useState<DataCubeResult | null>(null)
+
+  const handleViewDataCube = async () => {
+    if (!props.start || !props.end) {
+      toast.error("Set the acquisition period.")
+      return
+    }
+    if (!props.customPolygon && !props.activeExample) {
+      toast.error("Define an area: draw, search, or load an example.")
+      return
+    }
+    const useExample =
+      !!props.activeExample && !!props.areas.find((a) => a.id === props.activeExample)
+    const req: DataCubeRequest = {
+      area_id: useExample ? props.activeExample : "",
+      polygon_geojson: useExample ? null : props.customPolygon,
+      start: props.start,
+      end: props.end,
+      max_cloud: props.maxCloud,
+      monthly_best: props.monthlyBest,
+      tiles: [],
+    }
+    setDataCubeOpen(true)
+    setDataCubeLoading(true)
+    setDataCubeError(null)
+    setDataCubeResult(null)
+    try {
+      const res = (await ListDataCube(req as never)) as unknown as DataCubeResult
+      setDataCubeResult(res)
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e)
+      setDataCubeError(msg)
+      toast.error("Data cube error: " + msg)
+    } finally {
+      setDataCubeLoading(false)
+    }
+  }
 
   const handleRun = async () => {
     if (!props.start || !props.end) {
@@ -620,6 +663,15 @@ function AppBody(props: {
                 props.setAnalysisLabel(undefined)
               }}
               onNewClassification={startNewClassification}
+              onViewDataCube={() => void handleViewDataCube()}
+              dataCubeLoading={dataCubeLoading}
+              dataCubeOpen={dataCubeOpen}
+              dataCubeError={dataCubeError}
+              dataCubeResult={dataCubeResult}
+              onCloseDataCube={() => {
+                setDataCubeOpen(false)
+                setDataCubeError(null)
+              }}
             />
           )}
           {screen === "analysis" && (
