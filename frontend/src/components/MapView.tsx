@@ -201,10 +201,10 @@ function DrawControl({
             // legacy leaflet-draw default; keep false so fill never steals events
             clickable: false,
             fill: true,
-            fillOpacity: 0.08,
-            weight: 2,
-            opacity: 0.9,
-            color: "#d8944a",
+            fillOpacity: 0.06,
+            weight: 1.5,
+            opacity: 1,
+            color: "#ffffff",
           },
           icon: new L.DivIcon({
             iconSize: new L.Point(10, 10),
@@ -232,6 +232,15 @@ function DrawControl({
     }
     const onCreated = (e: any) => {
       drawnItems.clearLayers()
+      // Hide draw stroke once finished — AoiContour paints the visible white outline above overlays.
+      if (e.layer?.setStyle) {
+        e.layer.setStyle({
+          color: "#ffffff",
+          weight: 1.5,
+          opacity: 0,
+          fillOpacity: 0,
+        })
+      }
       drawnItems.addLayer(e.layer)
       emit()
     }
@@ -261,8 +270,25 @@ function DrawControl({
     if (JSON.stringify(current) === JSON.stringify(customPolygon)) return
     if (customPolygon) {
       fg.clearLayers()
-      const layer = L.geoJSON(customPolygon as any)
-      layer.eachLayer((l) => fg.addLayer(l))
+      const layer = L.geoJSON(customPolygon as any, {
+        style: {
+          color: "#ffffff",
+          weight: 1.5,
+          opacity: 0,
+          fillOpacity: 0,
+        },
+      })
+      layer.eachLayer((l) => {
+        if (l instanceof L.Path) {
+          l.setStyle({
+            color: "#ffffff",
+            weight: 1.5,
+            opacity: 0,
+            fillOpacity: 0,
+          })
+        }
+        fg.addLayer(l)
+      })
       try {
         map.fitBounds(fg.getBounds(), { padding: [40, 40] })
       } catch {
@@ -276,8 +302,69 @@ function DrawControl({
   return null
 }
 
+type LonLat = [number, number] // [lon, lat]
+
+function polygonOuterRing(geometry: GeoJSONGeometry): LonLat[] | null {
+  if (geometry.type === "Polygon") {
+    return (geometry.coordinates[0] as LonLat[]) ?? null
+  }
+  if (geometry.type === "MultiPolygon") {
+    const multi = geometry.coordinates as unknown as number[][][][]
+    return (multi[0]?.[0] as LonLat[]) ?? null
+  }
+  return null
+}
+
+function ringCentroid(ring: LonLat[]): LonLat {
+  let lon = 0
+  let lat = 0
+  const n = Math.max(1, ring.length - 1)
+  for (let i = 0; i < ring.length - 1; i++) {
+    lon += ring[i][0]
+    lat += ring[i][1]
+  }
+  return [lon / n, lat / n]
+}
+
+/** Longest edge in the southern band of the AOI — label glues to this segment. */
+function pickContourEdge(geometry: GeoJSONGeometry): {
+  a: LonLat
+  b: LonLat
+  mid: LonLat
+} | null {
+  const ring = polygonOuterRing(geometry)
+  if (!ring || ring.length < 2) return null
+
+  let latMin = Infinity
+  let latMax = -Infinity
+  for (const [, lat] of ring) {
+    if (lat < latMin) latMin = lat
+    if (lat > latMax) latMax = lat
+  }
+  const southBand = latMin + (latMax - latMin) * 0.4
+
+  let best: { a: LonLat; b: LonLat; mid: LonLat; score: number } | null = null
+  for (let i = 0; i < ring.length - 1; i++) {
+    const a = ring[i]
+    const b = ring[i + 1]
+    const mid: LonLat = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2]
+    const dlon = b[0] - a[0]
+    const dlat = b[1] - a[1]
+    const len = Math.hypot(dlon, dlat)
+    if (len < 1e-12) continue
+    // Prefer southern long edges (Wheat Field labels sit on the bottom contour).
+    const southBonus = mid[1] <= southBand ? 3 : 1
+    const score = len * southBonus - (mid[1] - latMin) * 0.15
+    if (!best || score > best.score) {
+      best = { a, b, mid, score }
+    }
+  }
+  if (!best) return null
+  return { a: best.a, b: best.b, mid: best.mid }
+}
+
 /**
- * White AOI outline + name chip (ag-map style), drawn above prediction overlays.
+ * Thin white AOI outline + name chip glued to a contour edge and rotated with it.
  */
 function AoiContour({
   geometry,
@@ -286,31 +373,11 @@ function AoiContour({
   geometry: GeoJSONGeometry
   label: string
 }) {
-  const labelPos = useMemo(() => {
-    try {
-      const layer = L.geoJSON(geometry as GeoJSON.GeoJsonObject)
-      const b = layer.getBounds()
-      if (!b.isValid()) return null
-      const lat = b.getSouth() + (b.getNorth() - b.getSouth()) * 0.12
-      return [lat, b.getCenter().lng] as [number, number]
-    } catch {
-      return null
-    }
+  const edge = useMemo(() => pickContourEdge(geometry), [geometry])
+  const centroid = useMemo(() => {
+    const ring = polygonOuterRing(geometry)
+    return ring ? ringCentroid(ring) : null
   }, [geometry])
-
-  const icon = useMemo(() => {
-    const safe = label
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;")
-      .replace(/"/g, "&quot;")
-    return L.divIcon({
-      className: "aoi-label",
-      html: `<div class="aoi-label-chip">${safe}</div>`,
-      iconSize: [0, 0],
-      iconAnchor: [0, 0],
-    })
-  }, [label])
 
   return (
     <>
@@ -319,16 +386,115 @@ function AoiContour({
         interactive={false}
         style={{
           color: "#ffffff",
-          weight: 2.75,
-          opacity: 0.98,
-          fillColor: "#ffffff",
+          weight: 1.5,
+          opacity: 1,
           fillOpacity: 0,
         }}
       />
-      {labelPos && label.trim() && (
-        <Marker position={labelPos} icon={icon} interactive={false} />
+      {edge && centroid && label.trim() && (
+        <AoiEdgeLabel edge={edge} centroid={centroid} label={label.trim()} />
       )}
     </>
+  )
+}
+
+/** Chip anchored outside a contour segment, rotated to match the edge angle. */
+function AoiEdgeLabel({
+  edge,
+  centroid,
+  label,
+}: {
+  edge: { a: LonLat; b: LonLat; mid: LonLat }
+  centroid: LonLat
+  label: string
+}) {
+  const map = useMap()
+  const [pose, setPose] = useState<{
+    position: [number, number]
+    angle: number
+  } | null>(null)
+
+  const updatePose = () => {
+    const p1 = map.latLngToLayerPoint(L.latLng(edge.a[1], edge.a[0]))
+    const p2 = map.latLngToLayerPoint(L.latLng(edge.b[1], edge.b[0]))
+    const mid = map.latLngToLayerPoint(L.latLng(edge.mid[1], edge.mid[0]))
+    const c = map.latLngToLayerPoint(L.latLng(centroid[1], centroid[0]))
+
+    let rad = Math.atan2(p2.y - p1.y, p2.x - p1.x)
+    let deg = (rad * 180) / Math.PI
+    // Keep text upright (readable left-to-right).
+    if (deg > 90) {
+      deg -= 180
+      rad -= Math.PI
+    } else if (deg < -90) {
+      deg += 180
+      rad += Math.PI
+    }
+
+    // Outward unit normal so the chip sits just outside the contour (top edge near the line).
+    let nx = -Math.sin(rad)
+    let ny = Math.cos(rad)
+    const outX = mid.x - c.x
+    const outY = mid.y - c.y
+    if (outX * nx + outY * ny < 0) {
+      nx = -nx
+      ny = -ny
+    }
+
+    // ~half chip height — looks "glued" to the contour from outside.
+    const offsetPx = 9
+    const pt = L.point(mid.x + nx * offsetPx, mid.y + ny * offsetPx)
+    const ll = map.layerPointToLatLng(pt)
+    setPose((prev) => {
+      if (
+        prev &&
+        Math.abs(prev.angle - deg) < 0.08 &&
+        Math.abs(prev.position[0] - ll.lat) < 1e-8 &&
+        Math.abs(prev.position[1] - ll.lng) < 1e-8
+      ) {
+        return prev
+      }
+      return { position: [ll.lat, ll.lng], angle: deg }
+    })
+  }
+
+  useEffect(() => {
+    updatePose()
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- refresh when edge/map changes
+  }, [map, edge.a, edge.b, edge.mid, centroid])
+
+  useMapEvents({
+    zoom: updatePose,
+    zoomend: updatePose,
+    move: updatePose,
+    moveend: updatePose,
+    viewreset: updatePose,
+  })
+
+  const icon = useMemo(() => {
+    if (!pose) return null
+    const safe = label
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+    return L.divIcon({
+      className: "aoi-label",
+      html: `<div class="aoi-label-chip" style="transform:translate(-50%,-50%) rotate(${pose.angle}deg)">${safe}</div>`,
+      iconSize: [0, 0],
+      iconAnchor: [0, 0],
+    })
+  }, [label, pose])
+
+  if (!pose || !icon) return null
+
+  return (
+    <Marker
+      position={pose.position}
+      icon={icon}
+      interactive={false}
+      zIndexOffset={600}
+    />
   )
 }
 
