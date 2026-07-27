@@ -11,6 +11,7 @@ import { SearchBar } from "@/components/SearchBar"
 import { ControlPanel } from "@/components/ControlPanel"
 import { ResultsPanel } from "@/components/ResultsPanel"
 import { DataCubeModal } from "@/components/DataCubeModal"
+import { ConfidenceLegend } from "@/components/ConfidenceLegend"
 
 export interface MapScreenProps {
   areas: Area[]
@@ -81,6 +82,14 @@ export function MapScreen(props: MapScreenProps) {
       />
 
       <SearchBar onSelectLocation={props.onLocationSelect} />
+
+      <ConfidenceLegend
+        visible={
+          !!props.showConfidence &&
+          !!props.result?.confidence_uri &&
+          (props.result.n_dates ?? 0) > 0
+        }
+      />
 
       <ControlPanel
         areas={props.areas}

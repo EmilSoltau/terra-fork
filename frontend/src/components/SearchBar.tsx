@@ -40,7 +40,7 @@ export function SearchBar({ onSelectLocation }: SearchBarProps) {
 
   return (
     <div className="app-no-drag absolute left-1/2 top-3 z-[1050] w-[26rem] max-w-[60%] -translate-x-1/2">
-      <div className="panel flex items-center gap-2 rounded-sm px-2.5 py-1.5">
+      <div className="panel flex items-center gap-2 rounded-lg px-2.5 py-1.5">
         <Search className="size-3.5 shrink-0 text-muted-foreground" />
         <input
           value={query}
@@ -56,7 +56,7 @@ export function SearchBar({ onSelectLocation }: SearchBarProps) {
         ) : (
           <button
             onClick={runSearch}
-            className="shrink-0 rounded-sm px-2 py-0.5 text-[11px] text-muted-foreground hover:bg-secondary hover:text-foreground"
+            className="shrink-0 rounded-md px-2 py-0.5 text-[11px] text-muted-foreground hover:bg-secondary hover:text-foreground"
           >
             Search
           </button>
@@ -64,7 +64,7 @@ export function SearchBar({ onSelectLocation }: SearchBarProps) {
       </div>
 
       {open && results.length > 0 && (
-        <ul className="panel panel-scroll mt-1 max-h-64 overflow-y-auto rounded-sm">
+        <ul className="panel panel-scroll mt-1 max-h-64 overflow-y-auto rounded-lg">
           {results.map((r, i) => (
             <li key={i}>
               <button

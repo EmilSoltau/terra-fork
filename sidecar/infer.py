@@ -520,12 +520,12 @@ def classify_from_features(feature_matrix, valid_mask, model, scaler, label_enco
 
 
 def write_confidence_png(confidence_map, valid_mask, out_path):
-    """Write a single-band confidence overlay as RGBA (cyan heat, alpha=conf)."""
+    """Write a single-band confidence overlay as RGBA (blue→cyan→yellow)."""
     h, w = confidence_map.shape
     rgba = np.zeros((h, w, 4), dtype=np.uint8)
     conf = np.clip(confidence_map, 0, 1)
     mask = valid_mask & (conf > 0)
-    # Map confidence to a cool→hot ramp (blue→cyan→yellow).
+    # Cool→hot ramp used by the map legend (keep in sync with ConfidenceLegend CSS).
     r = np.clip((conf - 0.5) * 2.0, 0, 1)
     g = np.clip(conf * 1.2, 0, 1)
     b = np.clip(1.0 - conf * 0.5, 0, 1)

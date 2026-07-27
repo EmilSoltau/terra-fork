@@ -281,23 +281,47 @@
   background: rgb(var(--p-ink));
   font-family: var(--font-sans);
 }
+
+/* Map toolbars (draw / edit / zoom) — match panel chrome + soft radius */
+.leaflet-bar {
+  border: 1px solid rgb(var(--p-line) / 0.28) !important;
+  border-radius: 0.55rem !important;
+  overflow: hidden;
+  box-shadow: 0 2px 8px rgb(0 0 0 / 0.28) !important;
+  background: transparent !important;
+}
 .leaflet-control-zoom a,
 .leaflet-draw-toolbar a {
-  background-color: rgb(var(--p-ink) / 0.85) !important;
+  background-color: rgb(var(--p-ink) / 0.55) !important;
   color: rgb(var(--p-text)) !important;
-  border-color: rgb(var(--p-line) / 0.35) !important;
+  border-bottom: 1px solid rgb(var(--p-line) / 0.22) !important;
+  width: 2.125rem !important;
+  height: 2.125rem !important;
+  line-height: 2.125rem !important;
+  backdrop-filter: blur(18px) saturate(1.05);
+  -webkit-backdrop-filter: blur(18px) saturate(1.05);
 }
 .leaflet-control-zoom a:hover,
 .leaflet-draw-toolbar a:hover {
-  background-color: rgb(var(--p-surface-raised) / 0.9) !important;
+  background-color: rgb(var(--p-surface-raised) / 0.85) !important;
+  color: rgb(var(--p-text)) !important;
 }
-.leaflet-bar {
-  border: 1px solid rgb(var(--p-line) / 0.35) !important;
-  box-shadow: none !important;
+.leaflet-bar a:first-child {
+  border-top-left-radius: 0.55rem !important;
+  border-top-right-radius: 0.55rem !important;
+}
+.leaflet-bar a:last-child {
+  border-bottom: none !important;
+  border-bottom-left-radius: 0.55rem !important;
+  border-bottom-right-radius: 0.55rem !important;
+}
+.leaflet-bar a:first-child:last-child {
+  border-radius: 0.55rem !important;
 }
 .leaflet-draw-actions a {
-  background-color: rgb(var(--p-ink) / 0.9) !important;
+  background-color: rgb(var(--p-ink) / 0.75) !important;
   color: rgb(var(--p-text)) !important;
+  border-radius: 0.35rem !important;
 }
 
 /* Draw guides must paint above the in-progress polygon SVG */
@@ -346,6 +370,25 @@
   pointer-events: none;
   user-select: none;
   transform-origin: center center;
+}
+
+/* Confidence overlay legend — same ramp as sidecar write_confidence_png.
+   Sits in the bottom-right tool column, above draw/edit/zoom (leaflet ~200px). */
+.confidence-legend {
+  right: 10px;
+  bottom: 15.25rem; /* clear gap above draw + edit + zoom stack */
+  width: 2.5rem;
+}
+.confidence-legend-bar {
+  height: 5.5rem;
+  background: linear-gradient(
+    to top,
+    rgb(0 0 255) 0%,
+    rgb(0 76 223) 25%,
+    rgb(0 153 191) 50%,
+    rgb(128 230 159) 75%,
+    rgb(255 255 128) 100%
+  );
 }
 
 .leaflet-control-attribution {
