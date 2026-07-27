@@ -40,6 +40,8 @@ interface ControlPanelProps {
   onPrithviModeChange: (m: "pixel" | "patch") => void
   overlayOpacity: number
   onOpacityChange: (v: number) => void
+  smoothOverlay: boolean
+  onSmoothOverlayChange: (v: boolean) => void
   running: boolean
   progress: number
   progressMsg: string
@@ -93,6 +95,8 @@ export function ControlPanel(props: ControlPanelProps) {
     onPrithviModeChange,
     overlayOpacity,
     onOpacityChange,
+    smoothOverlay,
+    onSmoothOverlayChange,
     running,
     progress,
     progressMsg,
@@ -391,6 +395,18 @@ export function ControlPanel(props: ControlPanelProps) {
             className="accent-[var(--primary)]"
           />
         </div>
+        <label className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+          <input
+            type="checkbox"
+            checked={smoothOverlay}
+            onChange={(e) => onSmoothOverlayChange(e.target.checked)}
+            className="accent-primary"
+          />
+          Smooth prediction overlay
+        </label>
+        <p className="-mt-1 text-[10px] leading-snug text-muted-foreground/80">
+          Contour style — solid classes, curved boundaries
+        </p>
       </Section>
 
       <div className="mt-auto flex flex-col gap-2 pt-2">

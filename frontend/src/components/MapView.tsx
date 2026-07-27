@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import {
   MapContainer,
   TileLayer,
@@ -15,6 +15,7 @@ import L from "leaflet"
 import "./leafletDrawPatch"
 import type { LatLngBoundsExpression } from "leaflet"
 import type { Area, PredictResult, GeoJSONGeometry } from "@/lib/types"
+import { majoritySmoothOverlay } from "@/lib/smoothOverlay"
 
 interface MapViewProps {
   areas: Area[]
@@ -26,6 +27,7 @@ interface MapViewProps {
   result: PredictResult | null
   overlayOpacity: number
   showConfidence: boolean
+  smoothOverlay: boolean
   onViewChange: (v: { lat: number; lon: number; zoom: number }) => void
 }
 
@@ -91,6 +93,77 @@ function FitBounds({
     }
   }, [map, customPolygon, result])
   return null
+}
+
+/**
+ * Prediction ImageOverlay. Smooth = contour/isoband style (solid colors,
+ * curved class boundaries via blur→argmax), not soft RGB blend.
+ */
+function PredictionOverlay({
+  url,
+  bounds,
+  opacity,
+  smooth,
+}: {
+  url: string
+  bounds: LatLngBoundsExpression
+  opacity: number
+  smooth: boolean
+}) {
+  const ref = useRef<L.ImageOverlay | null>(null)
+  const [displayUrl, setDisplayUrl] = useState(url)
+
+  useEffect(() => {
+    let cancelled = false
+
+    if (!smooth) {
+      setDisplayUrl(url)
+      return
+    }
+
+    majoritySmoothOverlay(url)
+      .then((next) => {
+        if (!cancelled) setDisplayUrl(next)
+      })
+      .catch(() => {
+        if (!cancelled) setDisplayUrl(url)
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [url, smooth])
+
+  useEffect(() => {
+    // Always nearest-neighbor: colors stay solid; curves come from the raster.
+    const applyCrisp = () => {
+      const img = ref.current?.getElement()
+      if (!img) return
+      img.classList.add("overlay-crisp")
+      img.classList.remove("overlay-smooth")
+    }
+    applyCrisp()
+    const overlay = ref.current
+    if (!overlay) return
+    overlay.on("load", applyCrisp)
+    return () => {
+      overlay.off("load", applyCrisp)
+    }
+  }, [displayUrl])
+
+  useEffect(() => {
+    ref.current?.setUrl(displayUrl)
+  }, [displayUrl])
+
+  return (
+    <ImageOverlay
+      ref={ref}
+      url={displayUrl}
+      bounds={bounds}
+      opacity={opacity}
+      className="overlay-crisp"
+    />
+  )
 }
 
 // leaflet-draw integration: a single-polygon draw tool with edit/clear.
@@ -211,6 +284,7 @@ export function MapView({
   result,
   overlayOpacity,
   showConfidence,
+  smoothOverlay,
   onViewChange,
 }: MapViewProps) {
   const center = useMemo<[number, number]>(() => [-14.5, -52], [])
@@ -280,13 +354,19 @@ export function MapView({
         ))}
 
       {result && hasValidExtent && overlayBounds && overlayUrl && (
-        <ImageOverlay url={overlayUrl} bounds={overlayBounds} opacity={overlayOpacity} />
+        <PredictionOverlay
+          url={overlayUrl}
+          bounds={overlayBounds}
+          opacity={overlayOpacity}
+          smooth={smoothOverlay}
+        />
       )}
       {result && hasValidExtent && overlayBounds && showConfidence && result.confidence_uri && (
-        <ImageOverlay
+        <PredictionOverlay
           url={result.confidence_uri}
           bounds={overlayBounds}
           opacity={Math.min(1, overlayOpacity + 0.15)}
+          smooth={false}
         />
       )}
 

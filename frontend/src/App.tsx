@@ -64,6 +64,7 @@ function App() {
   const [prithviMode, setPrithviMode] = useState<"pixel" | "patch">("pixel")
   const [overlayOpacity, setOverlayOpacity] = useState<number>(0.75)
   const [showConfidence, setShowConfidence] = useState(false)
+  const [smoothOverlay, setSmoothOverlay] = useState(false)
   const [running, setRunning] = useState<boolean>(false)
   const [progress, setProgress] = useState<number>(0)
   const [progressMsg, setProgressMsg] = useState<string>("")
@@ -231,6 +232,7 @@ function App() {
             prithviMode={prithviMode}
             overlayOpacity={overlayOpacity}
             showConfidence={showConfidence}
+            smoothOverlay={smoothOverlay}
             running={running}
             progress={progress}
             progressMsg={progressMsg}
@@ -250,6 +252,7 @@ function App() {
             setPrithviMode={setPrithviMode}
             setOverlayOpacity={setOverlayOpacity}
             setShowConfidence={setShowConfidence}
+            setSmoothOverlay={setSmoothOverlay}
             setRunning={setRunning}
             setProgress={setProgress}
             setProgressMsg={setProgressMsg}
@@ -282,6 +285,7 @@ function AppBody(props: {
   prithviMode: "pixel" | "patch"
   overlayOpacity: number
   showConfidence: boolean
+  smoothOverlay: boolean
   running: boolean
   progress: number
   progressMsg: string
@@ -301,6 +305,7 @@ function AppBody(props: {
   setPrithviMode: (m: "pixel" | "patch") => void
   setOverlayOpacity: (v: number) => void
   setShowConfidence: (v: boolean) => void
+  setSmoothOverlay: (v: boolean) => void
   setRunning: (v: boolean) => void
   setProgress: (v: number) => void
   setProgressMsg: (v: string) => void
@@ -492,6 +497,7 @@ function AppBody(props: {
               result={props.result}
               overlayOpacity={props.overlayOpacity}
               showConfidence={props.showConfidence}
+              smoothOverlay={props.smoothOverlay}
               hasArea={props.hasArea}
               start={props.start}
               end={props.end}
@@ -523,6 +529,7 @@ function AppBody(props: {
               onPrithviModeChange={props.setPrithviMode}
               onOpacityChange={props.setOverlayOpacity}
               onShowConfidenceChange={props.setShowConfidence}
+              onSmoothOverlayChange={props.setSmoothOverlay}
               onRun={handleRun}
               onAnalyzeLULC={handleAnalyzeLULC}
               lulcRunning={props.lulcRunning}

@@ -8,6 +8,8 @@ interface ResultsPanelProps {
   result: PredictResult
   showConfidence: boolean
   onShowConfidenceChange: (v: boolean) => void
+  smoothOverlay: boolean
+  onSmoothOverlayChange: (v: boolean) => void
   onClose: () => void
 }
 
@@ -15,6 +17,8 @@ export function ResultsPanel({
   result,
   showConfidence,
   onShowConfidenceChange,
+  smoothOverlay,
+  onSmoothOverlayChange,
   onClose,
 }: ResultsPanelProps) {
   const [collapsed, setCollapsed] = useState(false)
@@ -89,6 +93,15 @@ export function ResultsPanel({
         <>
           <hr className="hairline" />
           <div className="flex flex-col gap-3 p-3">
+            <label className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+              <input
+                type="checkbox"
+                checked={smoothOverlay}
+                onChange={(e) => onSmoothOverlayChange(e.target.checked)}
+                className="accent-primary"
+              />
+              Smooth prediction overlay
+            </label>
             {!isLulcOnly && (
               <label className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
                 <input

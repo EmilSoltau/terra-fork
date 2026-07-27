@@ -317,6 +317,14 @@
   height: 10px !important;
 }
 
+/* Overlays stay nearest-neighbor; smooth mode reshapes class regions in the PNG. */
+.leaflet-image-layer.overlay-crisp {
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+  filter: none;
+  transform: none;
+}
+
 .leaflet-control-attribution {
   background: rgb(var(--p-ink) / 0.7) !important;
   color: rgb(var(--p-muted)) !important;
