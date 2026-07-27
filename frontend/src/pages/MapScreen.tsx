@@ -19,6 +19,7 @@ export interface MapScreenProps {
   overlayOpacity: number
   showConfidence: boolean
   smoothOverlay: boolean
+  areaLabel?: string
   hasArea: boolean
   start: string
   end: string
@@ -66,6 +67,7 @@ export function MapScreen(props: MapScreenProps) {
         overlayOpacity={props.overlayOpacity}
         showConfidence={props.showConfidence}
         smoothOverlay={props.smoothOverlay}
+        areaLabel={props.areaLabel}
         onViewChange={props.onViewChange}
       />
 

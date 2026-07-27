@@ -4,6 +4,7 @@ import {
   TileLayer,
   GeoJSON,
   ImageOverlay,
+  Marker,
   LayersControl,
   ZoomControl,
   useMap,
@@ -28,6 +29,7 @@ interface MapViewProps {
   overlayOpacity: number
   showConfidence: boolean
   smoothOverlay: boolean
+  areaLabel?: string
   onViewChange: (v: { lat: number; lon: number; zoom: number }) => void
 }
 
@@ -274,6 +276,62 @@ function DrawControl({
   return null
 }
 
+/**
+ * White AOI outline + name chip (ag-map style), drawn above prediction overlays.
+ */
+function AoiContour({
+  geometry,
+  label,
+}: {
+  geometry: GeoJSONGeometry
+  label: string
+}) {
+  const labelPos = useMemo(() => {
+    try {
+      const layer = L.geoJSON(geometry as GeoJSON.GeoJsonObject)
+      const b = layer.getBounds()
+      if (!b.isValid()) return null
+      const lat = b.getSouth() + (b.getNorth() - b.getSouth()) * 0.12
+      return [lat, b.getCenter().lng] as [number, number]
+    } catch {
+      return null
+    }
+  }, [geometry])
+
+  const icon = useMemo(() => {
+    const safe = label
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+    return L.divIcon({
+      className: "aoi-label",
+      html: `<div class="aoi-label-chip">${safe}</div>`,
+      iconSize: [0, 0],
+      iconAnchor: [0, 0],
+    })
+  }, [label])
+
+  return (
+    <>
+      <GeoJSON
+        data={geometry as GeoJSON.Geometry}
+        interactive={false}
+        style={{
+          color: "#ffffff",
+          weight: 2.75,
+          opacity: 0.98,
+          fillColor: "#ffffff",
+          fillOpacity: 0,
+        }}
+      />
+      {labelPos && label.trim() && (
+        <Marker position={labelPos} icon={icon} interactive={false} />
+      )}
+    </>
+  )
+}
+
 export function MapView({
   areas,
   activeExample,
@@ -285,6 +343,7 @@ export function MapView({
   overlayOpacity,
   showConfidence,
   smoothOverlay,
+  areaLabel,
   onViewChange,
 }: MapViewProps) {
   const center = useMemo<[number, number]>(() => [-14.5, -52], [])
@@ -309,6 +368,22 @@ export function MapView({
   // Example outlines are shown only when no custom polygon is active, as faint
   // clickable shortcuts to the article's validated sites.
   const showExamples = !customPolygon
+
+  const aoiGeometry = useMemo(() => {
+    if (customPolygon) return customPolygon
+    if (activeExample) {
+      return areas.find((a) => a.id === activeExample)?.geometry ?? null
+    }
+    return null
+  }, [customPolygon, activeExample, areas])
+
+  const aoiName = useMemo(() => {
+    if (areaLabel?.trim()) return areaLabel.trim()
+    if (activeExample) {
+      return areas.find((a) => a.id === activeExample)?.label ?? "AOI"
+    }
+    return customPolygon ? "Custom AOI" : ""
+  }, [areaLabel, activeExample, areas, customPolygon])
 
   return (
     <div className="absolute inset-0">
@@ -368,6 +443,10 @@ export function MapView({
           opacity={Math.min(1, overlayOpacity + 0.15)}
           smooth={false}
         />
+      )}
+
+      {aoiGeometry && (
+        <AoiContour geometry={aoiGeometry} label={aoiName} />
       )}
 
       <DrawControl customPolygon={customPolygon} onPolygonDrawn={onPolygonDrawn} />

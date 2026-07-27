@@ -325,6 +325,28 @@
   transform: none;
 }
 
+/* AOI name chip — ag-map style (white pill over satellite) */
+.aoi-label {
+  background: transparent !important;
+  border: none !important;
+}
+.aoi-label-chip {
+  display: inline-block;
+  transform: translate(-50%, -10%);
+  padding: 0.28rem 0.65rem;
+  border-radius: 0.45rem;
+  background: rgb(252 249 244 / 0.94);
+  color: rgb(36 28 22);
+  font-family: var(--font-sans);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.35);
+  pointer-events: none;
+  user-select: none;
+}
+
 .leaflet-control-attribution {
   background: rgb(var(--p-ink) / 0.7) !important;
   color: rgb(var(--p-muted)) !important;
