@@ -1,13 +1,10 @@
 import { useEffect, useState } from "react"
 import { EventsOn, EventsOff } from "../../wailsjs/runtime/runtime"
 import { GetBootLogs } from "../../wailsjs/go/main/App"
-
-/** Aerial / field stills for the Ken Burns splash background. */
-const SPLASH_IMAGES = [
-  "/terra-splash-images/pexels-aleksandar069-15509901.jpg",
-  "/terra-splash-images/pexels-andrey-kwin-145997290-10436186.jpg",
-  "/terra-splash-images/pexels-zelch-30596252.jpg",
-] as const
+import {
+  SPLASH_IMAGES,
+  claimSplashSlideForLaunch,
+} from "@/lib/splashBackground"
 
 const SLIDE_MS = 7000
 
@@ -19,10 +16,13 @@ type SplashScreenProps = {
 /**
  * Compact boot UI for the small splash window (before the main shell).
  * Full-bleed aerial stills with sliding zoom; brand centered, status as one line.
+ * Starting still rotates on each program launch.
  */
 export function SplashScreen({ exiting = false }: SplashScreenProps) {
   const [logs, setLogs] = useState<string[]>(["booting…"])
-  const [slide, setSlide] = useState(0)
+  const [slide, setSlide] = useState(() =>
+    claimSplashSlideForLaunch(SPLASH_IMAGES.length)
+  )
 
   useEffect(() => {
     let cancelled = false
