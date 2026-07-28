@@ -21,6 +21,7 @@ export interface MapScreenProps {
   result: PredictResult | null
   overlayOpacity: number
   showConfidence: boolean
+  confidenceOnTop: boolean
   smoothOverlay: boolean
   areaLabel?: string
   hasArea: boolean
@@ -49,6 +50,7 @@ export interface MapScreenProps {
   onPrithviModeChange: (m: "pixel" | "patch") => void
   onOpacityChange: (v: number) => void
   onShowConfidenceChange: (v: boolean) => void
+  onConfidenceOnTopChange: (v: boolean) => void
   onSmoothOverlayChange: (v: boolean) => void
   onRun: () => void
   onAnalyzeLULC: () => void
@@ -76,6 +78,7 @@ export function MapScreen(props: MapScreenProps) {
         result={props.result}
         overlayOpacity={props.overlayOpacity}
         showConfidence={props.showConfidence}
+        confidenceOnTop={props.confidenceOnTop}
         smoothOverlay={props.smoothOverlay}
         areaLabel={props.areaLabel}
         onViewChange={props.onViewChange}
@@ -133,6 +136,8 @@ export function MapScreen(props: MapScreenProps) {
             result={props.result}
             showConfidence={props.showConfidence}
             onShowConfidenceChange={props.onShowConfidenceChange}
+            confidenceOnTop={props.confidenceOnTop}
+            onConfidenceOnTopChange={props.onConfidenceOnTopChange}
             smoothOverlay={props.smoothOverlay}
             onSmoothOverlayChange={props.onSmoothOverlayChange}
             onClose={props.onCloseResult}

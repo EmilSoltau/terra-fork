@@ -28,6 +28,8 @@ interface MapViewProps {
   result: PredictResult | null
   overlayOpacity: number
   showConfidence: boolean
+  /** When true (default), keep class prediction under the confidence overlay. */
+  confidenceOnTop: boolean
   smoothOverlay: boolean
   areaLabel?: string
   onViewChange: (v: { lat: number; lon: number; zoom: number }) => void
@@ -106,11 +108,13 @@ function PredictionOverlay({
   bounds,
   opacity,
   smooth,
+  zIndex = 400,
 }: {
   url: string
   bounds: LatLngBoundsExpression
   opacity: number
   smooth: boolean
+  zIndex?: number
 }) {
   const ref = useRef<L.ImageOverlay | null>(null)
   const [displayUrl, setDisplayUrl] = useState(url)
@@ -157,12 +161,17 @@ function PredictionOverlay({
     ref.current?.setUrl(displayUrl)
   }, [displayUrl])
 
+  useEffect(() => {
+    ref.current?.setZIndex(zIndex)
+  }, [zIndex])
+
   return (
     <ImageOverlay
       ref={ref}
       url={displayUrl}
       bounds={bounds}
       opacity={opacity}
+      zIndex={zIndex}
       className="overlay-crisp"
     />
   )
@@ -508,6 +517,7 @@ export function MapView({
   result,
   overlayOpacity,
   showConfidence,
+  confidenceOnTop,
   smoothOverlay,
   areaLabel,
   onViewChange,
@@ -530,6 +540,37 @@ export function MapView({
       result.extent.lat_min === 0 &&
       result.extent.lat_max === 0
     )
+
+  // Confidence is semi-transparent, so prediction always shows through unless
+  // we hide it. When confidenceOnTop is off, show confidence alone.
+  const showPredictionUnderConfidence = !showConfidence || confidenceOnTop
+  const predictionLayer =
+    result &&
+    hasValidExtent &&
+    overlayBounds &&
+    overlayUrl &&
+    showPredictionUnderConfidence ? (
+      <PredictionOverlay
+        key="prediction"
+        url={overlayUrl}
+        bounds={overlayBounds}
+        opacity={overlayOpacity}
+        smooth={smoothOverlay}
+        zIndex={400}
+      />
+    ) : null
+
+  const confidenceLayer =
+    result && hasValidExtent && overlayBounds && showConfidence && result.confidence_uri ? (
+      <PredictionOverlay
+        key="confidence"
+        url={result.confidence_uri}
+        bounds={overlayBounds}
+        opacity={Math.min(1, overlayOpacity + 0.15)}
+        smooth={false}
+        zIndex={450}
+      />
+    ) : null
 
   // Example outlines are shown only when no custom polygon is active, as faint
   // clickable shortcuts to the article's validated sites.
@@ -594,22 +635,8 @@ export function MapView({
           />
         ))}
 
-      {result && hasValidExtent && overlayBounds && overlayUrl && (
-        <PredictionOverlay
-          url={overlayUrl}
-          bounds={overlayBounds}
-          opacity={overlayOpacity}
-          smooth={smoothOverlay}
-        />
-      )}
-      {result && hasValidExtent && overlayBounds && showConfidence && result.confidence_uri && (
-        <PredictionOverlay
-          url={result.confidence_uri}
-          bounds={overlayBounds}
-          opacity={Math.min(1, overlayOpacity + 0.15)}
-          smooth={false}
-        />
-      )}
+      {predictionLayer}
+      {confidenceLayer}
 
       {aoiGeometry && (
         <AoiContour geometry={aoiGeometry} label={aoiName} />

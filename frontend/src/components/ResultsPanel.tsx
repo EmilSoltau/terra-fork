@@ -8,6 +8,8 @@ interface ResultsPanelProps {
   result: PredictResult
   showConfidence: boolean
   onShowConfidenceChange: (v: boolean) => void
+  confidenceOnTop: boolean
+  onConfidenceOnTopChange: (v: boolean) => void
   smoothOverlay: boolean
   onSmoothOverlayChange: (v: boolean) => void
   onClose: () => void
@@ -18,6 +20,8 @@ export function ResultsPanel({
   result,
   showConfidence,
   onShowConfidenceChange,
+  confidenceOnTop,
+  onConfidenceOnTopChange,
   smoothOverlay,
   onSmoothOverlayChange,
   onClose,
@@ -104,26 +108,44 @@ export function ResultsPanel({
         <>
           <hr className="hairline" />
           <div className="flex flex-col gap-3 p-3">
-            <label className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
-              <input
-                type="checkbox"
-                checked={smoothOverlay}
-                onChange={(e) => onSmoothOverlayChange(e.target.checked)}
-                className="accent-primary"
-              />
-              Smooth prediction overlay
-            </label>
-            {!isLulcOnly && (
+            <div className="grid grid-cols-2 gap-x-3 gap-y-2">
               <label className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
                 <input
                   type="checkbox"
-                  checked={showConfidence}
-                  onChange={(e) => onShowConfidenceChange(e.target.checked)}
+                  checked={smoothOverlay}
+                  onChange={(e) => onSmoothOverlayChange(e.target.checked)}
                   className="accent-primary"
                 />
-                Show confidence overlay
+                Smooth prediction overlay
               </label>
-            )}
+              {!isLulcOnly && (
+                <label className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                  <input
+                    type="checkbox"
+                    checked={showConfidence}
+                    onChange={(e) => onShowConfidenceChange(e.target.checked)}
+                    className="accent-primary"
+                  />
+                  Show confidence overlay
+                </label>
+              )}
+              {!isLulcOnly && (
+                <label
+                  className={`flex items-center gap-1.5 text-[11px] text-muted-foreground ${
+                    !showConfidence ? "opacity-45" : ""
+                  }`}
+                >
+                  <input
+                    type="checkbox"
+                    checked={confidenceOnTop}
+                    disabled={!showConfidence}
+                    onChange={(e) => onConfidenceOnTopChange(e.target.checked)}
+                    className="accent-primary"
+                  />
+                  Keep prediction under confidence
+                </label>
+              )}
+            </div>
             <ul className="flex flex-col gap-1.5">
               {stats.slice(0, 5).map((s) => (
                 <li key={s.class_id} className="flex items-center gap-2 text-xs">
