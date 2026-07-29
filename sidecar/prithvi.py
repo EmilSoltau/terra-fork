@@ -41,7 +41,14 @@ def load_backbone():
     global _MODEL, _DEVICE
     if _MODEL is not None:
         return _MODEL, _DEVICE
-    from terratorch.registry import BACKBONE_REGISTRY
+    try:
+        from terratorch.registry import BACKBONE_REGISTRY
+    except ImportError as e:
+        raise ImportError(
+            "Prithvi requires terratorch>=1.2 compatible with the installed torchgeo. "
+            "In the geosense env run: uv pip install 'terratorch>=1.2'. "
+            f"Original error: {e}"
+        ) from e
 
     _DEVICE = get_device()
     model = BACKBONE_REGISTRY.build(
