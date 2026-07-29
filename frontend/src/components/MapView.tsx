@@ -58,6 +58,158 @@ function ViewReporter({
   return null
 }
 
+type BasemapKind = "esri" | "eox" | "osm"
+
+function basemapKindFromLayerName(name: string): BasemapKind {
+  if (/sentinel|eox/i.test(name)) return "eox"
+  if (/osm|openstreet/i.test(name) || /^map\b/i.test(name)) return "osm"
+  return "esri"
+}
+
+function formatYmd(ymd: string): string {
+  if (/^\d{8}$/.test(ymd)) {
+    return `${ymd.slice(0, 4)}-${ymd.slice(4, 6)}-${ymd.slice(6, 8)}`
+  }
+  return ymd
+}
+
+/** Normalize Esri DATE (YYYYMMDD) or SRC_DATE2 (M/D/YYYY) → YYYY-MM-DD. */
+function normalizeImageryDate(raw: string): string | null {
+  const trimmed = raw.trim()
+  if (!trimmed) return null
+  if (/^\d{8}$/.test(trimmed)) return formatYmd(trimmed)
+  const us = trimmed.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/)
+  if (us) {
+    return `${us[3]}-${us[1].padStart(2, "0")}-${us[2].padStart(2, "0")}`
+  }
+  return trimmed
+}
+
+function dateSortKey(raw: string): string {
+  const n = normalizeImageryDate(raw)
+  return n ? n.replace(/-/g, "") : ""
+}
+
+/** Esri World Imagery identify → acquisition date at a map point. */
+async function fetchEsriImageryDate(
+  lat: number,
+  lon: number,
+  zoom: number,
+  signal?: AbortSignal
+): Promise<string | null> {
+  const pad = Math.max(0.02, 180 / 2 ** Math.max(zoom, 1))
+  const params = new URLSearchParams({
+    f: "json",
+    tolerance: "5",
+    returnGeometry: "false",
+    imageDisplay: "800,600,96",
+    geometry: JSON.stringify({ x: lon, y: lat }),
+    geometryType: "esriGeometryPoint",
+    sr: "4326",
+    mapExtent: `${lon - pad},${lat - pad},${lon + pad},${lat + pad}`,
+    layers: "top:0",
+  })
+  const res = await fetch(
+    `https://services.arcgisonline.com/arcgis/rest/services/World_Imagery/MapServer/identify?${params}`,
+    { signal }
+  )
+  if (!res.ok) return null
+  const data = (await res.json()) as {
+    results?: Array<{
+      attributes?: Record<string, string>
+    }>
+  }
+  const results = data.results ?? []
+  if (!results.length) return null
+
+  const withLevels = results.map((r) => {
+    const a = r.attributes ?? {}
+    const date = a["DATE (YYYYMMDD)"] || a.SRC_DATE2 || ""
+    return {
+      date,
+      min: Number(a.MinMapLevel ?? 0),
+      max: Number(a.MaxMapLevel ?? 22),
+    }
+  })
+  const matching = withLevels.filter((r) => zoom >= r.min && zoom <= r.max && r.date)
+  const pool = matching.length ? matching : withLevels.filter((r) => r.date)
+  if (!pool.length) return null
+
+  pool.sort((a, b) => dateSortKey(b.date).localeCompare(dateSortKey(a.date)))
+  return normalizeImageryDate(pool[0].date)
+}
+
+/**
+ * Shows the active basemap imagery date next to the Leaflet attribution prefix.
+ * Esri: acquisition date at map center (updates on pan/zoom). EOX: mosaic year.
+ */
+function BasemapDateAttribution() {
+  const map = useMap()
+  const [basemap, setBasemap] = useState<BasemapKind>("esri")
+  const [dateLabel, setDateLabel] = useState<string | null>(null)
+
+  useEffect(() => {
+    const onBase = (e: L.LayersControlEvent) => {
+      setBasemap(basemapKindFromLayerName(e.name))
+    }
+    map.on("baselayerchange", onBase)
+    return () => {
+      map.off("baselayerchange", onBase)
+    }
+  }, [map])
+
+  useEffect(() => {
+    if (basemap === "eox") {
+      setDateLabel("2025")
+      return
+    }
+    if (basemap === "osm") {
+      setDateLabel(null)
+      return
+    }
+
+    let cancelled = false
+    let timer: ReturnType<typeof setTimeout> | undefined
+    let abort: AbortController | undefined
+
+    const refresh = () => {
+      if (timer) clearTimeout(timer)
+      timer = setTimeout(async () => {
+        abort?.abort()
+        abort = new AbortController()
+        const c = map.getCenter()
+        try {
+          const d = await fetchEsriImageryDate(c.lat, c.lng, map.getZoom(), abort.signal)
+          if (!cancelled) setDateLabel(d)
+        } catch (err) {
+          if ((err as Error)?.name === "AbortError") return
+          if (!cancelled) setDateLabel(null)
+        }
+      }, 350)
+    }
+
+    refresh()
+    map.on("moveend", refresh)
+    map.on("zoomend", refresh)
+    return () => {
+      cancelled = true
+      if (timer) clearTimeout(timer)
+      abort?.abort()
+      map.off("moveend", refresh)
+      map.off("zoomend", refresh)
+    }
+  }, [map, basemap])
+
+  useEffect(() => {
+    const leaflet =
+      '<a href="https://leafletjs.com" title="A JavaScript library for interactive maps">Leaflet</a>'
+    const prefix = dateLabel ? `🇺🇦 ${leaflet} · ${dateLabel}` : `🇺🇦 ${leaflet}`
+    map.attributionControl.setPrefix(prefix)
+  }, [map, dateLabel])
+
+  return null
+}
+
 function FlyToController({
   flyTo,
 }: {
@@ -647,6 +799,7 @@ export function MapView({
       <FlyToController flyTo={flyTo} />
       <FitBounds customPolygon={customPolygon} result={result} />
       <ViewReporter onViewChange={onViewChange} />
+      <BasemapDateAttribution />
     </MapContainer>
     </div>
   )
