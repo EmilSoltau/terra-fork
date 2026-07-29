@@ -606,9 +606,10 @@ export function MapView({
         </LayersControl.BaseLayer>
         <LayersControl.BaseLayer name="Sentinel-2 2025 (EOX)">
           <TileLayer
-            attribution='&copy; <a href="https://cloudless.eox.at">EOX</a> &mdash; <a href="https://sentinel.esa.int/web/sentinel/user-guides/sentinel-2-msi">Contains modified Copernicus Sentinel data</a>'
-            url="https://tiles.maps.eox.at/wmts/1.0.0/s2cloudless-2025/default/GoogleMapsCompatible/{z}/{y}/{x}.jpg"
-            maxZoom={18}
+            attribution='&copy; <a href="https://cloudless.eox.at">EOX</a> &mdash; <a href="https://sentinel.esa.int/web/sentinel/user-guides/sentinel-2-msi">Contains modified Copernicus Sentinel data 2025</a>'
+            url="https://tiles.maps.eox.at/wmts/1.0.0/s2cloudless-2025_3857/default/g/{z}/{y}/{x}.jpg"
+            maxNativeZoom={14}
+            maxZoom={19}
           />
         </LayersControl.BaseLayer>
         <LayersControl.BaseLayer name="Map (OSM)">
