@@ -185,6 +185,73 @@
   pointer-events: none;
 }
 
+/* Sliding zoom (Ken Burns) behind the splash boot card */
+.splash-kenburns {
+  position: absolute;
+  inset: -8%;
+  background-position: center;
+  background-size: cover;
+  background-repeat: no-repeat;
+  opacity: 0;
+  transform: scale(1.04);
+  transition: opacity 1.35s ease;
+  will-change: transform, opacity;
+}
+.splash-kenburns.is-active {
+  opacity: 1;
+  z-index: 1;
+}
+.splash-kenburns.is-active.splash-kenburns--1 {
+  animation: splash-kenburns-a 16s ease-in-out forwards;
+}
+.splash-kenburns.is-active.splash-kenburns--2 {
+  animation: splash-kenburns-b 16s ease-in-out forwards;
+}
+.splash-kenburns.is-active.splash-kenburns--3 {
+  animation: splash-kenburns-c 16s ease-in-out forwards;
+}
+@keyframes splash-kenburns-a {
+  from {
+    transform: scale(1.05) translate(0%, 0%);
+  }
+  to {
+    transform: scale(1.22) translate(-3%, -2%);
+  }
+}
+@keyframes splash-kenburns-b {
+  from {
+    transform: scale(1.08) translate(2%, -1%);
+  }
+  to {
+    transform: scale(1.24) translate(-2%, 2%);
+  }
+}
+@keyframes splash-kenburns-c {
+  from {
+    transform: scale(1.06) translate(-2%, 1%);
+  }
+  to {
+    transform: scale(1.2) translate(2.5%, -1.5%);
+  }
+}
+.splash-kenburns-scrim {
+  z-index: 2;
+  background:
+    radial-gradient(
+      ellipse 70% 55% at 50% 42%,
+      rgb(var(--p-ink) / 0.18),
+      rgb(var(--p-ink) / 0.42) 55%,
+      rgb(var(--p-ink) / 0.62)
+    ),
+    linear-gradient(
+      to bottom,
+      rgb(var(--p-ink) / 0.2) 0%,
+      transparent 35%,
+      transparent 70%,
+      rgb(var(--p-ink) / 0.55) 100%
+    );
+}
+
 .app-shell-enter {
   animation: app-shell-enter 520ms ease both;
 }
@@ -281,23 +348,47 @@
   background: rgb(var(--p-ink));
   font-family: var(--font-sans);
 }
+
+/* Map toolbars (draw / edit / zoom) — match panel chrome + soft radius */
+.leaflet-bar {
+  border: 1px solid rgb(var(--p-line) / 0.28) !important;
+  border-radius: 0.55rem !important;
+  overflow: hidden;
+  box-shadow: 0 2px 8px rgb(0 0 0 / 0.28) !important;
+  background: transparent !important;
+}
 .leaflet-control-zoom a,
 .leaflet-draw-toolbar a {
-  background-color: rgb(var(--p-ink) / 0.85) !important;
+  background-color: rgb(var(--p-ink) / 0.55) !important;
   color: rgb(var(--p-text)) !important;
-  border-color: rgb(var(--p-line) / 0.35) !important;
+  border-bottom: 1px solid rgb(var(--p-line) / 0.22) !important;
+  width: 2.125rem !important;
+  height: 2.125rem !important;
+  line-height: 2.125rem !important;
+  backdrop-filter: blur(18px) saturate(1.05);
+  -webkit-backdrop-filter: blur(18px) saturate(1.05);
 }
 .leaflet-control-zoom a:hover,
 .leaflet-draw-toolbar a:hover {
-  background-color: rgb(var(--p-surface-raised) / 0.9) !important;
+  background-color: rgb(var(--p-surface-raised) / 0.85) !important;
+  color: rgb(var(--p-text)) !important;
 }
-.leaflet-bar {
-  border: 1px solid rgb(var(--p-line) / 0.35) !important;
-  box-shadow: none !important;
+.leaflet-bar a:first-child {
+  border-top-left-radius: 0.55rem !important;
+  border-top-right-radius: 0.55rem !important;
+}
+.leaflet-bar a:last-child {
+  border-bottom: none !important;
+  border-bottom-left-radius: 0.55rem !important;
+  border-bottom-right-radius: 0.55rem !important;
+}
+.leaflet-bar a:first-child:last-child {
+  border-radius: 0.55rem !important;
 }
 .leaflet-draw-actions a {
-  background-color: rgb(var(--p-ink) / 0.9) !important;
+  background-color: rgb(var(--p-ink) / 0.75) !important;
   color: rgb(var(--p-text)) !important;
+  border-radius: 0.35rem !important;
 }
 
 /* Draw guides must paint above the in-progress polygon SVG */
@@ -315,6 +406,56 @@
   margin: -5px 0 0 -5px !important;
   width: 10px !important;
   height: 10px !important;
+}
+
+/* Overlays stay nearest-neighbor; smooth mode reshapes class regions in the PNG. */
+.leaflet-image-layer.overlay-crisp {
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+  filter: none;
+  transform: none;
+}
+
+/* AOI name chip — glued to contour edge, rotation applied inline */
+.aoi-label {
+  background: transparent !important;
+  border: none !important;
+}
+.aoi-label-chip {
+  display: inline-block;
+  padding: 3px 9px;
+  border-radius: 4px;
+  background: rgb(245 245 243 / 0.97);
+  color: rgb(55 55 55);
+  font-family: var(--font-sans);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0;
+  line-height: 1.25;
+  white-space: nowrap;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.3);
+  pointer-events: none;
+  user-select: none;
+  transform-origin: center center;
+}
+
+/* Confidence overlay legend — same ramp as sidecar write_confidence_png.
+   Sits in the bottom-right tool column, above draw/edit/zoom (leaflet ~200px). */
+.confidence-legend {
+  right: 10px;
+  bottom: 15.25rem; /* clear gap above draw + edit + zoom stack */
+  width: 2.5rem;
+}
+.confidence-legend-bar {
+  height: 5.5rem;
+  background: linear-gradient(
+    to top,
+    rgb(0 0 255) 0%,
+    rgb(0 76 223) 25%,
+    rgb(0 153 191) 50%,
+    rgb(128 230 159) 75%,
+    rgb(255 255 128) 100%
+  );
 }
 
 .leaflet-control-attribution {

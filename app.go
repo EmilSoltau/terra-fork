@@ -215,6 +215,14 @@ func (a *App) AnalyzeLULC(req backend.LULCRequest) (*backend.LULCAnalysis, error
 	return a.runner.AnalyzeLULC(a.ctx, req)
 }
 
+// ListDataCube inventories Sentinel-2 L2A scenes for the AOI (before Classify).
+func (a *App) ListDataCube(req backend.DataCubeRequest) (*backend.DataCubeResult, error) {
+	if a.runner == nil {
+		return nil, errors.New("runner not initialized")
+	}
+	return a.runner.ListDataCube(a.ctx, req)
+}
+
 // ExportClassification copies the classification GeoTIFF to a user-chosen path.
 func (a *App) ExportClassification(rasterPath string) (string, error) {
 	if strings.TrimSpace(rasterPath) == "" {

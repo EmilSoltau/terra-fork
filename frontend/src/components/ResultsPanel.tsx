@@ -1,6 +1,6 @@
 import { useState } from "react"
 import { motion } from "motion/react"
-import { X, ChevronDown, ChevronUp, ChartColumn } from "lucide-react"
+import { X, ChevronDown, ChevronUp, ChartColumn, Plus } from "lucide-react"
 import type { PredictResult } from "@/lib/types"
 import { useAuth } from "@/lib/auth"
 
@@ -8,14 +8,24 @@ interface ResultsPanelProps {
   result: PredictResult
   showConfidence: boolean
   onShowConfidenceChange: (v: boolean) => void
+  confidenceOnTop: boolean
+  onConfidenceOnTopChange: (v: boolean) => void
+  smoothOverlay: boolean
+  onSmoothOverlayChange: (v: boolean) => void
   onClose: () => void
+  onNewClassification: () => void
 }
 
 export function ResultsPanel({
   result,
   showConfidence,
   onShowConfidenceChange,
+  confidenceOnTop,
+  onConfidenceOnTopChange,
+  smoothOverlay,
+  onSmoothOverlayChange,
   onClose,
+  onNewClassification,
 }: ResultsPanelProps) {
   const [collapsed, setCollapsed] = useState(false)
   const { goAnalysis } = useAuth()
@@ -69,6 +79,15 @@ export function ResultsPanel({
             Analysis
           </button>
           <button
+            type="button"
+            onClick={onNewClassification}
+            className="flex items-center gap-1 rounded-sm px-2 py-1 text-[11px] text-muted-foreground hover:bg-secondary hover:text-foreground"
+            title="Start a new classification"
+          >
+            <Plus className="size-3.5" />
+            New
+          </button>
+          <button
             onClick={() => setCollapsed((c) => !c)}
             className="text-muted-foreground hover:text-foreground"
             title={collapsed ? "Expand" : "Collapse"}
@@ -78,7 +97,7 @@ export function ResultsPanel({
           <button
             onClick={onClose}
             className="text-muted-foreground hover:text-foreground"
-            title="Close"
+            title="Close result"
           >
             <X className="size-4" />
           </button>
@@ -89,17 +108,44 @@ export function ResultsPanel({
         <>
           <hr className="hairline" />
           <div className="flex flex-col gap-3 p-3">
-            {!isLulcOnly && (
+            <div className="grid grid-cols-2 gap-x-3 gap-y-2">
               <label className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
                 <input
                   type="checkbox"
-                  checked={showConfidence}
-                  onChange={(e) => onShowConfidenceChange(e.target.checked)}
+                  checked={smoothOverlay}
+                  onChange={(e) => onSmoothOverlayChange(e.target.checked)}
                   className="accent-primary"
                 />
-                Show confidence overlay
+                Smooth prediction overlay
               </label>
-            )}
+              {!isLulcOnly && (
+                <label className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                  <input
+                    type="checkbox"
+                    checked={showConfidence}
+                    onChange={(e) => onShowConfidenceChange(e.target.checked)}
+                    className="accent-primary"
+                  />
+                  Show confidence overlay
+                </label>
+              )}
+              {!isLulcOnly && (
+                <label
+                  className={`flex items-center gap-1.5 text-[11px] text-muted-foreground ${
+                    !showConfidence ? "opacity-45" : ""
+                  }`}
+                >
+                  <input
+                    type="checkbox"
+                    checked={confidenceOnTop}
+                    disabled={!showConfidence}
+                    onChange={(e) => onConfidenceOnTopChange(e.target.checked)}
+                    className="accent-primary"
+                  />
+                  Keep prediction under confidence
+                </label>
+              )}
+            </div>
             <ul className="flex flex-col gap-1.5">
               {stats.slice(0, 5).map((s) => (
                 <li key={s.class_id} className="flex items-center gap-2 text-xs">

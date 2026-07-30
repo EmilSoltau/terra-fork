@@ -38,7 +38,7 @@ export function LulcSection({ lulc, areaId, areaLabel }: LulcSectionProps) {
         )}
       </div>
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,14rem)_1fr]">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,16rem)_1fr] xl:grid-cols-[minmax(0,20rem)_1fr] 2xl:grid-cols-[minmax(0,24rem)_1fr]">
         {lulc.map_uri ? (
           <div className="overflow-hidden rounded-sm border border-border/60 bg-ink/40">
             <img
@@ -53,7 +53,7 @@ export function LulcSection({ lulc, areaId, areaLabel }: LulcSectionProps) {
           </div>
         )}
 
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 xl:grid-cols-4 2xl:grid-cols-8">
           <Metric label="Area" value={`${m.area_ha.toFixed(1)} ha`} />
           <Metric label="Classes" value={String(m.n_classes)} />
           <Metric label="Shannon H" value={m.shannon_h.toFixed(3)} />
@@ -65,7 +65,11 @@ export function LulcSection({ lulc, areaId, areaLabel }: LulcSectionProps) {
         </div>
       </div>
 
-      <div className="mt-5 grid grid-cols-1 gap-5 md:grid-cols-2">
+      <div
+        className={`mt-5 grid grid-cols-1 gap-5 md:grid-cols-2 ${
+          hasCompare ? "xl:grid-cols-3" : ""
+        }`}
+      >
         <div>
           <p className="eyebrow mb-2">Cover composition</p>
           <StatBars
@@ -90,46 +94,48 @@ export function LulcSection({ lulc, areaId, areaLabel }: LulcSectionProps) {
             }))}
           />
         </div>
-      </div>
-
-      {hasCompare && (
-        <div className="mt-5">
-          <p className="eyebrow mb-2">MapBiomas vs predicted (shared pixels)</p>
-          <div className="flex flex-col gap-1.5">
-            {lulc.pred_vs_ref.map((r) => (
-              <div key={r.class_id} className="grid grid-cols-[7rem_1fr_3rem_3rem] items-center gap-2 text-[11px]">
-                <span className="flex items-center gap-1.5 truncate text-muted-foreground">
-                  <span
-                    className="size-2 shrink-0 rounded-[2px]"
-                    style={{ backgroundColor: r.color }}
-                  />
-                  {r.class_id}
-                </span>
-                <div className="relative h-2 overflow-hidden rounded-full bg-secondary">
-                  <span
-                    className="absolute inset-y-0 left-0 rounded-full opacity-40"
-                    style={{ width: `${r.pct_ref}%`, backgroundColor: r.color }}
-                  />
-                  <span
-                    className="absolute inset-y-0 left-0 rounded-full"
-                    style={{ width: `${r.pct_pred}%`, backgroundColor: r.color }}
-                  />
+        {hasCompare && (
+          <div className="md:col-span-2 xl:col-span-1">
+            <p className="eyebrow mb-2">MapBiomas vs predicted (shared pixels)</p>
+            <div className="flex flex-col gap-1.5">
+              {lulc.pred_vs_ref.map((r) => (
+                <div
+                  key={r.class_id}
+                  className="grid grid-cols-[4.5rem_1fr_2.5rem_2.5rem] items-center gap-2 text-[11px] sm:grid-cols-[7rem_1fr_3rem_3rem]"
+                >
+                  <span className="flex items-center gap-1.5 truncate text-muted-foreground">
+                    <span
+                      className="size-2 shrink-0 rounded-[2px]"
+                      style={{ backgroundColor: r.color }}
+                    />
+                    {r.class_id}
+                  </span>
+                  <div className="relative h-2 overflow-hidden rounded-full bg-secondary">
+                    <span
+                      className="absolute inset-y-0 left-0 rounded-full opacity-40"
+                      style={{ width: `${r.pct_ref}%`, backgroundColor: r.color }}
+                    />
+                    <span
+                      className="absolute inset-y-0 left-0 rounded-full"
+                      style={{ width: `${r.pct_pred}%`, backgroundColor: r.color }}
+                    />
+                  </div>
+                  <span className="telemetry text-right text-muted-foreground">
+                    {r.pct_ref.toFixed(0)}%
+                  </span>
+                  <span className="telemetry text-right text-foreground">
+                    {r.pct_pred.toFixed(0)}%
+                  </span>
                 </div>
-                <span className="telemetry text-right text-muted-foreground">
-                  {r.pct_ref.toFixed(0)}%
-                </span>
-                <span className="telemetry text-right text-foreground">
-                  {r.pct_pred.toFixed(0)}%
-                </span>
+              ))}
+              <div className="mt-1 flex justify-end gap-4 text-[10px] text-muted-foreground">
+                <span>dim = MapBiomas</span>
+                <span>solid = predicted</span>
               </div>
-            ))}
-            <div className="mt-1 flex justify-end gap-4 text-[10px] text-muted-foreground">
-              <span>dim = MapBiomas</span>
-              <span>solid = predicted</span>
             </div>
           </div>
-        </div>
-      )}
+        )}
+      </div>
 
       <p className="mt-4 text-[10px] text-muted-foreground">
         *Agricultural = annual cropland (39+41) + mosaic (21). Annual MapBiomas

@@ -19,6 +19,8 @@ export function RevealMainWindow():Promise<void>;
 
 export function GetPreferences():Promise<store.Preferences>;
 
+export function ListDataCube(arg1:backend.DataCubeRequest):Promise<backend.DataCubeResult>;
+
 export function ListEmbeddedAreas():Promise<Array<backend.Area>>;
 
 export function ListRuns(arg1:number):Promise<Array<store.InferenceRun>>;

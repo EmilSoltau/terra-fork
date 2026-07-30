@@ -1,6 +1,7 @@
 import { AnimatePresence } from "motion/react"
 import type {
   Area,
+  DataCubeResult,
   GeoJSONGeometry,
   ModelKind,
   PredictResult,
@@ -9,6 +10,8 @@ import { MapView } from "@/components/MapView"
 import { SearchBar } from "@/components/SearchBar"
 import { ControlPanel } from "@/components/ControlPanel"
 import { ResultsPanel } from "@/components/ResultsPanel"
+import { DataCubeModal } from "@/components/DataCubeModal"
+import { ConfidenceLegend } from "@/components/ConfidenceLegend"
 
 export interface MapScreenProps {
   areas: Area[]
@@ -18,6 +21,9 @@ export interface MapScreenProps {
   result: PredictResult | null
   overlayOpacity: number
   showConfidence: boolean
+  confidenceOnTop: boolean
+  smoothOverlay: boolean
+  areaLabel?: string
   hasArea: boolean
   start: string
   end: string
@@ -44,10 +50,19 @@ export interface MapScreenProps {
   onPrithviModeChange: (m: "pixel" | "patch") => void
   onOpacityChange: (v: number) => void
   onShowConfidenceChange: (v: boolean) => void
+  onConfidenceOnTopChange: (v: boolean) => void
+  onSmoothOverlayChange: (v: boolean) => void
   onRun: () => void
   onAnalyzeLULC: () => void
   lulcRunning?: boolean
   onCloseResult: () => void
+  onNewClassification: () => void
+  onViewDataCube: () => void
+  dataCubeLoading?: boolean
+  dataCubeOpen?: boolean
+  dataCubeError?: string | null
+  dataCubeResult?: DataCubeResult | null
+  onCloseDataCube: () => void
 }
 
 export function MapScreen(props: MapScreenProps) {
@@ -63,10 +78,21 @@ export function MapScreen(props: MapScreenProps) {
         result={props.result}
         overlayOpacity={props.overlayOpacity}
         showConfidence={props.showConfidence}
+        confidenceOnTop={props.confidenceOnTop}
+        smoothOverlay={props.smoothOverlay}
+        areaLabel={props.areaLabel}
         onViewChange={props.onViewChange}
       />
 
       <SearchBar onSelectLocation={props.onLocationSelect} />
+
+      <ConfidenceLegend
+        visible={
+          !!props.showConfidence &&
+          !!props.result?.confidence_uri &&
+          (props.result.n_dates ?? 0) > 0
+        }
+      />
 
       <ControlPanel
         areas={props.areas}
@@ -92,12 +118,16 @@ export function MapScreen(props: MapScreenProps) {
         onPrithviModeChange={props.onPrithviModeChange}
         overlayOpacity={props.overlayOpacity}
         onOpacityChange={props.onOpacityChange}
+        smoothOverlay={props.smoothOverlay}
+        onSmoothOverlayChange={props.onSmoothOverlayChange}
         running={props.running}
         progress={props.progress}
         progressMsg={props.progressMsg}
         onRun={props.onRun}
         onAnalyzeLULC={props.onAnalyzeLULC}
+        onViewDataCube={props.onViewDataCube}
         lulcRunning={props.lulcRunning}
+        dataCubeLoading={props.dataCubeLoading}
       />
 
       <AnimatePresence>
@@ -106,10 +136,23 @@ export function MapScreen(props: MapScreenProps) {
             result={props.result}
             showConfidence={props.showConfidence}
             onShowConfidenceChange={props.onShowConfidenceChange}
+            confidenceOnTop={props.confidenceOnTop}
+            onConfidenceOnTopChange={props.onConfidenceOnTopChange}
+            smoothOverlay={props.smoothOverlay}
+            onSmoothOverlayChange={props.onSmoothOverlayChange}
             onClose={props.onCloseResult}
+            onNewClassification={props.onNewClassification}
           />
         )}
       </AnimatePresence>
+
+      <DataCubeModal
+        open={!!props.dataCubeOpen}
+        loading={!!props.dataCubeLoading}
+        error={props.dataCubeError ?? null}
+        result={props.dataCubeResult ?? null}
+        onClose={props.onCloseDataCube}
+      />
     </div>
   )
 }

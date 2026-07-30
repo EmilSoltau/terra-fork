@@ -12,6 +12,7 @@ import {
   CheckCircle2,
   Circle,
   Globe2,
+  Boxes,
 } from "lucide-react"
 import type { Area, GeoJSONGeometry, ModelKind } from "@/lib/types"
 import { cn } from "@/lib/utils"
@@ -40,12 +41,16 @@ interface ControlPanelProps {
   onPrithviModeChange: (m: "pixel" | "patch") => void
   overlayOpacity: number
   onOpacityChange: (v: number) => void
+  smoothOverlay: boolean
+  onSmoothOverlayChange: (v: boolean) => void
   running: boolean
   progress: number
   progressMsg: string
   onRun: () => void
   onAnalyzeLULC: () => void
+  onViewDataCube: () => void
   lulcRunning?: boolean
+  dataCubeLoading?: boolean
 }
 
 function Section({
@@ -93,18 +98,22 @@ export function ControlPanel(props: ControlPanelProps) {
     onPrithviModeChange,
     overlayOpacity,
     onOpacityChange,
+    smoothOverlay,
+    onSmoothOverlayChange,
     running,
     progress,
     progressMsg,
     onRun,
     onAnalyzeLULC,
+    onViewDataCube,
     lulcRunning = false,
+    dataCubeLoading = false,
   } = props
 
   const [collapsed, setCollapsed] = useState(false)
   const [showExamples, setShowExamples] = useState(false)
   const canLULC = hasArea
-  const busy = running || lulcRunning
+  const busy = running || lulcRunning || dataCubeLoading
 
   return (
     <AnimatePresence mode="wait" initial={false}>
@@ -275,6 +284,19 @@ export function ControlPanel(props: ControlPanelProps) {
           )}
           Best scene per month
         </button>
+        <button
+          type="button"
+          disabled={!hasArea || busy}
+          onClick={onViewDataCube}
+          className="flex h-8 items-center justify-center gap-1.5 rounded-sm border border-border px-2 text-[11px] text-muted-foreground hover:bg-secondary hover:text-foreground disabled:opacity-50"
+        >
+          {dataCubeLoading ? (
+            <Loader2 className="size-3.5 animate-spin" />
+          ) : (
+            <Boxes className="size-3.5" />
+          )}
+          View data cube
+        </button>
       </Section>
 
       <hr className="hairline" />
@@ -391,6 +413,18 @@ export function ControlPanel(props: ControlPanelProps) {
             className="accent-[var(--primary)]"
           />
         </div>
+        <label className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+          <input
+            type="checkbox"
+            checked={smoothOverlay}
+            onChange={(e) => onSmoothOverlayChange(e.target.checked)}
+            className="accent-primary"
+          />
+          Smooth prediction overlay
+        </label>
+        <p className="-mt-1 text-[10px] leading-snug text-muted-foreground/80">
+          Contour style — solid classes, curved boundaries
+        </p>
       </Section>
 
       <div className="mt-auto flex flex-col gap-2 pt-2">

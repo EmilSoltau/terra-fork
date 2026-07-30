@@ -6,6 +6,7 @@ import {
   LoadAnalysis,
   Predict,
   AnalyzeLULC,
+  ListDataCube,
   OpenExternal,
   RevealMainWindow,
 } from "../wailsjs/go/main/App"
@@ -20,6 +21,8 @@ import type {
   ModelKind,
   InferenceRun,
   LULCAnalysis,
+  DataCubeResult,
+  DataCubeRequest,
 } from "@/lib/types"
 import { AuthProvider, useAuth } from "@/lib/auth"
 import { ThemeSync } from "@/components/ThemeSync"
@@ -44,6 +47,42 @@ function isModelKind(v: string): v is ModelKind {
   return v === "spectral" || v === "prithvi" || v === "temporal_transformer"
 }
 
+/** Restore AOI from a saved run's polygon_geojson (GeoJSON or {"area_id":"..."}). */
+function parseRunPolygon(
+  raw: string,
+  areas: Area[]
+): { exampleId: string; polygon: GeoJSONGeometry | null } {
+  const empty = { exampleId: "", polygon: null as GeoJSONGeometry | null }
+  if (!raw?.trim()) return empty
+  try {
+    const parsed = JSON.parse(raw) as Record<string, unknown>
+    if (typeof parsed.area_id === "string") {
+      const area = areas.find((a) => a.id === parsed.area_id)
+      if (area) return { exampleId: area.id, polygon: area.geometry }
+      return empty
+    }
+    if (parsed.type === "Polygon" || parsed.type === "MultiPolygon") {
+      return { exampleId: "", polygon: parsed as unknown as GeoJSONGeometry }
+    }
+    if (parsed.type === "Feature") {
+      const geom = (parsed as { geometry?: GeoJSONGeometry }).geometry
+      if (geom?.type === "Polygon" || geom?.type === "MultiPolygon") {
+        return { exampleId: "", polygon: geom }
+      }
+    }
+    if (parsed.type === "FeatureCollection") {
+      const features = (parsed as { features?: { geometry?: GeoJSONGeometry }[] }).features
+      const geom = features?.find(
+        (f) => f.geometry?.type === "Polygon" || f.geometry?.type === "MultiPolygon"
+      )?.geometry
+      if (geom) return { exampleId: "", polygon: geom }
+    }
+  } catch {
+    /* ignore malformed */
+  }
+  return empty
+}
+
 function App() {
   const period = useMemo(defaultPeriod, [])
   const [areas, setAreas] = useState<Area[]>([])
@@ -64,6 +103,8 @@ function App() {
   const [prithviMode, setPrithviMode] = useState<"pixel" | "patch">("pixel")
   const [overlayOpacity, setOverlayOpacity] = useState<number>(0.75)
   const [showConfidence, setShowConfidence] = useState(false)
+  const [confidenceOnTop, setConfidenceOnTop] = useState(true)
+  const [smoothOverlay, setSmoothOverlay] = useState(false)
   const [running, setRunning] = useState<boolean>(false)
   const [progress, setProgress] = useState<number>(0)
   const [progressMsg, setProgressMsg] = useState<string>("")
@@ -231,6 +272,8 @@ function App() {
             prithviMode={prithviMode}
             overlayOpacity={overlayOpacity}
             showConfidence={showConfidence}
+            confidenceOnTop={confidenceOnTop}
+            smoothOverlay={smoothOverlay}
             running={running}
             progress={progress}
             progressMsg={progressMsg}
@@ -250,6 +293,8 @@ function App() {
             setPrithviMode={setPrithviMode}
             setOverlayOpacity={setOverlayOpacity}
             setShowConfidence={setShowConfidence}
+            setConfidenceOnTop={setConfidenceOnTop}
+            setSmoothOverlay={setSmoothOverlay}
             setRunning={setRunning}
             setProgress={setProgress}
             setProgressMsg={setProgressMsg}
@@ -282,6 +327,8 @@ function AppBody(props: {
   prithviMode: "pixel" | "patch"
   overlayOpacity: number
   showConfidence: boolean
+  confidenceOnTop: boolean
+  smoothOverlay: boolean
   running: boolean
   progress: number
   progressMsg: string
@@ -301,6 +348,8 @@ function AppBody(props: {
   setPrithviMode: (m: "pixel" | "patch") => void
   setOverlayOpacity: (v: number) => void
   setShowConfidence: (v: boolean) => void
+  setConfidenceOnTop: (v: boolean) => void
+  setSmoothOverlay: (v: boolean) => void
   setRunning: (v: boolean) => void
   setProgress: (v: number) => void
   setProgressMsg: (v: string) => void
@@ -314,6 +363,46 @@ function AppBody(props: {
 }) {
   const { refreshRuns, screen, goAnalysis, goMap, runs } = useAuth()
   const [loadingRun, setLoadingRun] = useState(false)
+  const [dataCubeOpen, setDataCubeOpen] = useState(false)
+  const [dataCubeLoading, setDataCubeLoading] = useState(false)
+  const [dataCubeError, setDataCubeError] = useState<string | null>(null)
+  const [dataCubeResult, setDataCubeResult] = useState<DataCubeResult | null>(null)
+
+  const handleViewDataCube = async () => {
+    if (!props.start || !props.end) {
+      toast.error("Set the acquisition period.")
+      return
+    }
+    if (!props.customPolygon && !props.activeExample) {
+      toast.error("Define an area: draw, search, or load an example.")
+      return
+    }
+    const useExample =
+      !!props.activeExample && !!props.areas.find((a) => a.id === props.activeExample)
+    const req: DataCubeRequest = {
+      area_id: useExample ? props.activeExample : "",
+      polygon_geojson: useExample ? null : props.customPolygon,
+      start: props.start,
+      end: props.end,
+      max_cloud: props.maxCloud,
+      monthly_best: props.monthlyBest,
+      tiles: [],
+    }
+    setDataCubeOpen(true)
+    setDataCubeLoading(true)
+    setDataCubeError(null)
+    setDataCubeResult(null)
+    try {
+      const res = (await ListDataCube(req as never)) as unknown as DataCubeResult
+      setDataCubeResult(res)
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e)
+      setDataCubeError(msg)
+      toast.error("Data cube error: " + msg)
+    } finally {
+      setDataCubeLoading(false)
+    }
+  }
 
   const handleRun = async () => {
     if (!props.start || !props.end) {
@@ -452,6 +541,25 @@ function AppBody(props: {
         props.setResult(res)
         if (isModelKind(run.model_kind)) props.setModelKind(run.model_kind)
         props.setAnalysisLabel(run.label || "Saved analysis")
+        const aoi = parseRunPolygon(run.polygon_geojson, props.areas)
+        props.setActiveExample(aoi.exampleId)
+        props.setCustomPolygon(aoi.polygon)
+        if (aoi.polygon?.type === "Polygon") {
+          const ring = aoi.polygon.coordinates?.[0]
+          if (ring?.length) {
+            let lat = 0
+            let lon = 0
+            for (const [x, y] of ring) {
+              lon += x
+              lat += y
+            }
+            props.setFlyTo({
+              lat: lat / ring.length,
+              lon: lon / ring.length,
+              key: Date.now(),
+            })
+          }
+        }
         goAnalysis()
         toast.success("Analysis restored.")
       } catch (e) {
@@ -462,8 +570,30 @@ function AppBody(props: {
     },
     // props setters are stable from useState in parent
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [goAnalysis, props.setResult, props.setModelKind, props.setAnalysisLabel]
+    [
+      goAnalysis,
+      props.areas,
+      props.setResult,
+      props.setModelKind,
+      props.setAnalysisLabel,
+      props.setActiveExample,
+      props.setCustomPolygon,
+      props.setFlyTo,
+    ]
   )
+
+  const backToAnalysesList = useCallback(() => {
+    props.setResult(null)
+    props.setAnalysisLabel(undefined)
+    goAnalysis()
+  }, [goAnalysis, props.setResult, props.setAnalysisLabel])
+
+  const startNewClassification = useCallback(() => {
+    props.setResult(null)
+    props.setAnalysisLabel(undefined)
+    props.onClearArea()
+    goMap()
+  }, [goMap, props.setResult, props.setAnalysisLabel, props.onClearArea])
 
   const areaLabel = useMemo(() => {
     if (props.analysisLabel) return props.analysisLabel
@@ -481,6 +611,10 @@ function AppBody(props: {
         <AppSidebar
           onOpenRepo={() => OpenExternal("https://github.com/rexionmars")}
           hasAnalysis={!!props.result || runs.length > 0}
+          onAnalysisClick={() => {
+            if (screen === "analysis" && props.result) backToAnalysesList()
+            else goAnalysis()
+          }}
         />
         <div className="relative min-h-0 min-w-0 flex-1">
           {screen === "map" && (
@@ -492,6 +626,9 @@ function AppBody(props: {
               result={props.result}
               overlayOpacity={props.overlayOpacity}
               showConfidence={props.showConfidence}
+              confidenceOnTop={props.confidenceOnTop}
+              smoothOverlay={props.smoothOverlay}
+              areaLabel={areaLabel}
               hasArea={props.hasArea}
               start={props.start}
               end={props.end}
@@ -523,12 +660,24 @@ function AppBody(props: {
               onPrithviModeChange={props.setPrithviMode}
               onOpacityChange={props.setOverlayOpacity}
               onShowConfidenceChange={props.setShowConfidence}
+              onConfidenceOnTopChange={props.setConfidenceOnTop}
+              onSmoothOverlayChange={props.setSmoothOverlay}
               onRun={handleRun}
               onAnalyzeLULC={handleAnalyzeLULC}
               lulcRunning={props.lulcRunning}
               onCloseResult={() => {
                 props.setResult(null)
                 props.setAnalysisLabel(undefined)
+              }}
+              onNewClassification={startNewClassification}
+              onViewDataCube={() => void handleViewDataCube()}
+              dataCubeLoading={dataCubeLoading}
+              dataCubeOpen={dataCubeOpen}
+              dataCubeError={dataCubeError}
+              dataCubeResult={dataCubeResult}
+              onCloseDataCube={() => {
+                setDataCubeOpen(false)
+                setDataCubeError(null)
               }}
             />
           )}
@@ -540,6 +689,8 @@ function AppBody(props: {
               areaId={props.activeExample || undefined}
               loadingRun={loadingRun}
               onOpenRun={openSavedAnalysis}
+              onBackToList={backToAnalysesList}
+              onNewClassification={startNewClassification}
             />
           )}
           {screen === "auth" && <AuthPage />}

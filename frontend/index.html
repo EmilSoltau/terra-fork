@@ -13,6 +13,30 @@
     <!-- Must run before Leaflet loads: PointerEvent exists in WKWebView/desktop
          and would otherwise set L.Browser.touch=true, closing polygons at 3 pts. -->
     <script>window.L_NO_TOUCH = true</script>
+    <script>
+      // Rotate splash still per launch (keep paths in sync with splashBackground.ts).
+      (function () {
+        var images = [
+          "/terra-splash-images/pexels-aleksandar069-15509901.jpg",
+          "/terra-splash-images/pexels-andrey-kwin-145997290-10436186.jpg",
+          "/terra-splash-images/pexels-zelch-30596252.jpg",
+        ];
+        var nextKey = "terra.splash.next";
+        var currentKey = "terra.splash.current";
+        var index = 0;
+        try {
+          var raw = localStorage.getItem(nextKey);
+          var parsed = parseInt(raw || "0", 10);
+          if (isFinite(parsed)) index = ((parsed % images.length) + images.length) % images.length;
+          localStorage.setItem(nextKey, String((index + 1) % images.length));
+          sessionStorage.setItem(currentKey, String(index));
+        } catch (e) {}
+        var css =
+          "linear-gradient(to bottom, rgba(8,7,6,0.22) 0%, rgba(8,7,6,0.28) 40%, rgba(8,7,6,0.55) 100%)," +
+          'url("' + images[index] + '") center / cover no-repeat';
+        document.documentElement.style.setProperty("--splash-html-bg", css);
+      })();
+    </script>
     <style>
       html, body {
         margin: 0;
@@ -32,12 +56,7 @@
         gap: 0.85rem;
         padding: 1.25rem;
         box-sizing: border-box;
-        background:
-          radial-gradient(ellipse 90% 55% at 50% -5%,
-            rgba(196, 148, 96, 0.16),
-            rgba(196, 148, 96, 0.04) 32%,
-            transparent 62%),
-          rgb(8, 7, 6);
+        background: var(--splash-html-bg, rgb(8, 7, 6));
         opacity: 1;
         transition: opacity 280ms ease;
         pointer-events: none;
@@ -49,6 +68,7 @@
         width: 56px;
         height: 56px;
         object-fit: contain;
+        filter: drop-shadow(0 2px 12px rgba(0, 0, 0, 0.55));
       }
       #splash .splash-brand {
         margin: 0;
@@ -57,6 +77,7 @@
         font-size: 1.05rem;
         letter-spacing: 0.18em;
         color: rgb(236, 230, 220);
+        text-shadow: 0 1px 8px rgba(0, 0, 0, 0.65);
       }
       #splash .splash-eyebrow {
         margin: 0;
@@ -64,18 +85,24 @@
         font-size: 0.62rem;
         letter-spacing: 0.12em;
         text-transform: uppercase;
-        color: rgb(148, 136, 120);
+        color: rgb(196, 186, 172);
+        text-shadow: 0 1px 6px rgba(0, 0, 0, 0.55);
       }
       #splash .splash-log {
-        margin: 0.35rem 0 0;
-        max-width: 320px;
+        position: absolute;
+        left: 1rem;
+        right: 1rem;
+        bottom: 1rem;
+        margin: 0;
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
+        text-align: center;
         font-family: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
         font-size: 0.62rem;
         letter-spacing: 0.04em;
-        color: rgb(148, 136, 120);
+        color: rgba(236, 230, 220, 0.85);
+        text-shadow: 0 1px 6px rgba(0, 0, 0, 0.75);
       }
       #splash .splash-led {
         width: 6px;
