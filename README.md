@@ -117,6 +117,20 @@ wails dev
 
 Starts Vite with hot reload and the Go backend with the bridge bindings.
 
+## Testing
+
+Automated tests cover the SQLite store, area/model path resolution, vegetation
+indices, phenology, LULC metrics, and a smoke load of the spectral Random Forest
+artifacts. They run offline (no Planetary Computer / network) and are executed
+on every push and pull request to `main` via GitHub Actions.
+
+```bash
+go test ./backend/...
+
+pip install -r requirements-dev.txt
+pytest sidecar/tests -q
+```
+
 ## Build
 
 ```bash
