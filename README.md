@@ -1,51 +1,72 @@
 # TERRA
 
-Desktop application (`geosense-infer`) for land-cover classification from Sentinel-2 time series.
-It runs a trained Random Forest classifier over spectro-temporal features and
-renders the result as a georeferenced overlay on an interactive map.
+<p align="center">
+  <img src="docs/img/terra-opensource-project.png" alt="TERRA Open Source Project" width="280" />
+</p>
+
+Desktop application for land-cover classification from Sentinel-2 time series.
+Draw or import an area of interest, preview scenes, run a classifier, and inspect prediction overlays, confidence, phenology, and saved analyses — including side-by-side comparison of two runs.
 
 Imagery is read on demand from the Sentinel-2 L2A STAC catalog (Microsoft
 Planetary Computer) as Cloud-Optimized GeoTIFFs — only the polygon window and the
-four required bands are fetched, so no full product download is required.
+required bands are fetched, so no full product download is required.
 
-The classifier and feature engineering reproduce the method described in:
+The spectral Random Forest path reproduces the method described in:
 
 > Melo, J. L. S., Magalhães, D. K., Kolodziej, J. E., Kuhn, E. V.
 > *Automatic Land Cover Classification with Sentinel-2 and MapBiomas Time
 > Series.* XLIV Brazilian Symposium on Telecommunications and Signal Processing
 > (SBrT 2026), Salvador, BA, Brazil.
 
-![TERRA classifying a custom area drawn over José de Freitas, Piauí, Brazil](docs/img/screenshot.jpeg)
+<p align="center">
+  <img src="docs/img/KML_ROI.jpeg" alt="TERRA map with a custom AOI over Campo Maior, Piauí" width="900" />
+</p>
+
+<p align="center"><em>Map workspace — AOI, period, model, and Classify</em></p>
 
 ## Overview
 
-- Select any area in the world: draw a polygon, search a location, or import a
-  KML/GeoJSON file. Three validated study areas from the reference work are
-  included as examples.
+- Select any area: draw a polygon, search a location, or import a KML/GeoJSON
+  file. Three validated study areas from the reference work are included as
+  examples.
 - Choose an acquisition period and a maximum cloud cover. By default one scene
-  per month (lowest cloud cover) is selected.
-- Run a single classification (full temporal stack) or a temporal analysis
-  (cumulative stacking with per-step soybean retention, when a MapBiomas
-  reference is available).
-- Inspect the classified map overlay, per-class statistics, and the soybean
-  retention curve.
+  per month (lowest cloud cover) is selected; optionally preview the Sentinel-2
+  data cube before classifying.
+- Run **Random Forest** (spectro-temporal features), **Temporal Transformer**,
+  or **Prithvi-EO 2.0** embeddings (NASA/IBM), in map or temporal mode.
+- Inspect prediction and confidence overlays, MapBiomas reference layers, class
+  statistics, vegetation indices, and phenology.
+- Save analyses locally and **compare two runs** side by side (overlays, class
+  distribution, phenology / NDVI when available).
+
+## Gallery
+
+| MapBiomas reference | Random Forest | Temporal Transformer |
+|:-------------------:|:-------------:|:--------------------:|
+| ![MapBiomas for ROI](docs/img/mapbiomas_for_roi.jpeg) | ![RF prediction](docs/img/RF_prediction.jpeg) | ![TT prediction](docs/img/Temporal_transformers_prediction.jpeg) |
+
+<p align="center">
+  <img src="docs/img/comparasion_TT_RF.jpeg" alt="Compare analyses: Temporal Transformer vs Random Forest" width="900" />
+</p>
+
+<p align="center"><em>Compare mode — prediction and confidence for two saved analyses</em></p>
 
 ## Download
 
 Prebuilt desktop bundles for macOS, Windows, and Linux are attached to each
 [release](https://github.com/rexionmars/geosense/releases).
 
-> **Runtime requirement.** The bundles include the UI and the trained model but
+> **Runtime requirement.** The TERRA bundles include the UI and the trained model but
 > run inference through a local Python 3.12 with `rasterio`, `scikit-learn`,
 > `pyproj`, `shapely`, `joblib`, `numpy`, `pystac-client`, and
-> `planetary-computer`. If that interpreter is not on `PATH`, point the app at it
+> `planetary-computer`. If that interpreter is not on `PATH`, point TERRA at it
 > with the `GEOSENSE_PYTHON` environment variable. See
 > [Requirements](#requirements) and [Configuration](#configuration).
 
 ## Architecture
 
 ```
-geosense-infer/
+TERRA/
 ├── main.go              Wails window (frameless, dark), go:embed, bindings
 ├── app.go               Methods exposed to the frontend
 ├── backend/
@@ -53,17 +74,17 @@ geosense-infer/
 │   ├── geocode.go       OSM Nominatim location search
 │   └── types.go         Request/result types
 ├── sidecar/
-│   └── infer.py         Inference pipeline (STAC discovery, features, RF, overlay)
-├── model/               Trained Random Forest artifacts (.joblib)
+│   └── infer.py         Inference pipeline (STAC discovery, features, models, overlay)
+├── model/               Trained classifier artifacts (.joblib / .pt)
 ├── areas/               Embedded example polygons (GeoJSON)
+├── docs/img/            README screenshots and project mark
 └── frontend/            React 19 + Vite 7 + Tailwind 4 + Leaflet
 ```
-
 The Go shell renders a native WebView and bridges to a Python sidecar via
 subprocess (JSON over stdin/stdout). The sidecar reproduces the notebook
 pipeline so inference matches the reference results. Bands are read remotely with
-GDAL `/vsicurl`; features are computed in Python; the Random Forest, scaler, and
-label encoder are loaded from `model/`.
+GDAL `/vsicurl`; features are computed in Python; model weights are loaded from
+`model/`.
 
 ### Stack
 
@@ -102,11 +123,11 @@ Starts Vite with hot reload and the Go backend with the bridge bindings.
 wails build
 ```
 
-Produces a native application bundle under `build/bin/`.
+Produces a native application bundle under `build/bin/` (e.g. `TERRA.app` on macOS).
 
 ## Configuration
 
-Path resolution can be overridden with environment variables:
+Path resolution can be overridden with environment variables (legacy `GEOSENSE_*` names):
 
 | Variable             | Purpose |
 |----------------------|---------|
@@ -116,7 +137,7 @@ Path resolution can be overridden with environment variables:
 
 ## Models
 
-Two classifiers are selectable in the app.
+Classifiers selectable in the app:
 
 ### Spectral Random Forest (default)
 
@@ -130,6 +151,12 @@ feature_names.joblib   Ordered feature names (80)
 Each pixel is described by 80 spectro-temporal features: 14 temporal statistics
 for each of NDVI, EVI, and SAVI; 4 statistics per spectral band (B02, B03, B04,
 B08); and the raw NDVI series. Reproduces the reference work.
+
+### Temporal Transformer
+
+Lightweight series model over the Sentinel-2 temporal stack; produces a cover map
+and confidence layer comparable to the Random Forest path in the Analysis and
+Compare views.
 
 ### Prithvi-EO 2.0 embeddings
 
@@ -160,7 +187,8 @@ for serialization.
 Sentinel-2 L2A scenes are read from the
 [Microsoft Planetary Computer](https://planetarycomputer.microsoft.com/) STAC
 catalog. Access is anonymous (URLs are signed automatically). Location search
-uses [OpenStreetMap Nominatim](https://nominatim.openstreetmap.org/).
+uses [OpenStreetMap Nominatim](https://nominatim.openstreetmap.org/). Basemap
+tiles include Esri World Imagery and EOX Sentinel-2 cloudless 2025.
 
 ## License
 
