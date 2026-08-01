@@ -2,7 +2,7 @@
 
 Portable design system for apps that should share this notebook’s look: **scientific UI with a Mars 2020 / Perseverance reading** — basalt, dust, flight-hardware ochre, sky haze. Subtle mission chrome, not a fan site.
 
-Use this file as the source of truth when theming other products. Implementation in this repo lives in `src/app/globals.css` and `tailwind.config.ts`.
+Use this file as the source of truth when theming other products. Implementation in this repo lives in [`frontend/src/index.css`](../frontend/src/index.css) (CSS variables / Tailwind v4 theme).
 
 ---
 
@@ -251,7 +251,5 @@ colors: {
 
 ## Source files in this repo
 
-- Tokens & haze: `src/app/globals.css`
-- Tailwind bridge: `tailwind.config.ts`
-- Topic gradients: `src/lib/site.ts` (`topics[].gradient`)
-- Timeline overflow chrome: `src/components/HorizontalTimeline.tsx`
+- Tokens & theme: [`frontend/src/index.css`](../frontend/src/index.css)
+- App shell / splash styling: `frontend/src/` components and pages

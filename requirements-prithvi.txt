@@ -1,0 +1,4 @@
+# Optional extras for Prithvi-EO 2.0 (large download on first use).
+-r requirements.txt
+torch>=2.1
+terratorch>=1.2

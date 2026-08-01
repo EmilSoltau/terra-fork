@@ -1,9 +1,4 @@
 # Dev / CI dependencies for sidecar unit tests (offline; no torch).
+# Includes runtime deps from requirements.txt plus pytest.
+-r requirements.txt
 pytest>=8.0
-numpy>=1.26
-scipy>=1.11
-shapely>=2.0
-pyproj>=3.6
-rasterio>=1.3
-joblib>=1.3
-scikit-learn>=1.8,<1.9
