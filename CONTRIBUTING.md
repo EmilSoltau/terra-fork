@@ -49,6 +49,8 @@ when shipping new binaries (or a critical install fix). See
 [docs/RELEASING.md](docs/RELEASING.md) for PATCH / MINOR / MAJOR rules and the
 pre-tag checklist.
 
+For planned features, see [docs/ROADMAP.md](docs/ROADMAP.md).
+
 ## Code layout
 
 | Path | Role |
