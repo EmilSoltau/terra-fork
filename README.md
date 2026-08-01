@@ -50,6 +50,7 @@ account for the app itself.
 | [User guide](docs/USER_GUIDE.md) | AOI → classify → Analysis → Compare |
 | [Install](docs/INSTALL.md) | LITE vs FULL releases, Python env, from-source |
 | [Releasing](docs/RELEASING.md) | SemVer tags, when to bump, when not to release |
+| [Roadmap](docs/ROADMAP.md) | Planned packaging and analysis features |
 | [Architecture](docs/ARCHITECTURE.md) | Wails shell, sidecar, STAC/COG design |
 | [API](docs/API.md) | Go bindings and sidecar JSON contracts |
 | [Troubleshooting](docs/TROUBLESHOOTING.md) | Python, STAC, models, macOS |
