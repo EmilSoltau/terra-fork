@@ -6,9 +6,10 @@ see [INSTALL.md](INSTALL.md). For common failures, see [TROUBLESHOOTING.md](TROU
 ## Prerequisites
 
 - A TERRA desktop build ([releases](https://github.com/rexionmars/TERRA/releases))
+  — prefer **FULL** (`*-full.zip`) for spectral RF without installing Python —
   **or** a from-source install (`wails dev` / `wails build`).
-- Python 3.12 with [`requirements.txt`](../requirements.txt) installed, and
-  `GEOSENSE_PYTHON` set if the interpreter is not on `PATH`.
+- For **LITE** builds: Python 3.12 with [`requirements.txt`](../requirements.txt),
+  and `GEOSENSE_PYTHON` if the interpreter is not on `PATH`.
 - Network access to the Microsoft Planetary Computer STAC catalog (and Hugging
   Face if you use Prithvi).
 

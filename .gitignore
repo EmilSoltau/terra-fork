@@ -1,5 +1,8 @@
 # Build output
 build/bin/
+build/cache/
+build/stage-*/
+dist/
 
 # Frontend
 node_modules/

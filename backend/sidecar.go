@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 
@@ -25,45 +26,101 @@ type Runner struct {
 	areasDir   string // path to embedded area GeoJSONs
 }
 
+func hasSidecar(dir string) bool {
+	_, err := os.Stat(filepath.Join(dir, "sidecar", "infer.py"))
+	return err == nil
+}
+
+// resolveAppDir finds the directory that contains sidecar/, areas/, and model/.
+// Order: GEOSENSE_APP_DIR, provided appDir, macOS Contents/Resources, then
+// parents of the executable.
+func resolveAppDir(appDir string) string {
+	if env := os.Getenv("GEOSENSE_APP_DIR"); env != "" {
+		return env
+	}
+	if hasSidecar(appDir) {
+		return appDir
+	}
+	exe, err := os.Executable()
+	if err != nil {
+		return appDir
+	}
+	dir := filepath.Dir(exe)
+	// Packaged macOS: …/Contents/MacOS/Terra → …/Contents/Resources
+	if filepath.Base(dir) == "MacOS" {
+		res := filepath.Join(filepath.Dir(dir), "Resources")
+		if hasSidecar(res) {
+			return res
+		}
+	}
+	for i := 0; i < 8; i++ {
+		if hasSidecar(dir) {
+			return dir
+		}
+		if filepath.Base(dir) == "Contents" {
+			res := filepath.Join(dir, "Resources")
+			if hasSidecar(res) {
+				return res
+			}
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			break
+		}
+		dir = parent
+	}
+	return appDir
+}
+
+// resolvePython picks the interpreter: GEOSENSE_PYTHON, bundled python/,
+// repo .venv, then PATH.
+func resolvePython(appDir, repoRoot string) string {
+	if env := os.Getenv("GEOSENSE_PYTHON"); env != "" {
+		return env
+	}
+	bundled := []string{
+		filepath.Join(appDir, "python", "bin", "python3"),
+		filepath.Join(appDir, "python", "bin", "python"),
+		filepath.Join(appDir, "python", "python.exe"),
+		filepath.Join(appDir, "python", "python"),
+	}
+	for _, c := range bundled {
+		if _, err := os.Stat(c); err == nil {
+			return c
+		}
+	}
+	venvUnix := filepath.Join(repoRoot, ".venv", "bin", "python")
+	venvWin := filepath.Join(repoRoot, ".venv", "Scripts", "python.exe")
+	if runtime.GOOS == "windows" {
+		if _, err := os.Stat(venvWin); err == nil {
+			return venvWin
+		}
+		return "python"
+	}
+	if _, err := os.Stat(venvUnix); err == nil {
+		return venvUnix
+	}
+	return "python3"
+}
+
 // NewRunner resolves all required paths. appDir is the directory of the running
 // geosense-infer project (where sidecar/ and areas/ live). It is resolved from
 // (in order): GEOSENSE_APP_DIR, a candidate that actually contains sidecar/, or
 // the provided appDir.
 func NewRunner(appDir string) (*Runner, error) {
-	if env := os.Getenv("GEOSENSE_APP_DIR"); env != "" {
-		appDir = env
-	} else {
-		// When run from the project directory appDir already points at
-		// geosense-infer/. When launched as a packaged binary it may not, so
-		// probe the executable's directory and its parents for a sidecar/ dir.
-		if _, err := os.Stat(filepath.Join(appDir, "sidecar", "infer.py")); err != nil {
-			if exe, err := os.Executable(); err == nil {
-				dir := filepath.Dir(exe)
-				for i := 0; i < 6; i++ {
-					if _, err := os.Stat(filepath.Join(dir, "sidecar", "infer.py")); err == nil {
-						appDir = dir
-						break
-					}
-					dir = filepath.Dir(dir)
-				}
-			}
-		}
-	}
+	appDir = resolveAppDir(appDir)
 
 	repoRoot := filepath.Dir(appDir) // geosense-infer sits inside the repo
+	// Packaged apps keep assets under Resources; treat that as the app root.
+	if filepath.Base(appDir) == "Resources" {
+		// …/TERRA.app/Contents/Resources → repoRoot stays Contents (unused for models)
+		repoRoot = filepath.Dir(filepath.Dir(appDir))
+	}
 	if env := os.Getenv("GEOSENSE_ROOT"); env != "" {
 		repoRoot = env
 	}
 
-	python := os.Getenv("GEOSENSE_PYTHON")
-	if python == "" {
-		candidate := filepath.Join(repoRoot, ".venv", "bin", "python")
-		if _, err := os.Stat(candidate); err == nil {
-			python = candidate
-		} else {
-			python = "python3"
-		}
-	}
+	python := resolvePython(appDir, repoRoot)
 
 	sidecar := filepath.Join(appDir, "sidecar", "infer.py")
 	areasDir := filepath.Join(appDir, "areas")
@@ -112,7 +169,16 @@ func (r *Runner) Probe(ctx context.Context) (string, error) {
 	if ver == "" {
 		return "", fmt.Errorf("empty python version")
 	}
-	return fmt.Sprintf("sidecar ready · python %s · %s", ver, filepath.Base(r.sidecar)), nil
+	src := "system"
+	if strings.Contains(r.pythonPath, string(filepath.Separator)+"python"+string(filepath.Separator)) ||
+		strings.HasSuffix(filepath.Dir(filepath.Dir(r.pythonPath)), "python") ||
+		filepath.Base(filepath.Dir(r.pythonPath)) == "python" {
+		src = "bundled"
+	}
+	if os.Getenv("GEOSENSE_PYTHON") != "" {
+		src = "GEOSENSE_PYTHON"
+	}
+	return fmt.Sprintf("sidecar ready · python %s (%s) · %s", ver, src, filepath.Base(r.sidecar)), nil
 }
 
 // PythonPath returns the resolved interpreter path (for boot logs).
