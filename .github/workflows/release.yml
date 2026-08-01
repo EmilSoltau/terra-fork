@@ -19,15 +19,15 @@ jobs:
           - name: macOS (universal)
             os: macos-latest
             platform: darwin/universal
-            artifact: geosense-macOS-universal.zip
+            artifact: TERRA-macOS-universal.zip
           - name: Windows (amd64)
             os: windows-latest
             platform: windows/amd64
-            artifact: geosense-Windows-amd64.zip
+            artifact: TERRA-Windows-amd64.zip
           - name: Linux (amd64)
             os: ubuntu-latest
             platform: linux/amd64
-            artifact: geosense-Linux-amd64.zip
+            artifact: TERRA-Linux-amd64.zip
 
     steps:
       - uses: actions/checkout@v4
@@ -116,7 +116,7 @@ jobs:
           draft: false
           prerelease: false
           body: |
-            ## geosense-infer ${{ github.ref_name }}
+            ## TERRA ${{ github.ref_name }}
 
             Desktop builds for macOS, Windows, and Linux.
 

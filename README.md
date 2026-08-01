@@ -54,7 +54,7 @@ The spectral Random Forest path reproduces the method described in:
 ## Download
 
 Prebuilt desktop bundles for macOS, Windows, and Linux are attached to each
-[release](https://github.com/rexionmars/geosense/releases).
+[release](https://github.com/rexionmars/TERRA/releases).
 
 > **Runtime requirement.** The TERRA bundles include the UI and the trained model but
 > run inference through a local Python 3.12 with `rasterio`, `scikit-learn`,
