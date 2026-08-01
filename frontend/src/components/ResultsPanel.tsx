@@ -12,6 +12,8 @@ interface ResultsPanelProps {
   onConfidenceOnTopChange: (v: boolean) => void
   smoothOverlay: boolean
   onSmoothOverlayChange: (v: boolean) => void
+  swipeCompare: boolean
+  onSwipeCompareChange: (v: boolean) => void
   onClose: () => void
   onNewClassification: () => void
 }
@@ -24,6 +26,8 @@ export function ResultsPanel({
   onConfidenceOnTopChange,
   smoothOverlay,
   onSmoothOverlayChange,
+  swipeCompare,
+  onSwipeCompareChange,
   onClose,
   onNewClassification,
 }: ResultsPanelProps) {
@@ -118,6 +122,15 @@ export function ResultsPanel({
                 />
                 Smooth prediction overlay
               </label>
+              <label className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                <input
+                  type="checkbox"
+                  checked={swipeCompare}
+                  onChange={(e) => onSwipeCompareChange(e.target.checked)}
+                  className="accent-primary"
+                />
+                Swipe imagery ↔ overlay
+              </label>
               {!isLulcOnly && (
                 <label className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
                   <input
@@ -169,7 +182,9 @@ export function ResultsPanel({
             <p className="text-[10px] text-muted-foreground">
               {isLulcOnly
                 ? "MapBiomas cover on the map. Open Analysis for groups, diversity and details."
-                : "Open Analysis for land cover / use, cover map, VI series and phenology."}
+                : swipeCompare
+                  ? "Drag the handle to reveal satellite imagery under the prediction / confidence overlay."
+                  : "Open Analysis for land cover / use, cover map, VI series and phenology."}
             </p>
           </div>
         </>

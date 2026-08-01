@@ -24,6 +24,10 @@ import type {
   DataCubeResult,
   DataCubeRequest,
 } from "@/lib/types"
+import {
+  DEFAULT_AOI_CONTOUR_SCHEME,
+  type AoiContourSchemeId,
+} from "@/lib/aoiStyle"
 import { AuthProvider, useAuth } from "@/lib/auth"
 import { ThemeSync } from "@/components/ThemeSync"
 import { TitleBar } from "@/components/TitleBar"
@@ -105,6 +109,10 @@ function App() {
   const [showConfidence, setShowConfidence] = useState(false)
   const [confidenceOnTop, setConfidenceOnTop] = useState(true)
   const [smoothOverlay, setSmoothOverlay] = useState(false)
+  const [swipeCompare, setSwipeCompare] = useState(false)
+  const [swipeRatio, setSwipeRatio] = useState(0.5)
+  const [aoiContourScheme, setAoiContourScheme] =
+    useState<AoiContourSchemeId>(DEFAULT_AOI_CONTOUR_SCHEME)
   const [running, setRunning] = useState<boolean>(false)
   const [progress, setProgress] = useState<number>(0)
   const [progressMsg, setProgressMsg] = useState<string>("")
@@ -274,6 +282,9 @@ function App() {
             showConfidence={showConfidence}
             confidenceOnTop={confidenceOnTop}
             smoothOverlay={smoothOverlay}
+            swipeCompare={swipeCompare}
+            swipeRatio={swipeRatio}
+            aoiContourScheme={aoiContourScheme}
             running={running}
             progress={progress}
             progressMsg={progressMsg}
@@ -295,6 +306,9 @@ function App() {
             setShowConfidence={setShowConfidence}
             setConfidenceOnTop={setConfidenceOnTop}
             setSmoothOverlay={setSmoothOverlay}
+            setSwipeCompare={setSwipeCompare}
+            setSwipeRatio={setSwipeRatio}
+            setAoiContourScheme={setAoiContourScheme}
             setRunning={setRunning}
             setProgress={setProgress}
             setProgressMsg={setProgressMsg}
@@ -329,6 +343,9 @@ function AppBody(props: {
   showConfidence: boolean
   confidenceOnTop: boolean
   smoothOverlay: boolean
+  swipeCompare: boolean
+  swipeRatio: number
+  aoiContourScheme: AoiContourSchemeId
   running: boolean
   progress: number
   progressMsg: string
@@ -350,6 +367,9 @@ function AppBody(props: {
   setShowConfidence: (v: boolean) => void
   setConfidenceOnTop: (v: boolean) => void
   setSmoothOverlay: (v: boolean) => void
+  setSwipeCompare: (v: boolean) => void
+  setSwipeRatio: (v: number) => void
+  setAoiContourScheme: (id: AoiContourSchemeId) => void
   setRunning: (v: boolean) => void
   setProgress: (v: number) => void
   setProgressMsg: (v: string) => void
@@ -585,15 +605,25 @@ function AppBody(props: {
   const backToAnalysesList = useCallback(() => {
     props.setResult(null)
     props.setAnalysisLabel(undefined)
+    props.setSwipeCompare(false)
     goAnalysis()
-  }, [goAnalysis, props.setResult, props.setAnalysisLabel])
+  }, [goAnalysis, props.setResult, props.setAnalysisLabel, props.setSwipeCompare])
 
   const startNewClassification = useCallback(() => {
     props.setResult(null)
     props.setAnalysisLabel(undefined)
+    props.setSwipeCompare(false)
+    props.setSwipeRatio(0.5)
     props.onClearArea()
     goMap()
-  }, [goMap, props.setResult, props.setAnalysisLabel, props.onClearArea])
+  }, [
+    goMap,
+    props.setResult,
+    props.setAnalysisLabel,
+    props.setSwipeCompare,
+    props.setSwipeRatio,
+    props.onClearArea,
+  ])
 
   const areaLabel = useMemo(() => {
     if (props.analysisLabel) return props.analysisLabel
@@ -628,7 +658,12 @@ function AppBody(props: {
               showConfidence={props.showConfidence}
               confidenceOnTop={props.confidenceOnTop}
               smoothOverlay={props.smoothOverlay}
+              swipeCompare={props.swipeCompare}
+              swipeRatio={props.swipeRatio}
               areaLabel={areaLabel}
+              onAreaLabelChange={(label) => props.setAnalysisLabel(label)}
+              aoiContourScheme={props.aoiContourScheme}
+              onAoiContourSchemeChange={props.setAoiContourScheme}
               hasArea={props.hasArea}
               start={props.start}
               end={props.end}
@@ -662,12 +697,16 @@ function AppBody(props: {
               onShowConfidenceChange={props.setShowConfidence}
               onConfidenceOnTopChange={props.setConfidenceOnTop}
               onSmoothOverlayChange={props.setSmoothOverlay}
+              onSwipeCompareChange={props.setSwipeCompare}
+              onSwipeRatioChange={props.setSwipeRatio}
               onRun={handleRun}
               onAnalyzeLULC={handleAnalyzeLULC}
               lulcRunning={props.lulcRunning}
               onCloseResult={() => {
                 props.setResult(null)
                 props.setAnalysisLabel(undefined)
+                props.setSwipeCompare(false)
+                props.setSwipeRatio(0.5)
               }}
               onNewClassification={startNewClassification}
               onViewDataCube={() => void handleViewDataCube()}

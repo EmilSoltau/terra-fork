@@ -6,6 +6,7 @@ import type {
   ModelKind,
   PredictResult,
 } from "@/lib/types"
+import type { AoiContourSchemeId } from "@/lib/aoiStyle"
 import { MapView } from "@/components/MapView"
 import { SearchBar } from "@/components/SearchBar"
 import { ControlPanel } from "@/components/ControlPanel"
@@ -23,7 +24,12 @@ export interface MapScreenProps {
   showConfidence: boolean
   confidenceOnTop: boolean
   smoothOverlay: boolean
+  swipeCompare: boolean
+  swipeRatio: number
   areaLabel?: string
+  onAreaLabelChange: (label: string) => void
+  aoiContourScheme: AoiContourSchemeId
+  onAoiContourSchemeChange: (id: AoiContourSchemeId) => void
   hasArea: boolean
   start: string
   end: string
@@ -52,6 +58,8 @@ export interface MapScreenProps {
   onShowConfidenceChange: (v: boolean) => void
   onConfidenceOnTopChange: (v: boolean) => void
   onSmoothOverlayChange: (v: boolean) => void
+  onSwipeCompareChange: (v: boolean) => void
+  onSwipeRatioChange: (v: number) => void
   onRun: () => void
   onAnalyzeLULC: () => void
   lulcRunning?: boolean
@@ -80,7 +88,14 @@ export function MapScreen(props: MapScreenProps) {
         showConfidence={props.showConfidence}
         confidenceOnTop={props.confidenceOnTop}
         smoothOverlay={props.smoothOverlay}
+        swipeCompare={props.swipeCompare}
+        swipeRatio={props.swipeRatio}
+        onSwipeRatioChange={props.onSwipeRatioChange}
         areaLabel={props.areaLabel}
+        onAreaLabelChange={props.onAreaLabelChange}
+        aoiContourScheme={props.aoiContourScheme}
+        onAoiContourSchemeChange={props.onAoiContourSchemeChange}
+        onClearArea={props.onClearArea}
         onViewChange={props.onViewChange}
       />
 
@@ -140,6 +155,8 @@ export function MapScreen(props: MapScreenProps) {
             onConfidenceOnTopChange={props.onConfidenceOnTopChange}
             smoothOverlay={props.smoothOverlay}
             onSmoothOverlayChange={props.onSmoothOverlayChange}
+            swipeCompare={props.swipeCompare}
+            onSwipeCompareChange={props.onSwipeCompareChange}
             onClose={props.onCloseResult}
             onNewClassification={props.onNewClassification}
           />
