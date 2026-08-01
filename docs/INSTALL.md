@@ -138,4 +138,5 @@ into the bundled interpreter.
 
 - [User guide](USER_GUIDE.md) — first classification
 - [Troubleshooting](TROUBLESHOOTING.md) — common errors
+- [Releasing](RELEASING.md) — SemVer / when to tag
 - [Contributing](../CONTRIBUTING.md) — tests and PRs

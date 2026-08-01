@@ -42,6 +42,13 @@ pytest sidecar/tests -q
 5. Prefer small, reviewable commits with imperative messages
    (e.g. `fix: handle empty STAC results`).
 
+## Releases
+
+Not every merge should produce a GitHub Release. We follow SemVer and only tag
+when shipping new binaries (or a critical install fix). See
+[docs/RELEASING.md](docs/RELEASING.md) for PATCH / MINOR / MAJOR rules and the
+pre-tag checklist.
+
 ## Code layout
 
 | Path | Role |
