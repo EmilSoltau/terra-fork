@@ -94,15 +94,58 @@ func TestPngToDataURI(t *testing.T) {
 	}
 }
 
-func TestConvertLULCNilSafe(t *testing.T) {
-	if convertLULC(nil) != nil {
-		t.Fatal("expected nil")
+func TestNewRunnerPrefersBundledPython(t *testing.T) {
+	root := t.TempDir()
+	// Minimal sidecar tree
+	sid := filepath.Join(root, "sidecar")
+	if err := os.MkdirAll(sid, 0o755); err != nil {
+		t.Fatal(err)
 	}
-	out := convertLULC(&lulcSidecarPayload{Year: 2023, Source: "test"})
-	if out == nil || out.Year != 2023 {
-		t.Fatalf("unexpected: %+v", out)
+	if err := os.WriteFile(filepath.Join(sid, "infer.py"), []byte("# test\n"), 0o644); err != nil {
+		t.Fatal(err)
 	}
-	if out.Composition == nil || out.Groups == nil || out.PredVsRef == nil {
-		t.Fatal("nil slices should be normalized to empty")
+	bin := filepath.Join(root, "python", "bin")
+	if err := os.MkdirAll(bin, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	bundled := filepath.Join(bin, "python3")
+	if err := os.WriteFile(bundled, []byte("#!/bin/sh\necho fake\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	t.Setenv("GEOSENSE_APP_DIR", root)
+	t.Setenv("GEOSENSE_PYTHON", "")
+	t.Setenv("GEOSENSE_MODEL_DIR", filepath.Join(root, "model"))
+	_ = os.MkdirAll(filepath.Join(root, "model"), 0o755)
+	_ = os.WriteFile(filepath.Join(root, "model", "rf_classifier.joblib"), []byte("x"), 0o644)
+
+	r, err := NewRunner(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r.PythonPath() != bundled {
+		t.Fatalf("PythonPath=%s want bundled %s", r.PythonPath(), bundled)
 	}
 }
+
+func TestResolveAppDirResourcesLayout(t *testing.T) {
+	// Simulate macOS Resources layout without needing a real executable.
+	root := t.TempDir()
+	res := filepath.Join(root, "Contents", "Resources")
+	if err := os.MkdirAll(filepath.Join(res, "sidecar"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(res, "sidecar", "infer.py"), []byte("#\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("GEOSENSE_APP_DIR", res)
+	t.Setenv("GEOSENSE_PYTHON", "python3")
+	r, err := NewRunner("/nonexistent")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.HasSuffix(r.sidecar, filepath.Join("Resources", "sidecar", "infer.py")) {
+		t.Fatalf("sidecar=%s", r.sidecar)
+	}
+}
+

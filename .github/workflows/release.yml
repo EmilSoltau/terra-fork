@@ -10,24 +10,54 @@ permissions:
 
 jobs:
   build:
-    name: Build ${{ matrix.name }}
+    name: ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
         include:
-          - name: macOS (universal)
+          # LITE — UI + sidecar/areas/model; needs system Python
+          - name: macOS lite (universal)
             os: macos-latest
             platform: darwin/universal
-            artifact: TERRA-macOS-universal.zip
-          - name: Windows (amd64)
+            flavor: lite
+            artifact: TERRA-macOS-universal-lite.zip
+            package_os: darwin
+          - name: Windows lite (amd64)
             os: windows-latest
             platform: windows/amd64
-            artifact: TERRA-Windows-amd64.zip
-          - name: Linux (amd64)
+            flavor: lite
+            artifact: TERRA-Windows-amd64-lite.zip
+            package_os: windows
+          - name: Linux lite (amd64)
             os: ubuntu-latest
             platform: linux/amd64
-            artifact: TERRA-Linux-amd64.zip
+            flavor: lite
+            artifact: TERRA-Linux-amd64-lite.zip
+            package_os: linux
+
+          # FULL — embeds python-build-standalone + requirements.txt (spectral RF)
+          - name: macOS full (arm64)
+            os: macos-latest
+            platform: darwin/arm64
+            flavor: full
+            artifact: TERRA-macOS-arm64-full.zip
+            package_os: darwin
+            arch: aarch64
+          - name: Windows full (amd64)
+            os: windows-latest
+            platform: windows/amd64
+            flavor: full
+            artifact: TERRA-Windows-amd64-full.zip
+            package_os: windows
+            arch: x86_64
+          - name: Linux full (amd64)
+            os: ubuntu-latest
+            platform: linux/amd64
+            flavor: full
+            artifact: TERRA-Linux-amd64-full.zip
+            package_os: linux
+            arch: x86_64
 
     steps:
       - uses: actions/checkout@v4
@@ -49,10 +79,17 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev
+          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev zip
 
       - name: Install Wails CLI
         run: go install github.com/wailsapp/wails/v2/cmd/wails@v2.12.0
+
+      - name: Cache python-build-standalone
+        if: matrix.flavor == 'full'
+        uses: actions/cache@v4
+        with:
+          path: build/cache
+          key: pbs-20260728-3.12.13-${{ matrix.package_os }}-${{ matrix.arch }}
 
       # Ubuntu 24.04 ships webkit2gtk 4.1 only; tell Wails to target it.
       - name: Build (Linux)
@@ -63,38 +100,29 @@ jobs:
         if: runner.os != 'Linux'
         run: wails build -platform ${{ matrix.platform }} -clean
 
-      # --- package per platform ---
-
-      - name: Package (macOS)
-        if: runner.os == 'macOS'
+      - name: Package (Unix)
+        if: runner.os != 'Windows'
         run: |
-          cd build/bin
-          app=$(ls -d *.app | head -n1)
-          echo "packaging $app"
-          ditto -c -k --keepParent "$app" "../../${{ matrix.artifact }}"
+          chmod +x scripts/package_release.sh
+          args=(--flavor "${{ matrix.flavor }}" --os "${{ matrix.package_os }}" --artifact "${{ matrix.artifact }}")
+          if [ -n "${{ matrix.arch }}" ]; then
+            args+=(--arch "${{ matrix.arch }}")
+          fi
+          scripts/package_release.sh "${args[@]}"
 
       - name: Package (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          $exe = Get-ChildItem build/bin -Filter *.exe | Select-Object -First 1
-          Write-Host "packaging $($exe.Name)"
-          Compress-Archive -Path $exe.FullName -DestinationPath ${{ matrix.artifact }}
-
-      - name: Package (Linux)
-        if: runner.os == 'Linux'
-        run: |
-          cd build/bin
-          bin=$(find . -maxdepth 1 -type f ! -name "*.*" | head -n1)
-          echo "packaging $bin"
-          chmod +x "$bin" || true
-          zip -j "../../${{ matrix.artifact }}" "$bin"
+          $arch = "${{ matrix.arch }}"
+          if ($arch -eq "") { $arch = "x86_64" }
+          ./scripts/package_release.ps1 -Flavor ${{ matrix.flavor }} -Artifact ${{ matrix.artifact }} -Arch $arch
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.artifact }}
-          path: ${{ matrix.artifact }}
+          path: dist/${{ matrix.artifact }}
           if-no-files-found: error
 
   release:
@@ -118,14 +146,20 @@ jobs:
           body: |
             ## TERRA ${{ github.ref_name }}
 
-            Desktop builds for macOS, Windows, and Linux.
+            Two install flavors per platform:
 
-            **Runtime requirement.** These builds bundle the UI and the trained
-            model but rely on a local Python 3.12 with the inference
-            dependencies (`rasterio`, `scikit-learn`, `pyproj`, `shapely`,
-            `joblib`, `numpy`, `pystac-client`, `planetary-computer`). Point the
-            app at it with the `GEOSENSE_PYTHON` environment variable if it is
-            not on `PATH`. See the README for details.
+            | Flavor | Assets | What you need |
+            |--------|--------|----------------|
+            | **FULL** | `*-full.zip` | Unzip and run — embeds Python 3.12 + spectral RF deps |
+            | **LITE** | `*-lite.zip` | Smaller; install Python 3.12 + `requirements.txt` yourself |
+
+            **FULL** supports spectral Random Forest (and LULC / phenology) out of the box.
+            Temporal Transformer and Prithvi still need torch (`requirements-prithvi.txt`)
+            via a system/venv install (`GEOSENSE_PYTHON`).
+
+            macOS FULL is **arm64** (Apple Silicon). LITE macOS remains **universal**.
 
             Sentinel-2 imagery is read on demand from the Microsoft Planetary
             Computer STAC catalog; no full product download is required.
+
+            See [docs/INSTALL.md](https://github.com/rexionmars/TERRA/blob/main/docs/INSTALL.md).

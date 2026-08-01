@@ -4,8 +4,9 @@
 
 ### “Python not found” or boot never becomes ready
 
-- Install Python 3.12 and `pip install -r requirements.txt`.
-- Set `GEOSENSE_PYTHON` to the absolute path of that interpreter.
+- Prefer a **FULL** release (`*-full.zip`), which embeds Python.
+- For **LITE**: install Python 3.12 and `pip install -r requirements.txt`.
+- Set `GEOSENSE_PYTHON` to the absolute path of that interpreter if needed.
 - Confirm: `"$GEOSENSE_PYTHON" -c "import rasterio, sklearn, pystac_client; print('ok')"`.
 
 ### `InconsistentVersionWarning` or joblib load errors

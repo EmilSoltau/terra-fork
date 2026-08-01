@@ -48,7 +48,7 @@ account for the app itself.
 | Doc | Contents |
 |-----|----------|
 | [User guide](docs/USER_GUIDE.md) | AOI → classify → Analysis → Compare |
-| [Install](docs/INSTALL.md) | Binary + Python env + from-source |
+| [Install](docs/INSTALL.md) | LITE vs FULL releases, Python env, from-source |
 | [Architecture](docs/ARCHITECTURE.md) | Wails shell, sidecar, STAC/COG design |
 | [API](docs/API.md) | Go bindings and sidecar JSON contracts |
 | [Troubleshooting](docs/TROUBLESHOOTING.md) | Python, STAC, models, macOS |
@@ -57,9 +57,10 @@ account for the app itself.
 
 ## Quick start
 
-1. Install Python 3.12 deps: `pip install -r requirements.txt` (see [Install](docs/INSTALL.md)).
-2. Download a [release](https://github.com/rexionmars/TERRA/releases) **or** run `wails dev` from source.
-3. Set `GEOSENSE_PYTHON` if needed, then open TERRA.
+1. Prefer a **FULL** release zip (embeds Python) — or install Python 3.12 +
+   `pip install -r requirements.txt` for **LITE** (see [Install](docs/INSTALL.md)).
+2. Download from [releases](https://github.com/rexionmars/TERRA/releases) **or** run `wails dev` from source.
+3. Open TERRA (set `GEOSENSE_PYTHON` only if using LITE / a custom interpreter).
 4. Select embedded area **A** (or draw an AOI), set a seasonal date range, model **spectral**.
 5. Click **Classify** and inspect overlays / class stats in Analysis.
 
@@ -95,13 +96,16 @@ Full walkthrough: [docs/USER_GUIDE.md](docs/USER_GUIDE.md).
 ## Download
 
 Prebuilt desktop bundles for macOS, Windows, and Linux are attached to each
-[release](https://github.com/rexionmars/TERRA/releases)
-(`TERRA-macOS-universal.zip`, `TERRA-Windows-amd64.zip`, `TERRA-Linux-amd64.zip`).
+[release](https://github.com/rexionmars/TERRA/releases). Two flavors:
 
-> **Runtime requirement.** Bundles include the UI and trained models but run
-> inference through a local Python 3.12 environment. Install with
-> `pip install -r requirements.txt` and set `GEOSENSE_PYTHON` if needed.
-> Details: [docs/INSTALL.md](docs/INSTALL.md).
+| Flavor | Example assets | Notes |
+|--------|----------------|-------|
+| **FULL** | `TERRA-macOS-arm64-full.zip`, `TERRA-*-amd64-full.zip` | Embeds Python 3.12 + spectral RF deps — unzip and run |
+| **LITE** | `TERRA-macOS-universal-lite.zip`, `TERRA-*-amd64-lite.zip` | Smaller; needs system Python + [`requirements.txt`](requirements.txt) |
+
+FULL covers **spectral** classification out of the box. Temporal Transformer /
+Prithvi still need torch (`requirements-prithvi.txt`). Details:
+[docs/INSTALL.md](docs/INSTALL.md).
 
 ## Architecture
 
@@ -131,11 +135,12 @@ Binding and JSON contracts: [docs/API.md](docs/API.md).
 
 ## Requirements
 
-- **Runtime (users):** Python 3.12 + [`requirements.txt`](requirements.txt)
+- **FULL release:** no system Python required for spectral RF
+- **LITE / from source:** Python 3.12 + [`requirements.txt`](requirements.txt)
 - **Prithvi (optional):** [`requirements-prithvi.txt`](requirements-prithvi.txt)
 - **From source:** Go 1.23+, Node.js 18+, [Wails CLI](https://wails.io)
 
-Interpreter resolution: `GEOSENSE_PYTHON` → `.venv/bin/python` → `python3` on `PATH`.
+Interpreter resolution: `GEOSENSE_PYTHON` → bundled `python/` (FULL) → `.venv` → `python3` on `PATH`.
 
 ## Development
 
