@@ -520,7 +520,7 @@ export function AnalysisPage({
   }
 
   const metric = (label: string, value: number | null | undefined, suffix = "") => (
-    <div className="rounded-sm border border-border/60 bg-secondary/20 px-2 py-1.5">
+    <div className="ar-raised flex min-h-[4.25rem] flex-col justify-center px-2.5 py-2">
       <div className="eyebrow">{label}</div>
       <div className="telemetry mt-0.5 text-[12px] text-foreground">
         {value == null ? "—" : `${Number(value).toFixed(value % 1 === 0 ? 0 : 2)}${suffix}`}
@@ -528,21 +528,24 @@ export function AnalysisPage({
     </div>
   )
 
+  const btnGhost =
+    "ar-ghost flex h-8 items-center gap-1.5 rounded-sm border px-3 text-[11px] text-muted-foreground hover:text-foreground"
+
   return (
-    <div className="app-no-drag flex h-full min-h-0 flex-col overflow-y-auto bg-background">
-      <div className="flex w-full flex-col gap-6 px-5 py-7 sm:px-6 lg:px-8 xl:px-10">
+    <div className="analysis-result app-no-drag flex h-full min-h-0 flex-col overflow-hidden">
+      <header className="ar-header sticky top-0 z-10 shrink-0 px-5 py-3.5 sm:px-6 lg:px-8">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="min-w-0 flex-1">
             <p className="telemetry text-[10px] text-primary">ANALYSIS</p>
-            <h1 className="mt-1 font-display text-xl font-semibold tracking-wide xl:text-2xl">
+            <h1 className="mt-0.5 font-display text-xl font-semibold tracking-wide xl:text-2xl">
               {hasClassification ? "Cover map" : "Land cover / land use"}
               {areaLabel ? ` — ${areaLabel}` : ""}
             </h1>
-            <p className="mt-1 text-xs text-muted-foreground">
+            <p className="mt-0.5 text-xs text-muted-foreground">
               {hasClassification ? (
                 <>
-                  {result.n_dates} scenes · {result.date_range[0]} → {result.date_range[1]} ·{" "}
-                  {modelLabel}
+                  {result.n_dates} scenes · {result.date_range[0]} →{" "}
+                  {result.date_range[1]} · {modelLabel}
                   {result.mean_confidence > 0 && (
                     <> · mean conf {(result.mean_confidence * 100).toFixed(0)}%</>
                   )}
@@ -553,27 +556,15 @@ export function AnalysisPage({
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={onBackToList}
-              className="flex h-8 items-center gap-1.5 rounded-sm border border-border px-3 text-[11px] text-muted-foreground hover:bg-secondary hover:text-foreground"
-            >
+            <button type="button" onClick={onBackToList} className={btnGhost}>
               <ArrowLeft className="h-3 w-3" />
               Saved analyses
             </button>
-            <button
-              type="button"
-              onClick={goMap}
-              className="flex h-8 items-center gap-1.5 rounded-sm border border-border px-3 text-[11px] text-muted-foreground hover:bg-secondary hover:text-foreground"
-            >
+            <button type="button" onClick={goMap} className={btnGhost}>
               <MapIcon className="h-3 w-3" />
               View on map
             </button>
-            <button
-              type="button"
-              onClick={onNewClassification}
-              className="flex h-8 items-center gap-1.5 rounded-sm border border-border px-3 text-[11px] text-muted-foreground hover:bg-secondary hover:text-foreground"
-            >
+            <button type="button" onClick={onNewClassification} className={btnGhost}>
               <Plus className="h-3 w-3" />
               New classification
             </button>
@@ -589,165 +580,221 @@ export function AnalysisPage({
             )}
           </div>
         </div>
+      </header>
 
-        {lulc && (
-          <LulcSection lulc={lulc} areaId={areaId} areaLabel={areaLabel} />
-        )}
+      <div className="min-h-0 flex-1 overflow-y-auto">
+        <div className="flex w-full flex-col gap-3 px-5 py-4 sm:px-6 lg:px-8">
+          {lulc && (
+            <LulcSection lulc={lulc} areaId={areaId} areaLabel={areaLabel} />
+          )}
 
-        {hasClassification && (
-        <section className="rounded-md border border-border bg-card/40 p-4">
-          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-            <PanelTile
-              title="NDVI (temporal mean)"
-              uri={result.ndvi_mean_uri}
-              empty="NDVI mean unavailable"
-            />
-            <PanelTile
-              title="MapBiomas reference"
-              uri={result.reference_uri}
-              empty="No MapBiomas for this AOI"
-            />
-            <PanelTile
-              title={`Predicted · ${modelLabel}`}
-              uri={result.overlay_uri}
-              empty="No prediction"
-            />
-            <PanelTile
-              title="Confidence"
-              uri={result.confidence_uri}
-              empty="No confidence map"
-            />
-          </div>
-          <div className="mt-4 flex flex-wrap gap-3 border-t border-border/60 pt-3">
-            {MAPBIOMAS_LEGEND.map((c) => (
-              <span key={c.id} className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
-                <span className="size-2.5 rounded-[2px]" style={{ backgroundColor: c.color }} />
-                {c.id}: {c.name}
-              </span>
-            ))}
-          </div>
-        </section>
-        )}
-
-        {(hasClassification && result.class_stats?.length > 0) || viChart.length > 0 ? (
-          <div className="grid grid-cols-1 gap-6 xl:grid-cols-2 xl:items-stretch">
-            {hasClassification && result.class_stats?.length > 0 && (
-            <section className="rounded-md border border-border bg-card/40 p-5">
-              <p className="eyebrow mb-3">Predicted class distribution</p>
-              <ul className="flex flex-col gap-1.5">
-                {result.class_stats.map((s) => (
-                  <li key={s.class_id} className="flex items-center gap-2 text-xs">
+          {hasClassification && (
+            <section className="ar-section p-4">
+              <div className="grid grid-cols-2 gap-2.5 lg:grid-cols-4">
+                <PanelTile
+                  title="NDVI (temporal mean)"
+                  uri={result.ndvi_mean_uri}
+                  empty="NDVI mean unavailable"
+                />
+                <PanelTile
+                  title="MapBiomas reference"
+                  uri={result.reference_uri}
+                  empty="No MapBiomas for this AOI"
+                />
+                <PanelTile
+                  title={`Predicted · ${modelLabel}`}
+                  uri={result.overlay_uri}
+                  empty="No prediction"
+                />
+                <PanelTile
+                  title="Confidence"
+                  uri={result.confidence_uri}
+                  empty="No confidence map"
+                />
+              </div>
+              <div
+                className="mt-3 flex flex-wrap gap-3 border-t pt-3"
+                style={{ borderColor: "var(--ar-border)" }}
+              >
+                {MAPBIOMAS_LEGEND.map((c) => (
+                  <span
+                    key={c.id}
+                    className="flex items-center gap-1.5 text-[10px] text-muted-foreground"
+                  >
                     <span
-                      className="size-2.5 shrink-0 rounded-[2px]"
-                      style={{ backgroundColor: s.color }}
+                      className="size-2.5 rounded-[2px]"
+                      style={{ backgroundColor: c.color }}
                     />
-                    <span className="w-40 shrink-0 truncate sm:w-44">{s.name}</span>
-                    <span className="relative h-2 flex-1 overflow-hidden rounded-full bg-secondary">
-                      <span
-                        className="absolute inset-y-0 left-0 rounded-full"
-                        style={{ width: `${s.pct}%`, backgroundColor: s.color }}
-                      />
-                    </span>
-                    <span className="telemetry w-12 shrink-0 text-right">{s.pct.toFixed(1)}%</span>
-                    <span className="telemetry w-16 shrink-0 text-right text-muted-foreground">
-                      {s.area_ha.toFixed(1)} ha
-                    </span>
-                  </li>
+                    {c.id}: {c.name}
+                  </span>
                 ))}
-              </ul>
+              </div>
             </section>
-            )}
+          )}
 
-            {viChart.length > 0 && (
-              <section className="rounded-md border border-border bg-card/40 p-5">
-                <p className="eyebrow mb-3">Vegetation indices · AOI mean</p>
-                <ResponsiveContainer width="100%" height={220}>
-                  <LineChart data={viChart} margin={{ top: 5, right: 12, left: -12, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="2 4" stroke="var(--hairline)" />
-                    <XAxis
-                      dataKey="date"
-                      tick={{ fontSize: 9, fill: "var(--muted-foreground)" }}
-                      tickFormatter={(d: string) => d.slice(2, 7)}
-                      interval="preserveStartEnd"
-                      minTickGap={24}
-                    />
-                    <YAxis domain={[-0.1, 1]} tick={{ fontSize: 9, fill: "var(--muted-foreground)" }} />
-                    <Tooltip
-                      contentStyle={{
-                        backgroundColor: "var(--popover)",
-                        border: "1px solid var(--border)",
-                        borderRadius: 4,
-                        fontSize: 11,
-                      }}
-                    />
-                    <Legend wrapperStyle={{ fontSize: 10 }} />
-                    <Line type="monotone" dataKey="ndvi" name="NDVI" stroke="#22c55e" strokeWidth={1.8} dot={false} />
-                    <Line type="monotone" dataKey="evi" name="EVI" stroke="#38bdf8" strokeWidth={1.8} dot={false} />
-                    <Line type="monotone" dataKey="savi" name="SAVI" stroke="#f59e0b" strokeWidth={1.8} dot={false} />
-                  </LineChart>
-                </ResponsiveContainer>
-              </section>
-            )}
-          </div>
-        ) : null}
-
-        {(pheno && hasClassification) || states.length > 0 ? (
-          <div className="grid grid-cols-1 gap-6 xl:grid-cols-2 xl:items-stretch">
-            {pheno && hasClassification && (
-              <section className="rounded-md border border-border bg-card/40 p-5">
-                <p className="eyebrow mb-3">Phenology metrics · AOI NDVI</p>
-                <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 lg:grid-cols-7 xl:grid-cols-4 2xl:grid-cols-7">
-                  {metric("SOS", pheno.sos_doy, " d")}
-                  {metric("POS", pheno.pos_doy, " d")}
-                  {metric("EOS", pheno.eos_doy, " d")}
-                  {metric("LOS", pheno.los_days, " d")}
-                  {metric("Peak", pheno.peak)}
-                  {metric("Base", pheno.base)}
-                  {metric("Amp", pheno.amplitude)}
-                </div>
-              </section>
-            )}
-
-            {states.length > 0 && (
-              <section className="rounded-md border border-border bg-card/40 p-5">
-                <p className="eyebrow mb-3">Phenological state timeline</p>
-                <div className="edge-fade-x -mx-1 overflow-x-auto px-1">
-                  <div className="flex min-w-0 gap-1">
-                    {states.map((s) => (
-                      <div
-                        key={s.date}
-                        title={`${s.date}: ${s.state_name}${s.ndvi_mean != null ? ` · NDVI ${s.ndvi_mean}` : ""}`}
-                        className="flex min-w-[2.25rem] flex-1 flex-col items-center gap-0.5"
-                      >
+          {(hasClassification && result.class_stats?.length > 0) ||
+          viChart.length > 0 ? (
+            <div className="grid grid-cols-1 gap-3 xl:grid-cols-2 xl:items-stretch">
+              {hasClassification && result.class_stats?.length > 0 && (
+                <section className="ar-section p-4">
+                  <p className="eyebrow mb-3">Predicted class distribution</p>
+                  <ul className="flex flex-col gap-1.5">
+                    {result.class_stats.map((s) => (
+                      <li key={s.class_id} className="flex items-center gap-2 text-xs">
                         <span
-                          className="h-3 w-full rounded-sm"
+                          className="size-2.5 shrink-0 rounded-[2px]"
                           style={{ backgroundColor: s.color }}
                         />
-                        <span className="telemetry text-[8px] text-place">{s.date.slice(5)}</span>
-                      </div>
+                        <span className="w-40 shrink-0 truncate sm:w-44">
+                          {s.name}
+                        </span>
+                        <span className="ar-track relative h-1.5 flex-1 overflow-hidden rounded-sm">
+                          <span
+                            className="absolute inset-y-0 left-0 rounded-sm"
+                            style={{
+                              width: `${s.pct}%`,
+                              backgroundColor: s.color,
+                            }}
+                          />
+                        </span>
+                        <span className="telemetry w-12 shrink-0 text-right">
+                          {s.pct.toFixed(1)}%
+                        </span>
+                        <span className="telemetry w-16 shrink-0 text-right text-muted-foreground">
+                          {s.area_ha.toFixed(1)} ha
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              )}
+
+              {viChart.length > 0 && (
+                <section className="ar-section p-4">
+                  <p className="eyebrow mb-3">Vegetation indices · AOI mean</p>
+                  <ResponsiveContainer width="100%" height={220}>
+                    <LineChart
+                      data={viChart}
+                      margin={{ top: 5, right: 12, left: -12, bottom: 0 }}
+                    >
+                      <CartesianGrid
+                        strokeDasharray="2 4"
+                        stroke="var(--ar-border)"
+                      />
+                      <XAxis
+                        dataKey="date"
+                        tick={{ fontSize: 9, fill: "var(--muted-foreground)" }}
+                        tickFormatter={(d: string) => d.slice(2, 7)}
+                        interval="preserveStartEnd"
+                        minTickGap={24}
+                      />
+                      <YAxis
+                        domain={[-0.1, 1]}
+                        tick={{ fontSize: 9, fill: "var(--muted-foreground)" }}
+                      />
+                      <Tooltip
+                        contentStyle={{
+                          backgroundColor: "var(--ar-raised)",
+                          border: "1px solid var(--ar-border)",
+                          borderRadius: 4,
+                          fontSize: 11,
+                        }}
+                      />
+                      <Legend wrapperStyle={{ fontSize: 10 }} />
+                      <Line
+                        type="monotone"
+                        dataKey="ndvi"
+                        name="NDVI"
+                        stroke="#22c55e"
+                        strokeWidth={1.8}
+                        dot={false}
+                      />
+                      <Line
+                        type="monotone"
+                        dataKey="evi"
+                        name="EVI"
+                        stroke="#38bdf8"
+                        strokeWidth={1.8}
+                        dot={false}
+                      />
+                      <Line
+                        type="monotone"
+                        dataKey="savi"
+                        name="SAVI"
+                        stroke="#f59e0b"
+                        strokeWidth={1.8}
+                        dot={false}
+                      />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </section>
+              )}
+            </div>
+          ) : null}
+
+          {(pheno && hasClassification) || states.length > 0 ? (
+            <div className="grid grid-cols-1 gap-3 xl:grid-cols-2 xl:items-stretch">
+              {pheno && hasClassification && (
+                <section className="ar-section p-4">
+                  <p className="eyebrow mb-3">Phenology metrics · AOI NDVI</p>
+                  <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 lg:grid-cols-7 xl:grid-cols-4 2xl:grid-cols-7">
+                    {metric("SOS", pheno.sos_doy, " d")}
+                    {metric("POS", pheno.pos_doy, " d")}
+                    {metric("EOS", pheno.eos_doy, " d")}
+                    {metric("LOS", pheno.los_days, " d")}
+                    {metric("Peak", pheno.peak)}
+                    {metric("Base", pheno.base)}
+                    {metric("Amp", pheno.amplitude)}
+                  </div>
+                </section>
+              )}
+
+              {states.length > 0 && (
+                <section className="ar-section p-4">
+                  <p className="eyebrow mb-3">Phenological state timeline</p>
+                  <div className="edge-fade-x -mx-1 overflow-x-auto px-1">
+                    <div className="flex min-w-0 gap-1">
+                      {states.map((s) => (
+                        <div
+                          key={s.date}
+                          title={`${s.date}: ${s.state_name}${s.ndvi_mean != null ? ` · NDVI ${s.ndvi_mean}` : ""}`}
+                          className="flex min-w-[2.25rem] flex-1 flex-col items-center gap-0.5"
+                        >
+                          <span
+                            className="h-3 w-full rounded-sm"
+                            style={{ backgroundColor: s.color }}
+                          />
+                          <span className="telemetry text-[8px] text-place">
+                            {s.date.slice(5)}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="mt-3 flex flex-wrap gap-2 text-[10px] text-muted-foreground">
+                    {[
+                      ["#8c510a", "Bare / low"],
+                      ["#66c2a5", "Green-up"],
+                      ["#006d2c", "Peak"],
+                      ["#fdae61", "Senescence"],
+                      ["#bdbdbd", "Fallow"],
+                    ].map(([c, n]) => (
+                      <span key={n} className="flex items-center gap-1">
+                        <span
+                          className="size-2 rounded-[2px]"
+                          style={{ backgroundColor: c }}
+                        />
+                        {n}
+                      </span>
                     ))}
                   </div>
-                </div>
-                <div className="mt-3 flex flex-wrap gap-2 text-[10px] text-muted-foreground">
-                  {[
-                    ["#8c510a", "Bare / low"],
-                    ["#66c2a5", "Green-up"],
-                    ["#006d2c", "Peak"],
-                    ["#fdae61", "Senescence"],
-                    ["#bdbdbd", "Fallow"],
-                  ].map(([c, n]) => (
-                    <span key={n} className="flex items-center gap-1">
-                      <span className="size-2 rounded-[2px]" style={{ backgroundColor: c }} />
-                      {n}
-                    </span>
-                  ))}
-                </div>
-              </section>
-            )}
-          </div>
-        ) : null}
+                </section>
+              )}
+            </div>
+          ) : null}
 
-        {runsPanel}
+          {runsPanel}
+        </div>
       </div>
     </div>
   )
@@ -785,7 +832,7 @@ function SavedRunsPanel({
   const canCompare = selectedIds.length === 2 && !comparing
 
   return (
-    <section className="rounded-md border border-border bg-card/40 p-5">
+    <section className="ar-section p-4">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2">
           <History className="h-3.5 w-3.5 text-primary" />
@@ -812,7 +859,7 @@ function SavedRunsPanel({
       </div>
 
       {selectedIds.length > 0 && (
-        <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-sm border border-border/60 bg-secondary/25 px-3 py-2">
+        <div className="ar-raised mb-3 flex flex-wrap items-center justify-between gap-2 px-3 py-2">
           <p className="text-[11px] text-muted-foreground">
             {selectedIds.length === 1
               ? "Select one more analysis to compare"
@@ -846,9 +893,7 @@ function SavedRunsPanel({
                 key={r.id}
                 className={cn(
                   "flex items-center justify-between gap-3 rounded-sm border px-3 py-2.5 text-xs",
-                  selected
-                    ? "border-primary/60 bg-primary/10"
-                    : "border-border/60 bg-secondary/30"
+                  selected ? "ar-select" : "ar-raised"
                 )}
               >
                 <label className="flex min-w-0 flex-1 cursor-pointer items-start gap-2">
@@ -881,7 +926,7 @@ function SavedRunsPanel({
                     </div>
                     {onAssignProject && projects && projects.length > 0 && (
                       <select
-                        className="mt-1.5 max-w-full rounded-sm border border-border bg-secondary/40 px-1.5 py-0.5 text-[10px] text-muted-foreground"
+                        className="ar-inset mt-1.5 max-w-full px-1.5 py-0.5 text-[10px] text-muted-foreground"
                         defaultValue=""
                         onClick={(e) => e.stopPropagation()}
                         onChange={(e) => {
@@ -904,7 +949,7 @@ function SavedRunsPanel({
                     type="button"
                     disabled={loading}
                     onClick={() => void onOpen(r)}
-                    className="flex h-8 items-center gap-1.5 rounded-sm border border-border px-3 text-[11px] text-muted-foreground hover:bg-secondary hover:text-foreground disabled:opacity-60"
+                    className="ar-ghost flex h-8 items-center gap-1.5 rounded-sm border px-3 text-[11px] text-muted-foreground hover:text-foreground disabled:opacity-60"
                   >
                     <FolderOpen className="h-3 w-3" />
                     Open
@@ -914,7 +959,7 @@ function SavedRunsPanel({
                       type="button"
                       disabled={loading}
                       onClick={() => onDelete(r)}
-                      className="flex h-8 items-center justify-center rounded-sm border border-border px-2 text-muted-foreground hover:border-destructive/50 hover:text-destructive disabled:opacity-60"
+                      className="ar-ghost flex h-8 items-center justify-center rounded-sm border px-2 text-muted-foreground hover:border-destructive/50 hover:text-destructive disabled:opacity-60"
                       title="Delete analysis"
                     >
                       <Trash2 className="h-3 w-3" />
@@ -941,10 +986,14 @@ function PanelTile({
 }) {
   return (
     <div className="flex flex-col gap-1.5">
-      <p className="eyebrow !text-foreground/80">{title}</p>
-      <div className="relative aspect-[4/3] overflow-hidden rounded-sm border border-border bg-secondary/30">
+      <p className="eyebrow !text-muted-foreground">{title}</p>
+      <div className="ar-inset relative aspect-[4/3] overflow-hidden">
         {uri ? (
-          <img src={uri} alt={title} className="h-full w-full object-contain" />
+          <img
+            src={uri}
+            alt={title}
+            className="h-full w-full object-contain"
+          />
         ) : (
           <div className="flex h-full items-center justify-center px-3 text-center text-[10px] text-muted-foreground">
             {empty}
