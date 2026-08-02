@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
-import { notifyError, notifySuccess } from "@/lib/notify"
+import { notifyError, notifyInfo, notifySuccess } from "@/lib/notify"
 import { useTheme } from "next-themes"
 import {
   ListEmbeddedAreas,
@@ -445,11 +445,11 @@ function AppBody(props: {
 
   const handleListComposeScenes = async () => {
     if (!props.start || !props.end) {
-      toast.error("Set the acquisition period.")
+      notifyError("Set the acquisition period.")
       return
     }
     if (!props.customPolygon && !props.activeExample) {
-      toast.error("Define an area: draw, search, or load an example.")
+      notifyError("Define an area: draw, search, or load an example.")
       return
     }
     const useExample =
@@ -469,14 +469,14 @@ function AppBody(props: {
       const res = (await ListDataCube(req as never)) as unknown as DataCubeResult
       setComposeScenes(res.scenes ?? [])
       if ((res.scenes?.length ?? 0) === 0) {
-        toast.message("No scenes found for this period / cloud filter.")
+        notifyInfo("No scenes found for this period / cloud filter.")
       } else if (!selectedSceneId && res.scenes[0]) {
         setSelectedSceneId(res.scenes[0].id)
       }
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e)
       setComposeScenesError(msg)
-      toast.error("Scene list error: " + msg)
+      notifyError("Scene list error", msg)
     } finally {
       setComposeScenesLoading(false)
     }
@@ -484,15 +484,15 @@ function AppBody(props: {
 
   const handleApplyComposition = async () => {
     if (!selectedSceneId) {
-      toast.error("Select a scene first.")
+      notifyError("Select a scene first.")
       return
     }
     if (!props.start || !props.end) {
-      toast.error("Set the acquisition period.")
+      notifyError("Set the acquisition period.")
       return
     }
     if (!props.customPolygon && !props.activeExample) {
-      toast.error("Define an area first.")
+      notifyError("Define an area first.")
       return
     }
     const useExample =
@@ -547,9 +547,9 @@ function AppBody(props: {
       setCompositionGallery((prev) => [entry, ...prev].slice(0, 12))
       setShowCompositionOverlay(true)
       props.setShowPredictionOverlay(false)
-      toast.success("Composition applied to map.")
+      notifySuccess("Composition applied to map.")
     } catch (e) {
-      toast.error("Composition error: " + e)
+      notifyError("Composition error", e)
     } finally {
       setComposeRunning(false)
     }
