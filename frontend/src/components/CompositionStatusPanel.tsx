@@ -1,6 +1,6 @@
 import { forwardRef, useMemo, useState } from "react"
 import { motion } from "motion/react"
-import { X, ChevronDown, ChevronUp, Trash2, Layers } from "lucide-react"
+import { X, ChevronDown, ChevronUp, Trash2, SlidersHorizontal } from "lucide-react"
 import type { CompositionOverlay } from "@/lib/types"
 import {
   BLUES_STOPS,
@@ -14,13 +14,6 @@ interface CompositionStatusPanelProps {
   composition: CompositionOverlay | null
   sceneDate?: string | null
   composeOpacity: number
-  showCompositionOverlay: boolean
-  onShowCompositionOverlayChange: (v: boolean) => void
-  hasPrediction: boolean
-  showPredictionOverlay: boolean
-  onShowPredictionOverlayChange: (v: boolean) => void
-  swipeCompare: boolean
-  onSwipeCompareChange: (v: boolean) => void
   onClear: () => void
 }
 
@@ -53,19 +46,7 @@ export const CompositionStatusPanel = forwardRef<
   HTMLDivElement,
   CompositionStatusPanelProps
 >(function CompositionStatusPanel(
-  {
-    composition,
-    sceneDate,
-    composeOpacity,
-    showCompositionOverlay,
-    onShowCompositionOverlayChange,
-    hasPrediction,
-    showPredictionOverlay,
-    onShowPredictionOverlayChange,
-    swipeCompare,
-    onSwipeCompareChange,
-    onClear,
-  },
+  { composition, sceneDate, composeOpacity, onClear },
   ref
 ) {
   const [collapsed, setCollapsed] = useState(false)
@@ -87,7 +68,6 @@ export const CompositionStatusPanel = forwardRef<
         index: composition.index ?? "ndvi",
       })
     }
-    // Legacy overlays that only stored label
     const preset =
       composition.presetId && composition.presetId !== "custom"
         ? findRgbPreset(
@@ -238,46 +218,9 @@ export const CompositionStatusPanel = forwardRef<
                   />
                 )}
 
-                <div className="grid grid-cols-2 gap-x-3 gap-y-2">
-                  <label className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
-                    <input
-                      type="checkbox"
-                      checked={showCompositionOverlay}
-                      onChange={(e) =>
-                        onShowCompositionOverlayChange(e.target.checked)
-                      }
-                      className="accent-primary"
-                    />
-                    Show on map
-                  </label>
-                  <label className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
-                    <input
-                      type="checkbox"
-                      checked={swipeCompare}
-                      onChange={(e) => onSwipeCompareChange(e.target.checked)}
-                      className="accent-primary"
-                    />
-                    Swipe imagery ↔ overlay
-                  </label>
-                  {hasPrediction && (
-                    <label className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
-                      <input
-                        type="checkbox"
-                        checked={showPredictionOverlay}
-                        onChange={(e) =>
-                          onShowPredictionOverlayChange(e.target.checked)
-                        }
-                        className="accent-primary"
-                      />
-                      Show prediction overlay
-                    </label>
-                  )}
-                </div>
                 <p className="flex items-center gap-1 text-[10px] text-muted-foreground">
-                  <Layers className="size-3 shrink-0" />
-                  {swipeCompare
-                    ? "Drag the handle to reveal satellite imagery under the composition."
-                    : "Composite sits under prediction when both are on."}
+                  <SlidersHorizontal className="size-3 shrink-0" />
+                  Visibility, swipe and opacity live in Overlay Tools.
                 </p>
               </>
             ) : (

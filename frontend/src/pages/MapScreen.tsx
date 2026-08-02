@@ -22,6 +22,10 @@ import { ResultsPanel } from "@/components/ResultsPanel"
 import { CompositionStatusPanel } from "@/components/CompositionStatusPanel"
 import { DataCubeModal } from "@/components/DataCubeModal"
 import { ConfidenceLegend } from "@/components/ConfidenceLegend"
+import {
+  OverlayToolsButton,
+  OverlayToolsPanel,
+} from "@/components/OverlayToolsPanel"
 
 export interface MapScreenProps {
   areas: Area[]
@@ -112,6 +116,7 @@ export interface MapScreenProps {
 
 export function MapScreen(props: MapScreenProps) {
   const [leftPanel, setLeftPanel] = useState<LeftDockPanel | null>("classify")
+  const [overlayToolsOpen, setOverlayToolsOpen] = useState(false)
   const tabsMode = props.leftDockTabs ?? "retracted_only"
   const showDockTabs = tabsMode === "always" || leftPanel === null
   const panelOffsetClass =
@@ -159,6 +164,41 @@ export function MapScreen(props: MapScreenProps) {
       />
 
       <SearchBar onSelectLocation={props.onLocationSelect} />
+
+      <OverlayToolsButton
+        active={overlayToolsOpen}
+        onClick={() => setOverlayToolsOpen((o) => !o)}
+      />
+      <OverlayToolsPanel
+        open={overlayToolsOpen}
+        onClose={() => setOverlayToolsOpen(false)}
+        result={props.result}
+        composition={props.composition}
+        areaLabel={props.areaLabel}
+        modelKind={props.modelKind}
+        composeSceneDate={
+          props.composeScenes.find((s) => s.id === props.selectedSceneId)
+            ?.date ?? null
+        }
+        showPredictionOverlay={props.showPredictionOverlay}
+        onShowPredictionOverlayChange={props.onShowPredictionOverlayChange}
+        showCompositionOverlay={props.showCompositionOverlay}
+        onShowCompositionOverlayChange={props.onShowCompositionOverlayChange}
+        showConfidence={props.showConfidence}
+        onShowConfidenceChange={props.onShowConfidenceChange}
+        confidenceOnTop={props.confidenceOnTop}
+        onConfidenceOnTopChange={props.onConfidenceOnTopChange}
+        smoothOverlay={props.smoothOverlay}
+        onSmoothOverlayChange={props.onSmoothOverlayChange}
+        swipeCompare={props.swipeCompare}
+        onSwipeCompareChange={props.onSwipeCompareChange}
+        overlayOpacity={props.overlayOpacity}
+        onOverlayOpacityChange={props.onOpacityChange}
+        composeOpacity={props.composeOpacity}
+        onComposeOpacityChange={props.onComposeOpacityChange}
+        aoiContourScheme={props.aoiContourScheme}
+        onAoiContourSchemeChange={props.onAoiContourSchemeChange}
+      />
 
       <ConfidenceLegend
         visible={
@@ -252,8 +292,6 @@ export function MapScreen(props: MapScreenProps) {
             progress={props.composeProgress}
             progressMsg={props.composeProgressMsg}
             hasOverlay={!!props.composition}
-            showCompositionOverlay={props.showCompositionOverlay}
-            onShowCompositionOverlayChange={props.onShowCompositionOverlayChange}
             onApply={props.onApplyComposition}
             onClear={props.onClearComposition}
             onCollapse={() => setLeftPanel(null)}
@@ -268,17 +306,6 @@ export function MapScreen(props: MapScreenProps) {
             composition={props.composition}
             sceneDate={selectedSceneDate}
             composeOpacity={props.composeOpacity}
-            showCompositionOverlay={props.showCompositionOverlay}
-            onShowCompositionOverlayChange={
-              props.onShowCompositionOverlayChange
-            }
-            hasPrediction={!!props.result}
-            showPredictionOverlay={props.showPredictionOverlay}
-            onShowPredictionOverlayChange={
-              props.onShowPredictionOverlayChange
-            }
-            swipeCompare={props.swipeCompare}
-            onSwipeCompareChange={props.onSwipeCompareChange}
             onClear={props.onClearComposition}
           />
         ) : showPredictionStatus ? (
