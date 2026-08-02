@@ -54,6 +54,7 @@ import { AuthProvider, useAuth } from "@/lib/auth"
 import { ThemeSync } from "@/components/ThemeSync"
 import { TitleBar } from "@/components/TitleBar"
 import { SplashScreen } from "@/components/SplashScreen"
+import { WhatsNewGate } from "@/components/WhatsNewGate"
 import { AppSidebar } from "@/components/AppSidebar"
 import { MapScreen } from "@/pages/MapScreen"
 import { AuthPage } from "@/pages/AuthPage"
@@ -294,6 +295,7 @@ function App() {
         <SplashScreen exiting={splashExiting} />
       ) : (
         <div className="app-shell-enter h-full w-full">
+          <WhatsNewGate />
           <AppBody
             areas={areas}
             activeExample={activeExample}

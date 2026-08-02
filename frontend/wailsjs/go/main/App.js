@@ -42,6 +42,10 @@ export function GeocodeSearch(arg1) {
   return window['go']['main']['App']['GeocodeSearch'](arg1);
 }
 
+export function GetAppVersion() {
+  return window['go']['main']['App']['GetAppVersion']();
+}
+
 export function GetBootLogs() {
   return window['go']['main']['App']['GetBootLogs']();
 }
