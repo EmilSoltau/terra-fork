@@ -7,7 +7,7 @@ import {
   useState,
   type ReactNode,
 } from "react"
-import { toast } from "sonner"
+import { notifySuccess } from "@/lib/notify"
 import {
   ClearAvatar,
   CurrentUser,
@@ -106,7 +106,7 @@ export function AuthProvider({
       setUser(u)
       await loadPrefsAndRuns(u)
       setScreen("map")
-      toast.success(`Welcome back, ${u.display_name}.`)
+      notifySuccess(`Welcome back, ${u.display_name}.`)
     },
     [loadPrefsAndRuns]
   )
@@ -117,7 +117,7 @@ export function AuthProvider({
       setUser(u)
       await loadPrefsAndRuns(u)
       setScreen("map")
-      toast.success("Account created.")
+      notifySuccess("Account created.")
     },
     [loadPrefsAndRuns]
   )
@@ -127,26 +127,26 @@ export function AuthProvider({
     setUser(null)
     setPrefs(null)
     setScreen("map")
-    toast.success("Signed out.")
+    notifySuccess("Signed out.")
     await refreshRuns()
   }, [refreshRuns])
 
   const updateProfile = useCallback(async (displayName: string) => {
     const u = (await UpdateProfile(displayName)) as unknown as User
     setUser(u)
-    toast.success("Profile updated.")
+    notifySuccess("Profile updated.")
   }, [])
 
   const setAvatar = useCallback(async (dataURI: string) => {
     const u = (await SetAvatar(dataURI)) as unknown as User
     setUser(u)
-    toast.success("Photo updated.")
+    notifySuccess("Photo updated.")
   }, [])
 
   const clearAvatar = useCallback(async () => {
     const u = (await ClearAvatar()) as unknown as User
     setUser(u)
-    toast.success("Photo removed.")
+    notifySuccess("Photo removed.")
   }, [])
 
   const savePrefs = useCallback(
@@ -154,7 +154,7 @@ export function AuthProvider({
       await SavePreferences(p as never)
       setPrefs(p)
       onPrefsApplied?.(p)
-      toast.success("Preferences saved.")
+      notifySuccess("Preferences saved.")
     },
     [onPrefsApplied]
   )

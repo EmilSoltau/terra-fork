@@ -1,4 +1,5 @@
 import { toast, type ExternalToast } from "sonner"
+import { playNotifySound } from "@/lib/sounds"
 
 function errText(e: unknown): string {
   const raw = e instanceof Error ? e.message : String(e)
@@ -17,6 +18,7 @@ export function notifySuccess(
   description?: string,
   opts?: ExternalToast
 ) {
+  playNotifySound("success")
   toast.success(title, {
     description,
     duration: 4200,
@@ -29,6 +31,7 @@ export function notifyError(
   error?: unknown,
   opts?: ExternalToast
 ) {
+  playNotifySound("error")
   toast.error(title, {
     description: error !== undefined ? errText(error) : undefined,
     duration: 6500,
