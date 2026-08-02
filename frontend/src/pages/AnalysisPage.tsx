@@ -40,6 +40,10 @@ import {
 import { LulcSection } from "@/components/LulcSection"
 import { CompareAnalyses } from "@/components/CompareAnalyses"
 import { ProjectsHub } from "@/components/ProjectsHub"
+import {
+  AnalysisPlotModal,
+  type AnalysisPlotAsset,
+} from "@/components/AnalysisPlotModal"
 import { cn } from "@/lib/utils"
 
 const MAPBIOMAS_LEGEND = [
@@ -95,6 +99,9 @@ export function AnalysisPage({
   const [creating, setCreating] = useState(false)
   const [newName, setNewName] = useState("")
   const [hubLoading, setHubLoading] = useState(false)
+  const [selectedPlot, setSelectedPlot] = useState<AnalysisPlotAsset | null>(
+    null
+  )
 
   const selectedProject = useMemo(
     () => projects.find((p) => p.id === selectedProjectId) ?? null,
@@ -313,6 +320,72 @@ export function AnalysisPage({
     ]
   )
 
+  const modelLabel =
+    modelKind === "temporal_transformer"
+      ? "Temporal Transformer"
+      : modelKind === "prithvi"
+        ? "Prithvi-EO 2.0"
+        : "Random Forest"
+
+  const plotAssets = useMemo((): AnalysisPlotAsset[] => {
+    if (!result) return []
+    const items: AnalysisPlotAsset[] = []
+    if (result.true_color_uri) {
+      items.push({
+        id: "satellite",
+        title: "Satellite · true color",
+        uri: result.true_color_uri,
+        exportPngName: "terra_true_color.png",
+      })
+    }
+    if (result.ndvi_mean_uri) {
+      items.push({
+        id: "ndvi",
+        title: "NDVI (temporal mean)",
+        uri: result.ndvi_mean_uri,
+        exportPngName: "terra_ndvi_mean.png",
+      })
+    }
+    if (result.reference_uri) {
+      items.push({
+        id: "reference",
+        title: "MapBiomas reference",
+        uri: result.reference_uri,
+        exportPngName: "terra_mapbiomas_ref.png",
+        showClassLegend: true,
+        pixelated: true,
+      })
+    }
+    if (result.overlay_uri) {
+      items.push({
+        id: "predicted",
+        title: `Predicted · ${modelLabel}`,
+        uri: result.overlay_uri,
+        exportPngName: "terra_prediction.png",
+        rasterTif: result.raster_tif || undefined,
+        showClassLegend: true,
+        pixelated: true,
+      })
+    }
+    if (result.confidence_uri) {
+      items.push({
+        id: "confidence",
+        title: "Confidence",
+        uri: result.confidence_uri,
+        exportPngName: "terra_confidence.png",
+      })
+    }
+    return items
+  }, [result, modelLabel])
+
+  const openPlot = useCallback(
+    (id: string) => {
+      const hit = plotAssets.find((p) => p.id === id)
+      if (hit) setSelectedPlot(hit)
+    },
+    [plotAssets]
+  )
+
   if (compare) {
     return (
       <CompareAnalyses
@@ -499,12 +572,6 @@ export function AnalysisPage({
     evi: p.evi_mean,
     savi: p.savi_mean,
   }))
-  const modelLabel =
-    modelKind === "temporal_transformer"
-      ? "Temporal Transformer"
-      : modelKind === "prithvi"
-        ? "Prithvi-EO 2.0"
-        : "Random Forest"
 
   const exportTif = async () => {
     if (!result.raster_tif) return
@@ -587,26 +654,52 @@ export function AnalysisPage({
 
           {hasClassification && (
             <section className="ar-section p-4">
-              <div className="grid grid-cols-2 gap-2.5 lg:grid-cols-4">
+              <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-5">
+                <PanelTile
+                  title="Satellite · true color"
+                  uri={result.true_color_uri}
+                  empty="Re-run analysis to capture AOI imagery"
+                  onOpen={
+                    result.true_color_uri
+                      ? () => openPlot("satellite")
+                      : undefined
+                  }
+                />
                 <PanelTile
                   title="NDVI (temporal mean)"
                   uri={result.ndvi_mean_uri}
                   empty="NDVI mean unavailable"
+                  onOpen={
+                    result.ndvi_mean_uri ? () => openPlot("ndvi") : undefined
+                  }
                 />
                 <PanelTile
                   title="MapBiomas reference"
                   uri={result.reference_uri}
                   empty="No MapBiomas for this AOI"
+                  onOpen={
+                    result.reference_uri
+                      ? () => openPlot("reference")
+                      : undefined
+                  }
                 />
                 <PanelTile
                   title={`Predicted · ${modelLabel}`}
                   uri={result.overlay_uri}
                   empty="No prediction"
+                  onOpen={
+                    result.overlay_uri ? () => openPlot("predicted") : undefined
+                  }
                 />
                 <PanelTile
                   title="Confidence"
                   uri={result.confidence_uri}
                   empty="No confidence map"
+                  onOpen={
+                    result.confidence_uri
+                      ? () => openPlot("confidence")
+                      : undefined
+                  }
                 />
               </div>
               <div
@@ -793,6 +886,15 @@ export function AnalysisPage({
           {runsPanel}
         </div>
       </div>
+
+      {selectedPlot && (
+        <AnalysisPlotModal
+          plot={selectedPlot}
+          plots={plotAssets}
+          legend={MAPBIOMAS_LEGEND}
+          onClose={() => setSelectedPlot(null)}
+        />
+      )}
     </div>
   )
 }
@@ -976,27 +1078,45 @@ function PanelTile({
   title,
   uri,
   empty,
+  onOpen,
 }: {
   title: string
   uri?: string
   empty: string
+  onOpen?: () => void
 }) {
+  const preview = (
+    <div className="ar-inset relative aspect-[4/3] overflow-hidden">
+      {uri ? (
+        <img src={uri} alt={title} className="h-full w-full object-contain" />
+      ) : (
+        <div className="flex h-full items-center justify-center px-3 text-center text-[10px] text-muted-foreground">
+          {empty}
+        </div>
+      )}
+    </div>
+  )
+
+  if (onOpen && uri) {
+    return (
+      <button
+        type="button"
+        onClick={onOpen}
+        className="group flex w-full flex-col gap-1.5 text-left focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary/50"
+        title={`Open ${title}`}
+      >
+        <p className="eyebrow !text-muted-foreground group-hover:text-foreground">
+          {title}
+        </p>
+        <div className="transition-opacity group-hover:opacity-90">{preview}</div>
+      </button>
+    )
+  }
+
   return (
     <div className="flex flex-col gap-1.5">
       <p className="eyebrow !text-muted-foreground">{title}</p>
-      <div className="ar-inset relative aspect-[4/3] overflow-hidden">
-        {uri ? (
-          <img
-            src={uri}
-            alt={title}
-            className="h-full w-full object-contain"
-          />
-        ) : (
-          <div className="flex h-full items-center justify-center px-3 text-center text-[10px] text-muted-foreground">
-            {empty}
-          </div>
-        )}
-      </div>
+      {preview}
     </div>
   )
 }
