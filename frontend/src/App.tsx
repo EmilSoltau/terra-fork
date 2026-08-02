@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
+import { AnimatePresence, motion } from "motion/react"
 import { notifyError, notifyInfo, notifySuccess } from "@/lib/notify"
 import { useTheme } from "next-themes"
 import {
@@ -1032,150 +1033,170 @@ function AppBody(props: {
           }}
         />
         <div className="relative min-h-0 min-w-0 flex-1">
-          {screen === "map" && (
-            <MapScreen
-              areas={props.areas}
-              activeExample={props.activeExample}
-              customPolygon={props.customPolygon}
-              flyTo={props.flyTo}
-              result={props.result}
-              overlayOpacity={props.overlayOpacity}
-              showConfidence={props.showConfidence}
-              confidenceOnTop={props.confidenceOnTop}
-              smoothOverlay={props.smoothOverlay}
-              showPredictionOverlay={props.showPredictionOverlay}
-              showCompositionOverlay={showCompositionOverlay}
-              composition={
-                composition
-                  ? { ...composition, opacity: composeOpacity }
-                  : null
-              }
-              swipeCompare={props.swipeCompare}
-              swipeRatio={props.swipeRatio}
-              areaLabel={areaLabel}
-              onAreaLabelChange={(label) => props.setAnalysisLabel(label)}
-              aoiContourScheme={props.aoiContourScheme}
-              onAoiContourSchemeChange={props.setAoiContourScheme}
-              hasArea={props.hasArea}
-              start={props.start}
-              end={props.end}
-              maxCloud={props.maxCloud}
-              monthlyBest={props.monthlyBest}
-              mode={props.mode}
-              modelKind={props.modelKind}
-              prithviMode={props.prithviMode}
-              running={props.running}
-              progress={props.progress}
-              progressMsg={props.progressMsg}
-              composeRunning={composeRunning}
-              composeProgress={composeProgress}
-              composeProgressMsg={composeProgressMsg}
-              composeScenes={composeScenes}
-              composeScenesLoading={composeScenesLoading}
-              composeScenesError={composeScenesError}
-              selectedSceneId={selectedSceneId}
-              composeKind={composeKind}
-              composeBands={composeBands}
-              composeIndex={composeIndex}
-              composeStretchLow={composeStretchLow}
-              composeStretchHigh={composeStretchHigh}
-              composeOpacity={composeOpacity}
-              onViewChange={props.setView}
-              onPolygonDrawn={(geom) => {
-                props.setCustomPolygon(geom)
-                if (geom) props.setActiveExample("")
-              }}
-              onSelectExample={props.onSelectExample}
-              onLocationSelect={(lat, lon) =>
-                props.setFlyTo({ lat, lon, key: Date.now() })
-              }
-              onClearArea={clearAreaAndComposition}
-              onImportPolygon={props.onImportPolygon}
-              onStartChange={props.setStart}
-              onEndChange={props.setEnd}
-              onMaxCloudChange={props.setMaxCloud}
-              onMonthlyBestChange={props.setMonthlyBest}
-              onModeChange={props.setMode}
-              onModelKindChange={props.setModelKind}
-              onPrithviModeChange={props.setPrithviMode}
-              onOpacityChange={props.setOverlayOpacity}
-              onShowConfidenceChange={props.setShowConfidence}
-              onConfidenceOnTopChange={props.setConfidenceOnTop}
-              onSmoothOverlayChange={props.setSmoothOverlay}
-              onShowPredictionOverlayChange={props.setShowPredictionOverlay}
-              onShowCompositionOverlayChange={setShowCompositionOverlay}
-              onSelectScene={setSelectedSceneId}
-              onComposeKindChange={setComposeKind}
-              onComposeBandsChange={setComposeBands}
-              onComposeIndexChange={setComposeIndex}
-              onComposeStretchChange={(low, high) => {
-                setComposeStretchLow(low)
-                setComposeStretchHigh(high)
-              }}
-              onComposeOpacityChange={setComposeOpacity}
-              onListComposeScenes={() => void handleListComposeScenes()}
-              onApplyComposition={() => void handleApplyComposition()}
-              onClearComposition={() => {
-                setComposition(null)
-                setCompositionGallery([])
-                setShowCompositionOverlay(true)
-              }}
-              compositionGallery={compositionGallery}
-              onSelectComposition={(id) => {
-                const hit = compositionGallery.find((c) => c.id === id)
-                if (hit) {
-                  setComposition(hit)
-                  setShowCompositionOverlay(true)
-                }
-              }}
-              onRemoveComposition={(id) => {
-                setCompositionGallery((prev) => {
-                  const next = prev.filter((c) => c.id !== id)
-                  setComposition((cur) =>
-                    cur?.id === id ? (next[0] ?? null) : cur
-                  )
-                  return next
-                })
-              }}
-              onSwipeCompareChange={props.setSwipeCompare}
-              onSwipeRatioChange={props.setSwipeRatio}
-              onRun={handleRun}
-              onAnalyzeLULC={handleAnalyzeLULC}
-              lulcRunning={props.lulcRunning}
-              onCloseResult={() => {
-                props.setResult(null)
-                props.setShowPredictionOverlay(true)
-                props.setAnalysisLabel(undefined)
-                props.setSwipeCompare(false)
-                props.setSwipeRatio(0.5)
-              }}
-              onNewClassification={startNewClassification}
-              onViewDataCube={() => void handleViewDataCube()}
-              dataCubeLoading={dataCubeLoading}
-              dataCubeOpen={dataCubeOpen}
-              dataCubeError={dataCubeError}
-              dataCubeResult={dataCubeResult}
-              onCloseDataCube={() => {
-                setDataCubeOpen(false)
-                setDataCubeError(null)
-              }}
-              leftDockTabs={props.leftDockTabs}
-            />
-          )}
-          {screen === "analysis" && (
-            <AnalysisPage
-              result={props.result}
-              modelKind={props.modelKind}
-              areaLabel={areaLabel}
-              areaId={props.activeExample || undefined}
-              loadingRun={loadingRun}
-              onOpenRun={openSavedAnalysis}
-              onBackToList={backToAnalysesList}
-              onNewClassification={startNewClassification}
-              onActivateProject={(id) => void activateProject(id)}
-              activeProjectId={activeProjectId}
-            />
-          )}
+          <AnimatePresence mode="wait" initial={false}>
+            {screen === "map" && (
+              <motion.div
+                key="screen-map"
+                className="absolute inset-0 min-h-0"
+                initial={{ opacity: 0, x: -14 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -10 }}
+                transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
+              >
+                <MapScreen
+                  areas={props.areas}
+                  activeExample={props.activeExample}
+                  customPolygon={props.customPolygon}
+                  flyTo={props.flyTo}
+                  result={props.result}
+                  overlayOpacity={props.overlayOpacity}
+                  showConfidence={props.showConfidence}
+                  confidenceOnTop={props.confidenceOnTop}
+                  smoothOverlay={props.smoothOverlay}
+                  showPredictionOverlay={props.showPredictionOverlay}
+                  showCompositionOverlay={showCompositionOverlay}
+                  composition={
+                    composition
+                      ? { ...composition, opacity: composeOpacity }
+                      : null
+                  }
+                  swipeCompare={props.swipeCompare}
+                  swipeRatio={props.swipeRatio}
+                  areaLabel={areaLabel}
+                  onAreaLabelChange={(label) => props.setAnalysisLabel(label)}
+                  aoiContourScheme={props.aoiContourScheme}
+                  onAoiContourSchemeChange={props.setAoiContourScheme}
+                  hasArea={props.hasArea}
+                  start={props.start}
+                  end={props.end}
+                  maxCloud={props.maxCloud}
+                  monthlyBest={props.monthlyBest}
+                  mode={props.mode}
+                  modelKind={props.modelKind}
+                  prithviMode={props.prithviMode}
+                  running={props.running}
+                  progress={props.progress}
+                  progressMsg={props.progressMsg}
+                  composeRunning={composeRunning}
+                  composeProgress={composeProgress}
+                  composeProgressMsg={composeProgressMsg}
+                  composeScenes={composeScenes}
+                  composeScenesLoading={composeScenesLoading}
+                  composeScenesError={composeScenesError}
+                  selectedSceneId={selectedSceneId}
+                  composeKind={composeKind}
+                  composeBands={composeBands}
+                  composeIndex={composeIndex}
+                  composeStretchLow={composeStretchLow}
+                  composeStretchHigh={composeStretchHigh}
+                  composeOpacity={composeOpacity}
+                  onViewChange={props.setView}
+                  onPolygonDrawn={(geom) => {
+                    props.setCustomPolygon(geom)
+                    if (geom) props.setActiveExample("")
+                  }}
+                  onSelectExample={props.onSelectExample}
+                  onLocationSelect={(lat, lon) =>
+                    props.setFlyTo({ lat, lon, key: Date.now() })
+                  }
+                  onClearArea={clearAreaAndComposition}
+                  onImportPolygon={props.onImportPolygon}
+                  onStartChange={props.setStart}
+                  onEndChange={props.setEnd}
+                  onMaxCloudChange={props.setMaxCloud}
+                  onMonthlyBestChange={props.setMonthlyBest}
+                  onModeChange={props.setMode}
+                  onModelKindChange={props.setModelKind}
+                  onPrithviModeChange={props.setPrithviMode}
+                  onOpacityChange={props.setOverlayOpacity}
+                  onShowConfidenceChange={props.setShowConfidence}
+                  onConfidenceOnTopChange={props.setConfidenceOnTop}
+                  onSmoothOverlayChange={props.setSmoothOverlay}
+                  onShowPredictionOverlayChange={props.setShowPredictionOverlay}
+                  onShowCompositionOverlayChange={setShowCompositionOverlay}
+                  onSelectScene={setSelectedSceneId}
+                  onComposeKindChange={setComposeKind}
+                  onComposeBandsChange={setComposeBands}
+                  onComposeIndexChange={setComposeIndex}
+                  onComposeStretchChange={(low, high) => {
+                    setComposeStretchLow(low)
+                    setComposeStretchHigh(high)
+                  }}
+                  onComposeOpacityChange={setComposeOpacity}
+                  onListComposeScenes={() => void handleListComposeScenes()}
+                  onApplyComposition={() => void handleApplyComposition()}
+                  onClearComposition={() => {
+                    setComposition(null)
+                    setCompositionGallery([])
+                    setShowCompositionOverlay(true)
+                  }}
+                  compositionGallery={compositionGallery}
+                  onSelectComposition={(id) => {
+                    const hit = compositionGallery.find((c) => c.id === id)
+                    if (hit) {
+                      setComposition(hit)
+                      setShowCompositionOverlay(true)
+                    }
+                  }}
+                  onRemoveComposition={(id) => {
+                    setCompositionGallery((prev) => {
+                      const next = prev.filter((c) => c.id !== id)
+                      setComposition((cur) =>
+                        cur?.id === id ? (next[0] ?? null) : cur
+                      )
+                      return next
+                    })
+                  }}
+                  onSwipeCompareChange={props.setSwipeCompare}
+                  onSwipeRatioChange={props.setSwipeRatio}
+                  onRun={handleRun}
+                  onAnalyzeLULC={handleAnalyzeLULC}
+                  lulcRunning={props.lulcRunning}
+                  onCloseResult={() => {
+                    props.setResult(null)
+                    props.setShowPredictionOverlay(true)
+                    props.setAnalysisLabel(undefined)
+                    props.setSwipeCompare(false)
+                    props.setSwipeRatio(0.5)
+                  }}
+                  onNewClassification={startNewClassification}
+                  onViewDataCube={() => void handleViewDataCube()}
+                  dataCubeLoading={dataCubeLoading}
+                  dataCubeOpen={dataCubeOpen}
+                  dataCubeError={dataCubeError}
+                  dataCubeResult={dataCubeResult}
+                  onCloseDataCube={() => {
+                    setDataCubeOpen(false)
+                    setDataCubeError(null)
+                  }}
+                  leftDockTabs={props.leftDockTabs}
+                />
+              </motion.div>
+            )}
+            {screen === "analysis" && (
+              <motion.div
+                key="screen-analysis"
+                className="absolute inset-0 min-h-0"
+                initial={{ opacity: 0, x: 18 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: 12 }}
+                transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
+              >
+                <AnalysisPage
+                  result={props.result}
+                  modelKind={props.modelKind}
+                  areaLabel={areaLabel}
+                  areaId={props.activeExample || undefined}
+                  loadingRun={loadingRun}
+                  onOpenRun={openSavedAnalysis}
+                  onBackToList={backToAnalysesList}
+                  onNewClassification={startNewClassification}
+                  onActivateProject={(id) => void activateProject(id)}
+                  activeProjectId={activeProjectId}
+                />
+              </motion.div>
+            )}
+          </AnimatePresence>
           {screen === "auth" && <AuthPage />}
           {screen === "profile" && (
             <ProfilePage loadingRun={loadingRun} onOpenRun={openSavedAnalysis} />
