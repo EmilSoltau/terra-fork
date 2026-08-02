@@ -34,6 +34,10 @@ import type {
 } from "@/lib/types"
 import { leftDockTabsModeFromPrefs } from "@/lib/preferenceExtras"
 import { resolveCompositionMeta } from "@/lib/compositeCatalog"
+import {
+  DEFAULT_AOI_CONTOUR_SCHEME,
+  type AoiContourSchemeId,
+} from "@/lib/aoiStyle"
 import { AuthProvider, useAuth } from "@/lib/auth"
 import { ThemeSync } from "@/components/ThemeSync"
 import { TitleBar } from "@/components/TitleBar"
@@ -116,6 +120,10 @@ function App() {
   const [confidenceOnTop, setConfidenceOnTop] = useState(true)
   const [smoothOverlay, setSmoothOverlay] = useState(false)
   const [showPredictionOverlay, setShowPredictionOverlay] = useState(true)
+  const [swipeCompare, setSwipeCompare] = useState(false)
+  const [swipeRatio, setSwipeRatio] = useState(0.5)
+  const [aoiContourScheme, setAoiContourScheme] =
+    useState<AoiContourSchemeId>(DEFAULT_AOI_CONTOUR_SCHEME)
   const [running, setRunning] = useState<boolean>(false)
   const [progress, setProgress] = useState<number>(0)
   const [progressMsg, setProgressMsg] = useState<string>("")
@@ -290,6 +298,9 @@ function App() {
             confidenceOnTop={confidenceOnTop}
             smoothOverlay={smoothOverlay}
             showPredictionOverlay={showPredictionOverlay}
+            swipeCompare={swipeCompare}
+            swipeRatio={swipeRatio}
+            aoiContourScheme={aoiContourScheme}
             running={running}
             progress={progress}
             progressMsg={progressMsg}
@@ -312,6 +323,9 @@ function App() {
             setConfidenceOnTop={setConfidenceOnTop}
             setSmoothOverlay={setSmoothOverlay}
             setShowPredictionOverlay={setShowPredictionOverlay}
+            setSwipeCompare={setSwipeCompare}
+            setSwipeRatio={setSwipeRatio}
+            setAoiContourScheme={setAoiContourScheme}
             setRunning={setRunning}
             setProgress={setProgress}
             setProgressMsg={setProgressMsg}
@@ -348,6 +362,9 @@ function AppBody(props: {
   confidenceOnTop: boolean
   smoothOverlay: boolean
   showPredictionOverlay: boolean
+  swipeCompare: boolean
+  swipeRatio: number
+  aoiContourScheme: AoiContourSchemeId
   running: boolean
   progress: number
   progressMsg: string
@@ -370,6 +387,9 @@ function AppBody(props: {
   setConfidenceOnTop: (v: boolean) => void
   setSmoothOverlay: (v: boolean) => void
   setShowPredictionOverlay: (v: boolean) => void
+  setSwipeCompare: (v: boolean) => void
+  setSwipeRatio: (v: number) => void
+  setAoiContourScheme: (id: AoiContourSchemeId) => void
   setRunning: (v: boolean) => void
   setProgress: (v: number) => void
   setProgressMsg: (v: string) => void
@@ -741,17 +761,33 @@ function AppBody(props: {
     props.setResult(null)
     props.setShowPredictionOverlay(true)
     props.setAnalysisLabel(undefined)
+    props.setSwipeCompare(false)
     goAnalysis()
-  }, [goAnalysis, props.setResult, props.setShowPredictionOverlay, props.setAnalysisLabel])
+  }, [
+    goAnalysis,
+    props.setResult,
+    props.setShowPredictionOverlay,
+    props.setAnalysisLabel,
+    props.setSwipeCompare,
+  ])
 
   const startNewClassification = useCallback(() => {
     props.setResult(null)
     props.setShowPredictionOverlay(true)
     props.setAnalysisLabel(undefined)
+    props.setSwipeCompare(false)
+    props.setSwipeRatio(0.5)
     props.onClearArea()
     goMap()
-  }, [goMap, props.setResult, props.setShowPredictionOverlay, props.setAnalysisLabel, props.onClearArea])
-
+  }, [
+    goMap,
+    props.setResult,
+    props.setShowPredictionOverlay,
+    props.setAnalysisLabel,
+    props.setSwipeCompare,
+    props.setSwipeRatio,
+    props.onClearArea,
+  ])
   const areaLabel = useMemo(() => {
     if (props.analysisLabel) return props.analysisLabel
     if (props.activeExample) {
@@ -792,7 +828,12 @@ function AppBody(props: {
                   ? { ...composition, opacity: composeOpacity }
                   : null
               }
+              swipeCompare={props.swipeCompare}
+              swipeRatio={props.swipeRatio}
               areaLabel={areaLabel}
+              onAreaLabelChange={(label) => props.setAnalysisLabel(label)}
+              aoiContourScheme={props.aoiContourScheme}
+              onAoiContourSchemeChange={props.setAoiContourScheme}
               hasArea={props.hasArea}
               start={props.start}
               end={props.end}
@@ -856,6 +897,8 @@ function AppBody(props: {
                 setComposition(null)
                 setShowCompositionOverlay(true)
               }}
+              onSwipeCompareChange={props.setSwipeCompare}
+              onSwipeRatioChange={props.setSwipeRatio}
               onRun={handleRun}
               onAnalyzeLULC={handleAnalyzeLULC}
               lulcRunning={props.lulcRunning}
@@ -863,6 +906,8 @@ function AppBody(props: {
                 props.setResult(null)
                 props.setShowPredictionOverlay(true)
                 props.setAnalysisLabel(undefined)
+                props.setSwipeCompare(false)
+                props.setSwipeRatio(0.5)
               }}
               onNewClassification={startNewClassification}
               onViewDataCube={() => void handleViewDataCube()}

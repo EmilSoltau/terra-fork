@@ -426,6 +426,12 @@
   user-select: none;
 }
 
+/* Map swipe (imagery ↔ prediction) — handle sits above leaflet panes */
+.map-swipe-handle {
+  touch-action: none;
+  user-select: none;
+}
+
 /* AOI name chip — glued to contour edge, rotation applied inline */
 .aoi-label {
   background: transparent !important;
@@ -435,6 +441,7 @@
   display: inline-block;
   padding: 3px 9px;
   border-radius: 4px;
+  /* Default chip chrome; MapView may override via inline scheme colors */
   background: rgb(245 245 243 / 0.97);
   color: rgb(55 55 55);
   font-family: var(--font-sans);

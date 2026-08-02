@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react"
+import { useEffect, useMemo, useRef, useState, type RefObject } from "react"
 import {
   MapContainer,
   TileLayer,
@@ -17,6 +17,15 @@ import "./leafletDrawPatch"
 import type { LatLngBoundsExpression } from "leaflet"
 import type { Area, PredictResult, GeoJSONGeometry, CompositionOverlay } from "@/lib/types"
 import { majoritySmoothOverlay } from "@/lib/smoothOverlay"
+import {
+  getAoiContourScheme,
+  type AoiContourScheme,
+  type AoiContourSchemeId,
+} from "@/lib/aoiStyle"
+import {
+  AoiContextMenu,
+  type AoiContextMenuState,
+} from "@/components/AoiContextMenu"
 
 interface MapViewProps {
   areas: Area[]
@@ -36,7 +45,15 @@ interface MapViewProps {
   /** When false, hide the band composition overlay. */
   showCompositionOverlay?: boolean
   composition?: CompositionOverlay | null
+  /** Vertical wipe: left = basemap, right = prediction. */
+  swipeCompare: boolean
+  swipeRatio: number
+  onSwipeRatioChange: (ratio: number) => void
   areaLabel?: string
+  onAreaLabelChange: (label: string) => void
+  aoiContourScheme: AoiContourSchemeId
+  onAoiContourSchemeChange: (id: AoiContourSchemeId) => void
+  onClearArea: () => void
   onViewChange: (v: { lat: number; lon: number; zoom: number }) => void
 }
 
@@ -287,6 +304,7 @@ function FitComposition({
 /**
  * Prediction ImageOverlay. Smooth = contour/isoband style (solid colors,
  * curved class boundaries via blur→argmax), not soft RGB blend.
+ * Optional swipeRatio clips the overlay so the left side reveals the basemap.
  */
 function PredictionOverlay({
   url,
@@ -294,13 +312,17 @@ function PredictionOverlay({
   opacity,
   smooth,
   zIndex = 400,
+  swipeRatio = null,
 }: {
   url: string
   bounds: LatLngBoundsExpression
   opacity: number
   smooth: boolean
   zIndex?: number
+  /** 0–1 map-container fraction; null disables clip. */
+  swipeRatio?: number | null
 }) {
+  const map = useMap()
   const ref = useRef<L.ImageOverlay | null>(null)
   const [displayUrl, setDisplayUrl] = useState(url)
 
@@ -350,6 +372,39 @@ function PredictionOverlay({
     ref.current?.setZIndex(zIndex)
   }, [zIndex])
 
+  useEffect(() => {
+    const applyClip = () => {
+      const img = ref.current?.getElement()
+      if (!img) return
+      if (swipeRatio == null) {
+        img.style.clipPath = ""
+        return
+      }
+      const mapRect = map.getContainer().getBoundingClientRect()
+      const imgRect = img.getBoundingClientRect()
+      if (imgRect.width <= 0 || imgRect.height <= 0) {
+        img.style.clipPath = ""
+        return
+      }
+      const lineX = mapRect.left + swipeRatio * mapRect.width
+      const clipLeft = Math.max(0, Math.min(imgRect.width, lineX - imgRect.left))
+      img.style.clipPath = `inset(0 0 0 ${clipLeft}px)`
+    }
+
+    applyClip()
+    const overlay = ref.current
+    overlay?.on("load", applyClip)
+    map.on("move zoom moveend zoomend viewreset", applyClip)
+    window.addEventListener("resize", applyClip)
+    return () => {
+      overlay?.off("load", applyClip)
+      map.off("move zoom moveend zoomend viewreset", applyClip)
+      window.removeEventListener("resize", applyClip)
+      const img = ref.current?.getElement()
+      if (img) img.style.clipPath = ""
+    }
+  }, [map, swipeRatio, displayUrl, opacity])
+
   return (
     <ImageOverlay
       ref={ref}
@@ -359,6 +414,102 @@ function PredictionOverlay({
       zIndex={zIndex}
       className="overlay-crisp"
     />
+  )
+}
+
+/** Locks pan while the swipe handle is dragged. */
+function MapDragLock({ locked }: { locked: boolean }) {
+  const map = useMap()
+  useEffect(() => {
+    if (locked) {
+      map.dragging.disable()
+      return () => {
+        map.dragging.enable()
+      }
+    }
+    map.dragging.enable()
+  }, [locked, map])
+  return null
+}
+
+/** Vertical wipe handle overlaid on the map container (DOM, not a Leaflet layer). */
+function SwipeDivider({
+  ratio,
+  onRatioChange,
+  onDraggingChange,
+  rightLabel = "Prediction",
+}: {
+  ratio: number
+  onRatioChange: (ratio: number) => void
+  onDraggingChange: (dragging: boolean) => void
+  rightLabel?: string
+}) {
+  const trackRef = useRef<HTMLDivElement | null>(null)
+
+  const setFromClientX = (clientX: number) => {
+    const el = trackRef.current
+    if (!el) return
+    const rect = el.getBoundingClientRect()
+    if (rect.width <= 0) return
+    const next = Math.min(0.92, Math.max(0.08, (clientX - rect.left) / rect.width))
+    onRatioChange(next)
+  }
+
+  return (
+    <div
+      ref={trackRef}
+      className="map-swipe-track app-no-drag pointer-events-none absolute inset-0 z-[1050]"
+      aria-hidden={false}
+    >
+      <div
+        className="pointer-events-none absolute inset-y-0 w-px bg-white/85 shadow-[0_0_0_1px_rgba(0,0,0,0.35)]"
+        style={{ left: `${ratio * 100}%`, transform: "translateX(-50%)" }}
+      />
+      <div
+        className="pointer-events-none absolute top-3 -translate-x-full rounded-sm bg-black/55 px-1.5 py-0.5 text-[10px] tracking-wide text-white/90"
+        style={{ left: `calc(${ratio * 100}% - 8px)` }}
+      >
+        Imagery
+      </div>
+      <div
+        className="pointer-events-none absolute top-3 translate-x-0 rounded-sm bg-black/55 px-1.5 py-0.5 text-[10px] tracking-wide text-white/90"
+        style={{ left: `calc(${ratio * 100}% + 8px)` }}
+      >
+        {rightLabel}
+      </div>
+      <button
+        type="button"
+        aria-label={`Drag to compare imagery and ${rightLabel.toLowerCase()}`}
+        className="map-swipe-handle pointer-events-auto absolute top-1/2 flex h-11 w-7 -translate-x-1/2 -translate-y-1/2 cursor-ew-resize items-center justify-center rounded-full border border-white/70 bg-black/55 shadow-md outline-none focus-visible:ring-2 focus-visible:ring-white/60"
+        style={{ left: `${ratio * 100}%` }}
+        onPointerDown={(e) => {
+          e.preventDefault()
+          e.stopPropagation()
+          const target = e.currentTarget
+          target.setPointerCapture(e.pointerId)
+          onDraggingChange(true)
+          setFromClientX(e.clientX)
+        }}
+        onPointerMove={(e) => {
+          if (!e.currentTarget.hasPointerCapture(e.pointerId)) return
+          e.preventDefault()
+          e.stopPropagation()
+          setFromClientX(e.clientX)
+        }}
+        onPointerUp={(e) => {
+          if (e.currentTarget.hasPointerCapture(e.pointerId)) {
+            e.currentTarget.releasePointerCapture(e.pointerId)
+          }
+          onDraggingChange(false)
+        }}
+        onPointerCancel={() => onDraggingChange(false)}
+      >
+        <span className="flex gap-0.5" aria-hidden>
+          <span className="h-4 w-0.5 rounded-full bg-white/90" />
+          <span className="h-4 w-0.5 rounded-full bg-white/90" />
+        </span>
+      </button>
+    </div>
   )
 }
 
@@ -520,6 +671,100 @@ function ringCentroid(ring: LonLat[]): LonLat {
   return [lon / n, lat / n]
 }
 
+/** Ray-cast point-in-polygon (lon/lat), for AOI right-click hit testing. */
+function pointInRing(lon: number, lat: number, ring: LonLat[]): boolean {
+  let inside = false
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const xi = ring[i][0]
+    const yi = ring[i][1]
+    const xj = ring[j][0]
+    const yj = ring[j][1]
+    const intersect =
+      yi > lat !== yj > lat &&
+      lon < ((xj - xi) * (lat - yi)) / (yj - yi + Number.EPSILON) + xi
+    if (intersect) inside = !inside
+  }
+  return inside
+}
+
+function pointInAoi(lon: number, lat: number, geometry: GeoJSONGeometry): boolean {
+  if (geometry.type === "Polygon") {
+    const coords = geometry.coordinates as LonLat[][]
+    const outer = coords[0]
+    if (!outer || !pointInRing(lon, lat, outer)) return false
+    for (let h = 1; h < coords.length; h++) {
+      if (pointInRing(lon, lat, coords[h])) return false
+    }
+    return true
+  }
+  if (geometry.type === "MultiPolygon") {
+    const multi = geometry.coordinates as unknown as LonLat[][][]
+    return multi.some((poly) => {
+      const outer = poly[0]
+      if (!outer || !pointInRing(lon, lat, outer)) return false
+      for (let h = 1; h < poly.length; h++) {
+        if (pointInRing(lon, lat, poly[h])) return false
+      }
+      return true
+    })
+  }
+  return false
+}
+
+/**
+ * Captures right-clicks on the map (including over prediction ImageOverlays).
+ * Suppresses the Wails/browser menu and opens the AOI menu when inside the polygon.
+ */
+function AoiRightClickBridge({
+  geometry,
+  containerRef,
+  onOpen,
+}: {
+  geometry: GeoJSONGeometry | null
+  containerRef: RefObject<HTMLDivElement | null>
+  onOpen: (menu: AoiContextMenuState | null) => void
+}) {
+  const map = useMap()
+  const geometryRef = useRef(geometry)
+  geometryRef.current = geometry
+  const onOpenRef = useRef(onOpen)
+  onOpenRef.current = onOpen
+  const containerRefStable = containerRef
+
+  useEffect(() => {
+    const el = map.getContainer()
+    const onContextMenu = (e: MouseEvent) => {
+      // Always block native Reload / Inspect on the map surface.
+      e.preventDefault()
+      e.stopPropagation()
+
+      const g = geometryRef.current
+      if (!g) {
+        onOpenRef.current(null)
+        return
+      }
+
+      const ll = map.mouseEventToLatLng(e)
+      if (!pointInAoi(ll.lng, ll.lat, g)) {
+        onOpenRef.current(null)
+        return
+      }
+
+      const root = containerRefStable.current
+      const rect = root?.getBoundingClientRect()
+      onOpenRef.current({
+        x: e.clientX - (rect?.left ?? 0),
+        y: e.clientY - (rect?.top ?? 0),
+      })
+    }
+
+    el.addEventListener("contextmenu", onContextMenu, true)
+    return () => el.removeEventListener("contextmenu", onContextMenu, true)
+  }, [map, containerRefStable])
+
+  return null
+}
+
 /** Longest edge in the southern band of the AOI — label glues to this segment. */
 function pickContourEdge(geometry: GeoJSONGeometry): {
   a: LonLat
@@ -558,14 +803,17 @@ function pickContourEdge(geometry: GeoJSONGeometry): {
 }
 
 /**
- * Thin white AOI outline + name chip glued to a contour edge and rotated with it.
+ * Thin AOI outline + name chip glued to a contour edge and rotated with it.
+ * Right-click is handled by AoiRightClickBridge (works above prediction overlays).
  */
 function AoiContour({
   geometry,
   label,
+  scheme,
 }: {
   geometry: GeoJSONGeometry
   label: string
+  scheme: AoiContourScheme
 }) {
   const edge = useMemo(() => pickContourEdge(geometry), [geometry])
   const centroid = useMemo(() => {
@@ -576,20 +824,48 @@ function AoiContour({
   return (
     <>
       <GeoJSON
+        key={`aoi-outline-${scheme.id}`}
         data={geometry as GeoJSON.Geometry}
         interactive={false}
-        style={{
-          color: "#ffffff",
-          weight: 1.5,
+        pathOptions={{
+          color: scheme.stroke,
+          weight: 2,
           opacity: 1,
+          fillColor: scheme.stroke,
           fillOpacity: 0,
         }}
       />
       {edge && centroid && label.trim() && (
-        <AoiEdgeLabel edge={edge} centroid={centroid} label={label.trim()} />
+        <AoiEdgeLabel
+          edge={edge}
+          centroid={centroid}
+          label={label.trim()}
+          scheme={scheme}
+        />
       )}
     </>
   )
+}
+
+/** Fits the map to the active AOI when `nonce` increments. */
+function FitAoiOnRequest({
+  geometry,
+  nonce,
+}: {
+  geometry: GeoJSONGeometry | null
+  nonce: number
+}) {
+  const map = useMap()
+  useEffect(() => {
+    if (!geometry || nonce <= 0) return
+    try {
+      const layer = L.geoJSON(geometry as GeoJSON.GeoJsonObject)
+      map.fitBounds(layer.getBounds(), { padding: [40, 40] })
+    } catch {
+      // ignore invalid bounds
+    }
+  }, [map, geometry, nonce])
+  return null
 }
 
 /** Chip anchored outside a contour segment, rotated to match the edge angle. */
@@ -597,10 +873,12 @@ function AoiEdgeLabel({
   edge,
   centroid,
   label,
+  scheme,
 }: {
   edge: { a: LonLat; b: LonLat; mid: LonLat }
   centroid: LonLat
   label: string
+  scheme: AoiContourScheme
 }) {
   const map = useMap()
   const [pose, setPose] = useState<{
@@ -674,11 +952,11 @@ function AoiEdgeLabel({
       .replace(/"/g, "&quot;")
     return L.divIcon({
       className: "aoi-label",
-      html: `<div class="aoi-label-chip" style="transform:translate(-50%,-50%) rotate(${pose.angle}deg)">${safe}</div>`,
+      html: `<div class="aoi-label-chip" style="transform:translate(-50%,-50%) rotate(${pose.angle}deg);background:${scheme.chipBg};color:${scheme.chipFg}">${safe}</div>`,
       iconSize: [0, 0],
       iconAnchor: [0, 0],
     })
-  }, [label, pose])
+  }, [label, pose, scheme.chipBg, scheme.chipFg])
 
   if (!pose || !icon) return null
 
@@ -707,10 +985,25 @@ export function MapView({
   showPredictionOverlay = true,
   showCompositionOverlay = true,
   composition = null,
+  swipeCompare,
+  swipeRatio,
+  onSwipeRatioChange,
   areaLabel,
+  onAreaLabelChange,
+  aoiContourScheme,
+  onAoiContourSchemeChange,
+  onClearArea,
   onViewChange,
 }: MapViewProps) {
   const center = useMemo<[number, number]>(() => [-14.5, -52], [])
+  const containerRef = useRef<HTMLDivElement | null>(null)
+  const [swipeDragging, setSwipeDragging] = useState(false)
+  const [aoiMenu, setAoiMenu] = useState<AoiContextMenuState | null>(null)
+  const [fitAoiNonce, setFitAoiNonce] = useState(0)
+  const contourScheme = useMemo(
+    () => getAoiContourScheme(aoiContourScheme),
+    [aoiContourScheme]
+  )
 
   const overlayUrl =
     result?.overlay_uri || result?.lulc?.map_uri || result?.reference_uri || ""
@@ -743,8 +1036,11 @@ export function MapView({
         ]
       : null
 
+  const swipeActive = swipeCompare && !!overlayUrl && hasValidExtent
+
   // Confidence is semi-transparent, so prediction always shows through unless
   // we hide it. When confidenceOnTop is off, show confidence alone.
+  // Swipe clips whichever overlay(s) are visible so the left side shows basemap.
   const showPredictionUnderConfidence = !showConfidence || confidenceOnTop
   const compositionLayer =
     composition &&
@@ -761,6 +1057,10 @@ export function MapView({
       />
     ) : null
 
+  const predictionOpacity = swipeActive
+    ? Math.max(overlayOpacity, 0.88)
+    : overlayOpacity
+  const swipeClip = swipeActive ? swipeRatio : null
   const predictionLayer =
     result &&
     showPredictionOverlay &&
@@ -772,23 +1072,40 @@ export function MapView({
         key="prediction"
         url={overlayUrl}
         bounds={overlayBounds}
-        opacity={overlayOpacity}
+        opacity={predictionOpacity}
         smooth={smoothOverlay}
         zIndex={400}
+        swipeRatio={swipeClip}
       />
     ) : null
 
   const confidenceLayer =
-    result && hasValidExtent && overlayBounds && showConfidence && result.confidence_uri ? (
+    result &&
+    hasValidExtent &&
+    overlayBounds &&
+    showConfidence &&
+    result.confidence_uri ? (
       <PredictionOverlay
         key="confidence"
         url={result.confidence_uri}
         bounds={overlayBounds}
-        opacity={Math.min(1, overlayOpacity + 0.15)}
+        opacity={
+          swipeActive
+            ? Math.max(Math.min(1, overlayOpacity + 0.15), 0.9)
+            : Math.min(1, overlayOpacity + 0.15)
+        }
         smooth={false}
         zIndex={450}
+        swipeRatio={swipeClip}
       />
     ) : null
+
+  const swipeRightLabel =
+    showConfidence && !showPredictionUnderConfidence
+      ? "Confidence"
+      : showConfidence
+        ? "Confidence"
+        : "Prediction"
 
   // Example outlines are shown only when no custom polygon is active, as faint
   // clickable shortcuts to the article's validated sites.
@@ -811,7 +1128,8 @@ export function MapView({
   }, [areaLabel, activeExample, areas, customPolygon])
 
   return (
-    <div className="absolute inset-0">
+    // z-0 keeps swipe chrome inside this stacking context, under Result/Control panels
+    <div ref={containerRef} className="absolute inset-0 z-0">
     <MapContainer center={center} zoom={4} className="h-full w-full" zoomControl={false}>
       <ZoomControl position="bottomright" />
       <LayersControl position="topright">
@@ -859,16 +1177,51 @@ export function MapView({
       {confidenceLayer}
 
       {aoiGeometry && (
-        <AoiContour geometry={aoiGeometry} label={aoiName} />
+        <AoiContour
+          geometry={aoiGeometry}
+          label={aoiName}
+          scheme={contourScheme}
+        />
       )}
 
       <DrawControl customPolygon={customPolygon} onPolygonDrawn={onPolygonDrawn} />
       <FlyToController flyTo={flyTo} />
       <FitBounds customPolygon={customPolygon} result={result} />
       <FitComposition composition={composition} hasPrediction={!!result} />
+      <FitAoiOnRequest geometry={aoiGeometry} nonce={fitAoiNonce} />
+      <AoiRightClickBridge
+        geometry={aoiGeometry}
+        containerRef={containerRef}
+        onOpen={setAoiMenu}
+      />
       <ViewReporter onViewChange={onViewChange} />
       <BasemapDateAttribution />
+      <MapDragLock locked={swipeDragging} />
     </MapContainer>
+    {swipeActive && (
+      <SwipeDivider
+        ratio={swipeRatio}
+        onRatioChange={onSwipeRatioChange}
+        onDraggingChange={setSwipeDragging}
+        rightLabel={swipeRightLabel}
+      />
+    )}
+    {aoiMenu && aoiGeometry && (
+      <AoiContextMenu
+        menu={aoiMenu}
+        areaName={aoiName || "AOI"}
+        schemeId={contourScheme.id}
+        canClear={!!customPolygon || !!activeExample}
+        onClose={() => setAoiMenu(null)}
+        onRename={onAreaLabelChange}
+        onSchemeChange={onAoiContourSchemeChange}
+        onFitToArea={() => setFitAoiNonce((n) => n + 1)}
+        onClearArea={() => {
+          setAoiMenu(null)
+          onClearArea()
+        }}
+      />
+    )}
     </div>
   )
 }
