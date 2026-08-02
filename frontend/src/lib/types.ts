@@ -40,6 +40,8 @@ export interface PredictRequest {
   prithvi_mode: "pixel" | "patch"
   /** Attach the saved run to this project when set. */
   project_id?: string
+  /** Display name for the AOI (custom rename or example label). */
+  label?: string
 }
 
 export interface ClassStat {

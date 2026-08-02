@@ -541,6 +541,7 @@ export namespace backend {
 	    model_kind: string;
 	    prithvi_mode: string;
 	    project_id?: string;
+	    label?: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new PredictRequest(source);
@@ -559,6 +560,7 @@ export namespace backend {
 	        this.model_kind = source["model_kind"];
 	        this.prithvi_mode = source["prithvi_mode"];
 	        this.project_id = source["project_id"];
+	        this.label = source["label"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {

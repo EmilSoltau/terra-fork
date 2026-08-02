@@ -232,6 +232,7 @@ function App() {
   const clearArea = () => {
     setCustomPolygon(null)
     setActiveExample("")
+    setAnalysisLabel(undefined)
   }
 
   const handleImportPolygon = async () => {
@@ -276,6 +277,7 @@ function App() {
         }
         setActiveExample("")
         setCustomPolygon(geom)
+        setAnalysisLabel(undefined)
         notifySuccess("Polygon imported.")
       }
       input.click()
@@ -471,16 +473,19 @@ function AppBody(props: {
   )
 
   const syncProjectAoi = useCallback(
-    async (projectId: string) => {
+    async (projectId: string, labelOverride?: string) => {
       const useExample =
         !!props.activeExample &&
         !!props.areas.find((a) => a.id === props.activeExample)
-      const label = useExample
-        ? props.areas.find((a) => a.id === props.activeExample)?.label ||
-          props.activeExample
-        : props.customPolygon
-          ? "Custom AOI"
-          : ""
+      const renamed = (labelOverride ?? props.analysisLabel)?.trim()
+      const label =
+        renamed ||
+        (useExample
+          ? props.areas.find((a) => a.id === props.activeExample)?.label ||
+            props.activeExample
+          : props.customPolygon
+            ? "Custom AOI"
+            : "")
       let poly = ""
       if (!useExample && props.customPolygon) {
         poly = JSON.stringify(props.customPolygon)
@@ -501,6 +506,7 @@ function AppBody(props: {
       props.activeExample,
       props.areas,
       props.customPolygon,
+      props.analysisLabel,
       refreshProjects,
     ]
   )
@@ -806,17 +812,22 @@ function AppBody(props: {
       model_kind: props.modelKind,
       prithvi_mode: props.prithviMode,
       project_id: activeProjectId || undefined,
+      label:
+        props.analysisLabel?.trim() ||
+        (useExample
+          ? props.areas.find((a) => a.id === props.activeExample)?.label
+          : undefined) ||
+        (useExample ? props.activeExample : "Custom AOI"),
     }
     try {
       const res = (await Predict(req as never)) as unknown as PredictResult
       props.setResult(res)
       props.setShowPredictionOverlay(true)
-      const label = useExample
-        ? props.areas.find((a) => a.id === props.activeExample)?.label
-        : "Custom AOI"
-      props.setAnalysisLabel(label)
+      if (!props.analysisLabel?.trim()) {
+        props.setAnalysisLabel(req.label)
+      }
       if (activeProjectId) {
-        await syncProjectAoi(activeProjectId)
+        await syncProjectAoi(activeProjectId, req.label)
         await refreshProjects()
       }
       notifySuccess(`Classification complete — ${res.n_dates} scenes (saved).`, undefined, {
@@ -851,10 +862,12 @@ function AppBody(props: {
         area_id: useExample ? props.activeExample : "",
         polygon_geojson: useExample ? null : props.customPolygon,
       } as never)) as unknown as LULCAnalysis
-      const label = useExample
-        ? props.areas.find((a) => a.id === props.activeExample)?.label
-        : "Custom AOI"
-      props.setAnalysisLabel(label)
+      if (!props.analysisLabel?.trim()) {
+        const label = useExample
+          ? props.areas.find((a) => a.id === props.activeExample)?.label
+          : "Custom AOI"
+        props.setAnalysisLabel(label)
+      }
       const mapUri = lulc.map_uri ?? ""
       const extent = lulc.extent ?? {
         lon_min: 0,
@@ -1064,7 +1077,10 @@ function AppBody(props: {
                   swipeCompare={props.swipeCompare}
                   swipeRatio={props.swipeRatio}
                   areaLabel={areaLabel}
-                  onAreaLabelChange={(label) => props.setAnalysisLabel(label)}
+                  onAreaLabelChange={(label) => {
+                    props.setAnalysisLabel(label)
+                    if (activeProjectId) void syncProjectAoi(activeProjectId, label)
+                  }}
                   aoiContourScheme={props.aoiContourScheme}
                   onAoiContourSchemeChange={props.setAoiContourScheme}
                   hasArea={props.hasArea}
@@ -1094,7 +1110,10 @@ function AppBody(props: {
                   onViewChange={props.setView}
                   onPolygonDrawn={(geom) => {
                     props.setCustomPolygon(geom)
-                    if (geom) props.setActiveExample("")
+                    if (geom) {
+                      props.setActiveExample("")
+                      props.setAnalysisLabel(undefined)
+                    }
                   }}
                   onSelectExample={props.onSelectExample}
                   onLocationSelect={(lat, lon) =>
@@ -1192,6 +1211,10 @@ function AppBody(props: {
                   onOpenRun={openSavedAnalysis}
                   onBackToList={backToAnalysesList}
                   onNewClassification={startNewClassification}
+                  onAreaLabelChange={(label) => {
+                    props.setAnalysisLabel(label)
+                    if (activeProjectId) void syncProjectAoi(activeProjectId, label)
+                  }}
                   onActivateProject={(id) => void activateProject(id)}
                   activeProjectId={activeProjectId}
                 />

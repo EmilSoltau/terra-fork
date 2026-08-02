@@ -1,11 +1,13 @@
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import {
   ArrowLeft,
+  Check,
   Columns2,
   Download,
   FolderOpen,
   History,
   Map as MapIcon,
+  Pencil,
   Plus,
   Trash2,
 } from "lucide-react"
@@ -63,6 +65,8 @@ interface AnalysisPageProps {
   onOpenRun: (run: InferenceRun) => Promise<void>
   onBackToList: () => void
   onNewClassification: () => void
+  /** Rename the active AOI (same path as map context-menu rename). */
+  onAreaLabelChange?: (label: string) => void
   /** Set map active project when opening a project from the hub. */
   onActivateProject?: (projectId: string) => void
   /** Currently active project on the map (keeps Analysis list scoped). */
@@ -85,6 +89,7 @@ export function AnalysisPage({
   onOpenRun,
   onBackToList,
   onNewClassification,
+  onAreaLabelChange,
   onActivateProject,
   activeProjectId,
 }: AnalysisPageProps) {
@@ -102,6 +107,10 @@ export function AnalysisPage({
   const [selectedPlot, setSelectedPlot] = useState<AnalysisPlotAsset | null>(
     null
   )
+  const [renamingTitle, setRenamingTitle] = useState(false)
+  const [titleDraft, setTitleDraft] = useState("")
+  const titleInputRef = useRef<HTMLInputElement | null>(null)
+  const cancelTitleRenameRef = useRef(false)
 
   const selectedProject = useMemo(
     () => projects.find((p) => p.id === selectedProjectId) ?? null,
@@ -595,16 +604,96 @@ export function AnalysisPage({
   const btnGhost =
     "ar-ghost flex h-8 items-center gap-1.5 rounded-sm border px-3 text-[11px] text-muted-foreground hover:text-foreground"
 
+  useEffect(() => {
+    if (renamingTitle) titleInputRef.current?.focus()
+  }, [renamingTitle])
+
+  const startTitleRename = () => {
+    if (!onAreaLabelChange) return
+    cancelTitleRenameRef.current = false
+    setTitleDraft(areaLabel?.trim() || "")
+    setRenamingTitle(true)
+  }
+
+  const commitTitleRename = () => {
+    if (cancelTitleRenameRef.current) {
+      cancelTitleRenameRef.current = false
+      return
+    }
+    const next = titleDraft.trim()
+    if (next && onAreaLabelChange) onAreaLabelChange(next)
+    setRenamingTitle(false)
+  }
+
+  const cancelTitleRename = () => {
+    cancelTitleRenameRef.current = true
+    setRenamingTitle(false)
+    setTitleDraft(areaLabel?.trim() || "")
+  }
+
   return (
     <div className="terra-workspace app-no-drag flex h-full min-h-0 flex-col overflow-hidden">
       <header className="ar-header sticky top-0 z-10 shrink-0 px-5 py-3.5 sm:px-6 lg:px-8">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="min-w-0 flex-1">
             <p className="telemetry text-[10px] text-primary">ANALYSIS</p>
-            <h1 className="mt-0.5 font-display text-xl font-semibold tracking-wide xl:text-2xl">
-              {hasClassification ? "Cover map" : "Land cover / land use"}
-              {areaLabel ? ` — ${areaLabel}` : ""}
-            </h1>
+            {renamingTitle ? (
+              <form
+                className="mt-0.5 flex max-w-xl items-center gap-2"
+                onSubmit={(e) => {
+                  e.preventDefault()
+                  commitTitleRename()
+                }}
+              >
+                <span className="shrink-0 font-display text-xl font-semibold tracking-wide text-muted-foreground xl:text-2xl">
+                  {hasClassification ? "Cover map" : "Land cover / land use"} —
+                </span>
+                <input
+                  ref={titleInputRef}
+                  value={titleDraft}
+                  onChange={(e) => setTitleDraft(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Escape") {
+                      e.preventDefault()
+                      cancelTitleRename()
+                    }
+                  }}
+                  onBlur={() => commitTitleRename()}
+                  maxLength={64}
+                  placeholder="Area name"
+                  aria-label="Area name"
+                  className="ar-inset min-w-0 flex-1 px-2 py-1 font-display text-xl font-semibold tracking-wide text-foreground outline-none focus:ring-1 focus:ring-primary/50 xl:text-2xl"
+                />
+                <button
+                  type="submit"
+                  className="flex size-8 shrink-0 items-center justify-center rounded-sm text-primary hover:bg-[var(--ar-raised)]"
+                  title="Save name"
+                >
+                  <Check className="size-4" />
+                </button>
+              </form>
+            ) : (
+              <h1 className="mt-0.5 font-display text-xl font-semibold tracking-wide xl:text-2xl">
+                <span>
+                  {hasClassification ? "Cover map" : "Land cover / land use"}
+                </span>
+                {onAreaLabelChange ? (
+                  <button
+                    type="button"
+                    onClick={startTitleRename}
+                    title="Rename area"
+                    className="group ml-1 inline-flex max-w-full items-baseline gap-1.5 rounded-sm px-1 py-0.5 text-left hover:bg-[var(--ar-raised)]"
+                  >
+                    <span className="truncate">
+                      {areaLabel ? `— ${areaLabel}` : "— Name this area…"}
+                    </span>
+                    <Pencil className="size-3.5 shrink-0 opacity-40 group-hover:opacity-90" />
+                  </button>
+                ) : areaLabel ? (
+                  <span>{` — ${areaLabel}`}</span>
+                ) : null}
+              </h1>
+            )}
             <p className="mt-0.5 text-xs text-muted-foreground">
               {hasClassification ? (
                 <>

@@ -50,6 +50,8 @@ type PredictRequest struct {
 	PrithviMode string `json:"prithvi_mode"`
 	// ProjectID optionally attaches the saved run to a project.
 	ProjectID string `json:"project_id,omitempty"`
+	// Label is the display name for the AOI (custom rename or example label).
+	Label string `json:"label,omitempty"`
 }
 
 // sidecarRequest is the JSON contract written to the Python sidecar stdin.

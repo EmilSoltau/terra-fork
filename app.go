@@ -381,7 +381,10 @@ func (a *App) persistAnalysis(req backend.PredictRequest, res *backend.PredictRe
 	} else if req.AreaID != "" {
 		poly = fmt.Sprintf(`{"area_id":%q}`, req.AreaID)
 	}
-	label := req.AreaID
+	label := strings.TrimSpace(req.Label)
+	if label == "" {
+		label = strings.TrimSpace(req.AreaID)
+	}
 	if label == "" {
 		label = "Custom AOI"
 	}
