@@ -7,6 +7,8 @@ export interface PreferenceExtras {
   active_project_id?: string
   /** Last custom AOI display name (survives restart with active project / prefs). */
   aoi_label?: string
+  /** Last product version for which What’s New was shown (or silently seeded). */
+  last_seen_version?: string
 }
 
 export function parsePreferenceExtras(

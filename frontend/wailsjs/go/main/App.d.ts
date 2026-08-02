@@ -24,6 +24,8 @@ export function ExportOverlayFile(arg1:string,arg2:string):Promise<string>;
 
 export function GeocodeSearch(arg1:string):Promise<Array<backend.GeocodeResult>>;
 
+export function GetAppVersion():Promise<string>;
+
 export function GetBootLogs():Promise<Array<string>>;
 
 export function GetPreferences():Promise<store.Preferences>;

@@ -43,7 +43,7 @@ interface AuthContextValue {
   updateProfile: (displayName: string) => Promise<void>
   setAvatar: (dataURI: string) => Promise<void>
   clearAvatar: () => Promise<void>
-  savePrefs: (prefs: Preferences) => Promise<void>
+  savePrefs: (prefs: Preferences, opts?: { silent?: boolean }) => Promise<void>
   refreshRuns: () => Promise<void>
   refreshProjects: () => Promise<void>
 }
@@ -172,11 +172,11 @@ export function AuthProvider({
   }, [])
 
   const savePrefs = useCallback(
-    async (p: Preferences) => {
+    async (p: Preferences, opts?: { silent?: boolean }) => {
       await SavePreferences(p as never)
       setPrefs(p)
       onPrefsApplied?.(p)
-      notifySuccess("Preferences saved.")
+      if (!opts?.silent) notifySuccess("Preferences saved.")
     },
     [onPrefsApplied]
   )

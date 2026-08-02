@@ -45,7 +45,11 @@ JOSS acceptance / production-ready install story).
 1. `main` is green (CI) and contains only what you intend to ship.
 2. Decide PATCH / MINOR / MAJOR with the table above.
 3. Update release notes mentally: what should users download (LITE vs FULL)?
-4. Tag and push:
+4. Bump embedded `AppVersion` in [`version.go`](../version.go) to match the tag
+   (or pass `-ldflags "-X main.AppVersion=X.Y.Z"` in the release build), and add a
+   matching entry in [`frontend/src/lib/whatsNew.ts`](../frontend/src/lib/whatsNew.ts)
+   if the release should show a What’s New modal.
+5. Tag and push:
 
 ```bash
 git checkout main && git pull
@@ -53,7 +57,7 @@ git tag -a v0.3.0 -m "TERRA v0.3.0 — short reason"
 git push origin v0.3.0
 ```
 
-5. Confirm the Release workflow finished and assets appear on
+6. Confirm the Release workflow finished and assets appear on
    [Releases](https://github.com/rexionmars/TERRA/releases).
 
 ## Current line
