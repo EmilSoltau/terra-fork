@@ -10,6 +10,12 @@ import {
   RenderComposite,
   OpenExternal,
   RevealMainWindow,
+  SavePreferences,
+  SaveProjectOverlay,
+  ListProjectOverlays,
+  GetProject,
+  UpdateProjectAOI,
+  CreateProject,
 } from "../wailsjs/go/main/App"
 import { EventsOn, EventsOff } from "../wailsjs/runtime/runtime"
 import type {
@@ -31,8 +37,12 @@ import type {
   CompositeIndex,
   CompositeResult,
   LeftDockTabsMode,
+  Project,
+  SaveProjectOverlayRequest,
 } from "@/lib/types"
-import { leftDockTabsModeFromPrefs } from "@/lib/preferenceExtras"
+import { leftDockTabsModeFromPrefs, parsePreferenceExtras } from "@/lib/preferenceExtras"
+import { projectOverlayToComposition } from "@/lib/projectOverlays"
+import { ProjectSwitcher } from "@/components/ProjectSwitcher"
 import { resolveCompositionMeta } from "@/lib/compositeCatalog"
 import {
   DEFAULT_AOI_CONTOUR_SCHEME,
@@ -402,12 +412,14 @@ function AppBody(props: {
   onClearArea: () => void
   onImportPolygon: () => void
 }) {
-  const { refreshRuns, screen, goAnalysis, goMap, runs } = useAuth()
+  const { refreshRuns, refreshProjects, screen, goAnalysis, goMap, runs, projects, prefs } =
+    useAuth()
   const [loadingRun, setLoadingRun] = useState(false)
   const [dataCubeOpen, setDataCubeOpen] = useState(false)
   const [dataCubeLoading, setDataCubeLoading] = useState(false)
   const [dataCubeError, setDataCubeError] = useState<string | null>(null)
   const [dataCubeResult, setDataCubeResult] = useState<DataCubeResult | null>(null)
+  const [activeProjectId, setActiveProjectId] = useState<string | null>(null)
 
   const [composition, setComposition] = useState<CompositionOverlay | null>(null)
   /** Session gallery of applied compositions (newest first); map shows `composition`. */
@@ -432,6 +444,153 @@ function AppBody(props: {
   const [composeStretchLow, setComposeStretchLow] = useState(2)
   const [composeStretchHigh, setComposeStretchHigh] = useState(98)
   const [composeOpacity, setComposeOpacity] = useState(0.85)
+
+  useEffect(() => {
+    const id = parsePreferenceExtras(prefs?.extras_json).active_project_id
+    setActiveProjectId(id?.trim() ? id : null)
+  }, [prefs?.extras_json])
+
+  const persistActiveProjectId = useCallback(
+    async (id: string | null) => {
+      setActiveProjectId(id)
+      if (!prefs) return
+      const extras = parsePreferenceExtras(prefs.extras_json)
+      if (id) extras.active_project_id = id
+      else delete extras.active_project_id
+      try {
+        await SavePreferences({
+          ...prefs,
+          extras_json: JSON.stringify(extras),
+        } as never)
+      } catch {
+        /* best-effort */
+      }
+    },
+    [prefs]
+  )
+
+  const syncProjectAoi = useCallback(
+    async (projectId: string) => {
+      const useExample =
+        !!props.activeExample &&
+        !!props.areas.find((a) => a.id === props.activeExample)
+      const label = useExample
+        ? props.areas.find((a) => a.id === props.activeExample)?.label ||
+          props.activeExample
+        : props.customPolygon
+          ? "Custom AOI"
+          : ""
+      let poly = ""
+      if (!useExample && props.customPolygon) {
+        poly = JSON.stringify(props.customPolygon)
+      }
+      try {
+        await UpdateProjectAOI(
+          projectId,
+          useExample ? props.activeExample : "",
+          poly,
+          label
+        )
+        await refreshProjects()
+      } catch {
+        /* best-effort */
+      }
+    },
+    [
+      props.activeExample,
+      props.areas,
+      props.customPolygon,
+      refreshProjects,
+    ]
+  )
+
+  const activateProject = useCallback(
+    async (id: string | null) => {
+      await persistActiveProjectId(id)
+      if (!id) {
+        setComposition(null)
+        setCompositionGallery([])
+        setShowCompositionOverlay(true)
+        return
+      }
+      try {
+        const p = (await GetProject(id)) as unknown as Project
+        if (p.area_id) {
+          props.setActiveExample(p.area_id)
+          props.setCustomPolygon(null)
+          props.setAnalysisLabel(p.label || p.name)
+        } else if (p.polygon_geojson) {
+          const aoi = parseRunPolygon(p.polygon_geojson, props.areas)
+          props.setActiveExample(aoi.exampleId)
+          props.setCustomPolygon(aoi.polygon)
+          props.setAnalysisLabel(p.label || p.name)
+          if (aoi.polygon?.type === "Polygon") {
+            const ring = aoi.polygon.coordinates?.[0]
+            if (ring?.length) {
+              let lat = 0
+              let lon = 0
+              for (const [x, y] of ring) {
+                lon += x
+                lat += y
+              }
+              props.setFlyTo({
+                lat: lat / ring.length,
+                lon: lon / ring.length,
+                key: Date.now(),
+              })
+            }
+          }
+        }
+        const overlays = (await ListProjectOverlays(
+          id
+        )) as unknown as import("@/lib/types").ProjectOverlay[]
+        const gallery = overlays
+          .map(projectOverlayToComposition)
+          .filter((x): x is CompositionOverlay => !!x)
+        setCompositionGallery(gallery)
+        setComposition(gallery[0] ?? null)
+        setShowCompositionOverlay(!!gallery[0])
+      } catch (e) {
+        notifyError("Could not open project", e)
+      }
+    },
+    [
+      persistActiveProjectId,
+      props.areas,
+      props.setActiveExample,
+      props.setCustomPolygon,
+      props.setAnalysisLabel,
+      props.setFlyTo,
+    ]
+  )
+
+  const handleCreateProjectFromMap = useCallback(async () => {
+    const hint =
+      props.analysisLabel ||
+      (props.activeExample
+        ? props.areas.find((a) => a.id === props.activeExample)?.label
+        : null) ||
+      (props.customPolygon ? "Custom AOI" : "New field")
+    const name = window.prompt("Project name", hint)
+    if (!name?.trim()) return
+    try {
+      const p = (await CreateProject(name.trim(), "")) as unknown as Project
+      await refreshProjects()
+      await activateProject(p.id)
+      await syncProjectAoi(p.id)
+      notifySuccess("Project created", p.name)
+    } catch (e) {
+      notifyError("Could not create project", e)
+    }
+  }, [
+    activateProject,
+    refreshProjects,
+    syncProjectAoi,
+    props.analysisLabel,
+    props.activeExample,
+    props.areas,
+    props.customPolygon,
+  ])
 
   const clearAreaAndComposition = useCallback(() => {
     setComposition(null)
@@ -547,6 +706,34 @@ function AppBody(props: {
       setCompositionGallery((prev) => [entry, ...prev].slice(0, 12))
       setShowCompositionOverlay(true)
       props.setShowPredictionOverlay(false)
+      if (activeProjectId) {
+        try {
+          const metaJson = JSON.stringify({
+            description: meta.description,
+            kind: meta.kind,
+            bands: meta.bands,
+            index: meta.index,
+            presetId: meta.presetId,
+            sceneDate,
+            opacity: composeOpacity,
+            extent: res.extent,
+            label: meta.label,
+          })
+          const reqSave: SaveProjectOverlayRequest = {
+            project_id: activeProjectId,
+            kind: "composition",
+            title: meta.title,
+            meta_json: metaJson,
+            overlay_uri: res.overlay_uri,
+            raster_tif: res.raster_tif,
+          }
+          await SaveProjectOverlay(reqSave as never)
+          await syncProjectAoi(activeProjectId)
+          await refreshProjects()
+        } catch (e) {
+          notifyError("Composition applied, but save to project failed", e)
+        }
+      }
       notifySuccess("Composition applied to map.")
     } catch (e) {
       notifyError("Composition error", e)
@@ -617,6 +804,7 @@ function AppBody(props: {
       mode: props.mode,
       model_kind: props.modelKind,
       prithvi_mode: props.prithviMode,
+      project_id: activeProjectId || undefined,
     }
     try {
       const res = (await Predict(req as never)) as unknown as PredictResult
@@ -626,6 +814,10 @@ function AppBody(props: {
         ? props.areas.find((a) => a.id === props.activeExample)?.label
         : "Custom AOI"
       props.setAnalysisLabel(label)
+      if (activeProjectId) {
+        await syncProjectAoi(activeProjectId)
+        await refreshProjects()
+      }
       notifySuccess(`Classification complete — ${res.n_dates} scenes (saved).`, undefined, {
         action: {
           label: "View analysis",
@@ -633,6 +825,7 @@ function AppBody(props: {
         },
       })
       void refreshRuns()
+      void refreshProjects()
     } catch (e) {
       notifyError("Inference error", e)
     } finally {
@@ -813,7 +1006,21 @@ function AppBody(props: {
 
   return (
     <div className="flex h-screen w-screen flex-col overflow-hidden bg-background text-foreground">
-      <TitleBar view={props.view} result={props.result} />
+      <TitleBar
+        view={props.view}
+        result={props.result}
+        projectSwitcher={
+          screen === "map" ? (
+            <ProjectSwitcher
+              projects={projects}
+              activeProjectId={activeProjectId}
+              onSelect={(id) => void activateProject(id)}
+              onCreate={() => void handleCreateProjectFromMap()}
+              onOpenHub={() => goAnalysis()}
+            />
+          ) : undefined
+        }
+      />
 
       <div className="flex min-h-0 flex-1">
         <AppSidebar
@@ -965,6 +1172,8 @@ function AppBody(props: {
               onOpenRun={openSavedAnalysis}
               onBackToList={backToAnalysesList}
               onNewClassification={startNewClassification}
+              onActivateProject={(id) => void activateProject(id)}
+              activeProjectId={activeProjectId}
             />
           )}
           {screen === "auth" && <AuthPage />}

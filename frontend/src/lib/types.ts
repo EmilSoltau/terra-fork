@@ -38,6 +38,8 @@ export interface PredictRequest {
   mode: "single" | "temporal"
   model_kind: ModelKind
   prithvi_mode: "pixel" | "patch"
+  /** Attach the saved run to this project when set. */
+  project_id?: string
 }
 
 export interface ClassStat {
@@ -206,6 +208,43 @@ export interface InferenceRun {
   assets_relpath?: string
   n_dates: number
   label?: string
+  project_id?: string
+}
+
+export interface Project {
+  id: string
+  user_id: string
+  name: string
+  notes?: string
+  created_at: string
+  updated_at: string
+  polygon_geojson?: string
+  area_id?: string
+  label?: string
+  run_count?: number
+  overlay_count?: number
+}
+
+export interface ProjectOverlay {
+  id: string
+  project_id: string
+  kind: string
+  title: string
+  meta_json?: string
+  png_relpath?: string
+  tif_relpath?: string
+  created_at: string
+  overlay_uri?: string
+  raster_tif?: string
+}
+
+export interface SaveProjectOverlayRequest {
+  project_id: string
+  kind: string
+  title: string
+  meta_json: string
+  overlay_uri: string
+  raster_tif?: string
 }
 
 export interface DataCubeRequest {

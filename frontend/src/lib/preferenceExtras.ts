@@ -4,6 +4,7 @@ export type { LeftDockTabsMode }
 
 export interface PreferenceExtras {
   left_dock_tabs?: LeftDockTabsMode
+  active_project_id?: string
 }
 
 export function parsePreferenceExtras(

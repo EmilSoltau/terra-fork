@@ -1,14 +1,16 @@
-import { useCallback, useState } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 import {
   ArrowLeft,
   Columns2,
   Download,
   FolderOpen,
+  FolderKanban,
   History,
   Map as MapIcon,
   Plus,
+  Trash2,
 } from "lucide-react"
-import { notifyError, notifyExportFail, notifyExportOk } from "@/lib/notify"
+import { notifyError, notifyExportFail, notifyExportOk, notifySuccess } from "@/lib/notify"
 import {
   LineChart,
   Line,
@@ -20,10 +22,21 @@ import {
   Legend,
 } from "recharts"
 import { useAuth } from "@/lib/auth"
-import type { InferenceRun, PredictResult } from "@/lib/types"
+import type {
+  InferenceRun,
+  PredictResult,
+  Project,
+  ProjectOverlay,
+} from "@/lib/types"
 import {
+  CreateProject,
+  DeleteAnalysis,
+  DeleteProject,
   ExportClassification,
+  ListProjectOverlays,
+  ListProjectRuns,
   LoadAnalysis,
+  SetRunProject,
 } from "../../wailsjs/go/main/App"
 import { LulcSection } from "@/components/LulcSection"
 import { CompareAnalyses } from "@/components/CompareAnalyses"
@@ -46,6 +59,10 @@ interface AnalysisPageProps {
   onOpenRun: (run: InferenceRun) => Promise<void>
   onBackToList: () => void
   onNewClassification: () => void
+  /** Set map active project when opening a project from the hub. */
+  onActivateProject?: (projectId: string) => void
+  /** Currently active project on the map (keeps Analysis list scoped). */
+  activeProjectId?: string | null
 }
 
 type CompareState = {
@@ -64,11 +81,95 @@ export function AnalysisPage({
   onOpenRun,
   onBackToList,
   onNewClassification,
+  onActivateProject,
+  activeProjectId,
 }: AnalysisPageProps) {
-  const { goMap, runs, refreshRuns } = useAuth()
+  const { goMap, runs, refreshRuns, projects, refreshProjects } = useAuth()
   const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [compare, setCompare] = useState<CompareState | null>(null)
   const [comparing, setComparing] = useState(false)
+  const [hubView, setHubView] = useState<"list" | "detail" | "unassigned">("list")
+  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null)
+  const [projectRuns, setProjectRuns] = useState<InferenceRun[]>([])
+  const [projectOverlays, setProjectOverlays] = useState<ProjectOverlay[]>([])
+  const [creating, setCreating] = useState(false)
+  const [newName, setNewName] = useState("")
+  const [hubLoading, setHubLoading] = useState(false)
+
+  const selectedProject = useMemo(
+    () => projects.find((p) => p.id === selectedProjectId) ?? null,
+    [projects, selectedProjectId]
+  )
+
+  const unassignedCount = useMemo(
+    () => runs.filter((r) => !r.project_id).length,
+    [runs]
+  )
+
+  const loadProjectDetail = useCallback(async (projectId: string) => {
+    setHubLoading(true)
+    try {
+      const [r, o] = await Promise.all([
+        ListProjectRuns(projectId, 50) as unknown as Promise<InferenceRun[]>,
+        ListProjectOverlays(projectId) as unknown as Promise<ProjectOverlay[]>,
+      ])
+      setProjectRuns(r ?? [])
+      setProjectOverlays(o ?? [])
+    } catch (e) {
+      notifyError("Could not load project", e)
+      setProjectRuns([])
+      setProjectOverlays([])
+    } finally {
+      setHubLoading(false)
+    }
+  }, [])
+
+  const loadUnassigned = useCallback(async () => {
+    setHubLoading(true)
+    try {
+      const r = (await ListProjectRuns("", 50)) as unknown as InferenceRun[]
+      setProjectRuns(r ?? [])
+      setProjectOverlays([])
+    } catch (e) {
+      notifyError("Could not load unassigned runs", e)
+      setProjectRuns([])
+    } finally {
+      setHubLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (activeProjectId) {
+      setSelectedProjectId(activeProjectId)
+      if (hubView === "list" && !result) {
+        setHubView("detail")
+      }
+    }
+  }, [activeProjectId]) // eslint-disable-line react-hooks/exhaustive-deps — only react to map project changes
+
+  useEffect(() => {
+    if (hubView === "detail" && selectedProjectId) {
+      void loadProjectDetail(selectedProjectId)
+    } else if (hubView === "unassigned") {
+      void loadUnassigned()
+    }
+  }, [hubView, selectedProjectId, loadProjectDetail, loadUnassigned])
+
+  const [openedRunId, setOpenedRunId] = useState<string | null>(null)
+
+  const handleOpenRun = useCallback(
+    async (run: InferenceRun) => {
+      setOpenedRunId(run.id)
+      if (run.project_id) {
+        setSelectedProjectId(run.project_id)
+        setHubView("detail")
+      } else if (!run.project_id && hubView === "detail") {
+        // Opening an unassigned run from elsewhere — keep context.
+      }
+      await onOpenRun(run)
+    },
+    [onOpenRun, hubView]
+  )
 
   const toggleSelect = useCallback((id: string) => {
     setSelectedIds((prev) => {
@@ -80,10 +181,33 @@ export function AnalysisPage({
 
   const clearSelection = useCallback(() => setSelectedIds([]), [])
 
+  const scopedRuns = useMemo(() => {
+    if (hubView === "detail" && selectedProjectId) {
+      // Belt-and-suspenders: never mix in legacy/unassigned runs.
+      return projectRuns.filter(
+        (r) => !r.project_id || r.project_id === selectedProjectId
+      )
+    }
+    if (hubView === "unassigned") {
+      return projectRuns.filter((r) => !r.project_id)
+    }
+    if (selectedProjectId) {
+      return runs.filter((r) => r.project_id === selectedProjectId)
+    }
+    return runs
+  }, [hubView, projectRuns, runs, selectedProjectId])
+
+  const panelTitle = useMemo(() => {
+    if (hubView === "unassigned") return "Unassigned analyses"
+    if (selectedProject) return `Analyses · ${selectedProject.name}`
+    return "Saved analyses"
+  }, [hubView, selectedProject])
+
   const startCompare = useCallback(async () => {
     if (selectedIds.length !== 2) return
-    const runA = runs.find((r) => r.id === selectedIds[0])
-    const runB = runs.find((r) => r.id === selectedIds[1])
+    const pool = scopedRuns
+    const runA = pool.find((r) => r.id === selectedIds[0])
+    const runB = pool.find((r) => r.id === selectedIds[1])
     if (!runA || !runB) {
       notifyError("Selected analyses are no longer available")
       return
@@ -100,7 +224,7 @@ export function AnalysisPage({
     } finally {
       setComparing(false)
     }
-  }, [runs, selectedIds])
+  }, [scopedRuns, selectedIds])
 
   const exitCompare = useCallback(() => {
     setCompare(null)
@@ -118,6 +242,77 @@ export function AnalysisPage({
     })
   }, [])
 
+  const handleCreateProject = async () => {
+    const name = newName.trim()
+    if (!name) return
+    setCreating(true)
+    try {
+      const p = (await CreateProject(name, "")) as unknown as Project
+      await refreshProjects()
+      setNewName("")
+      setSelectedProjectId(p.id)
+      setHubView("detail")
+      notifySuccess("Project created", name)
+      onActivateProject?.(p.id)
+    } catch (e) {
+      notifyError("Could not create project", e)
+    } finally {
+      setCreating(false)
+    }
+  }
+
+  const handleDeleteProject = async (id: string) => {
+    try {
+      await DeleteProject(id)
+      await refreshProjects()
+      await refreshRuns()
+      if (selectedProjectId === id) {
+        setSelectedProjectId(null)
+        setHubView("list")
+      }
+      notifySuccess("Project deleted")
+    } catch (e) {
+      notifyError("Could not delete project", e)
+    }
+  }
+
+  const handleDeleteRun = useCallback(
+    async (run: InferenceRun) => {
+      const label = run.label || run.model_kind || "this analysis"
+      if (!window.confirm(`Delete “${label}”? This cannot be undone.`)) return
+      try {
+        await DeleteAnalysis(run.id)
+        await refreshRuns()
+        await refreshProjects()
+        if (hubView === "detail" && selectedProjectId) {
+          await loadProjectDetail(selectedProjectId)
+        } else if (hubView === "unassigned") {
+          await loadUnassigned()
+        }
+        clearSelection()
+        if (result && openedRunId === run.id) {
+          setOpenedRunId(null)
+          onBackToList()
+        }
+        notifySuccess("Analysis deleted")
+      } catch (e) {
+        notifyError("Could not delete analysis", e)
+      }
+    },
+    [
+      refreshRuns,
+      refreshProjects,
+      hubView,
+      selectedProjectId,
+      loadProjectDetail,
+      loadUnassigned,
+      clearSelection,
+      result,
+      openedRunId,
+      onBackToList,
+    ]
+  )
+
   if (compare) {
     return (
       <CompareAnalyses
@@ -133,15 +328,37 @@ export function AnalysisPage({
 
   const runsPanel = (
     <SavedRunsPanel
-      runs={runs}
-      loading={!!loadingRun || comparing}
+      title={panelTitle}
+      runs={scopedRuns}
+      loading={!!loadingRun || comparing || hubLoading}
       selectedIds={selectedIds}
       onToggleSelect={toggleSelect}
       onClearSelection={clearSelection}
       onCompare={() => void startCompare()}
       comparing={comparing}
-      onOpen={onOpenRun}
-      onRefresh={() => void refreshRuns()}
+      onOpen={handleOpenRun}
+      onDelete={(run) => void handleDeleteRun(run)}
+      onRefresh={() => {
+        void refreshRuns()
+        if (hubView === "detail" && selectedProjectId) void loadProjectDetail(selectedProjectId)
+        if (hubView === "unassigned") void loadUnassigned()
+      }}
+      projects={projects}
+      onAssignProject={
+        hubView === "unassigned"
+          ? async (runId, projectId) => {
+              try {
+                await SetRunProject(runId, projectId)
+                await refreshRuns()
+                await loadUnassigned()
+                await refreshProjects()
+                notifySuccess("Assigned to project")
+              } catch (e) {
+                notifyError("Could not assign run", e)
+              }
+            }
+          : undefined
+      }
     />
   )
 
@@ -153,14 +370,36 @@ export function AnalysisPage({
             <div className="min-w-0 max-w-xl">
               <p className="telemetry text-[10px] text-primary">ANALYSIS</p>
               <h1 className="mt-1 font-display text-xl font-semibold tracking-wide xl:text-2xl">
-                Saved analyses
+                {hubView === "list"
+                  ? "Projects"
+                  : hubView === "unassigned"
+                    ? "Unassigned"
+                    : selectedProject?.name || "Project"}
               </h1>
               <p className="mt-1 text-xs text-muted-foreground">
-                Open a saved run, or select two to compare. Results persist locally
-                after you close the app.
+                {hubView === "list"
+                  ? "Create a project for this farm / field — analyses and compositions stay together."
+                  : hubView === "unassigned"
+                    ? "Older classifications not yet attached to a project."
+                    : selectedProject?.notes ||
+                      "Analyses and overlays saved under this project."}
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
+              {(hubView === "detail" || hubView === "unassigned") && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setHubView("list")
+                    setSelectedProjectId(null)
+                    clearSelection()
+                  }}
+                  className="flex h-9 items-center gap-1.5 rounded-sm border border-border px-4 text-xs text-muted-foreground hover:bg-secondary hover:text-foreground"
+                >
+                  <ArrowLeft className="h-3.5 w-3.5" />
+                  All projects
+                </button>
+              )}
               <button
                 type="button"
                 onClick={onNewClassification}
@@ -179,7 +418,154 @@ export function AnalysisPage({
               </button>
             </div>
           </div>
-          {runsPanel}
+
+          {hubView === "list" && (
+            <>
+              <section className="rounded-md border border-border bg-card/40 p-5">
+                <div className="mb-3 flex flex-wrap items-end gap-2">
+                  <div className="min-w-0 flex-1">
+                    <p className="eyebrow !text-foreground mb-1.5">New project</p>
+                    <input
+                      value={newName}
+                      onChange={(e) => setNewName(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") void handleCreateProject()
+                      }}
+                      placeholder="e.g. Fazenda Norte — Talhão 3"
+                      className="h-9 w-full max-w-md rounded-sm border border-border bg-secondary/30 px-3 text-xs outline-none focus:border-primary"
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    disabled={creating || !newName.trim()}
+                    onClick={() => void handleCreateProject()}
+                    className="flex h-9 items-center gap-1.5 rounded-sm bg-primary px-4 text-xs font-semibold text-primary-foreground disabled:opacity-50"
+                  >
+                    <Plus className="h-3.5 w-3.5" />
+                    Create
+                  </button>
+                </div>
+              </section>
+
+              <section className="rounded-md border border-border bg-card/40 p-5">
+                <div className="mb-3 flex items-center gap-2">
+                  <FolderKanban className="h-3.5 w-3.5 text-primary" />
+                  <p className="eyebrow !text-foreground">Your projects</p>
+                </div>
+                {projects.length === 0 ? (
+                  <p className="text-xs text-muted-foreground">
+                    No projects yet. Create one so classifications and compositions
+                    stay organized by field.
+                  </p>
+                ) : (
+                  <ul className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                    {projects.map((p) => (
+                      <li key={p.id}>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelectedProjectId(p.id)
+                            setHubView("detail")
+                            clearSelection()
+                            onActivateProject?.(p.id)
+                          }}
+                          className="flex w-full flex-col gap-1 rounded-sm border border-border/60 bg-secondary/30 px-3 py-3 text-left hover:border-primary/40 hover:bg-secondary/50"
+                        >
+                          <span className="truncate text-xs font-medium text-foreground">
+                            {p.name}
+                          </span>
+                          <span className="telemetry text-[10px] text-muted-foreground">
+                            {p.run_count ?? 0} analyses · {p.overlay_count ?? 0}{" "}
+                            overlays
+                            {p.label ? ` · ${p.label}` : ""}
+                          </span>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                {unassignedCount > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setHubView("unassigned")
+                      clearSelection()
+                    }}
+                    className="mt-3 text-[11px] text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
+                  >
+                    {unassignedCount} unassigned{" "}
+                    {unassignedCount === 1 ? "analysis" : "analyses"}
+                  </button>
+                )}
+              </section>
+            </>
+          )}
+
+          {(hubView === "detail" || hubView === "unassigned") && (
+            <>
+              {hubView === "detail" && selectedProject && (
+                <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border/60 bg-secondary/20 px-3 py-2">
+                  <p className="text-[11px] text-muted-foreground">
+                    AOI:{" "}
+                    {selectedProject.label ||
+                      selectedProject.area_id ||
+                      (selectedProject.polygon_geojson ? "Custom polygon" : "Not set yet")}
+                  </p>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onActivateProject?.(selectedProject.id)
+                        goMap()
+                      }}
+                      className="flex h-8 items-center gap-1.5 rounded-sm border border-border px-3 text-[11px] text-muted-foreground hover:bg-secondary hover:text-foreground"
+                    >
+                      <MapIcon className="h-3 w-3" />
+                      Open on map
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void handleDeleteProject(selectedProject.id)}
+                      className="flex h-8 items-center gap-1.5 rounded-sm border border-border px-3 text-[11px] text-muted-foreground hover:text-destructive"
+                      title="Delete project (runs become unassigned)"
+                    >
+                      <Trash2 className="h-3 w-3" />
+                      Delete
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {hubView === "detail" && projectOverlays.length > 0 && (
+                <section className="rounded-md border border-border bg-card/40 p-5">
+                  <p className="eyebrow !text-foreground mb-3">Overlays</p>
+                  <ul className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
+                    {projectOverlays.map((o) => (
+                      <li
+                        key={o.id}
+                        className="overflow-hidden rounded-sm border border-border/60 bg-secondary/20"
+                      >
+                        <div className="aspect-square bg-secondary">
+                          {o.overlay_uri ? (
+                            <img
+                              src={o.overlay_uri}
+                              alt=""
+                              className="h-full w-full object-cover"
+                            />
+                          ) : null}
+                        </div>
+                        <p className="truncate px-2 py-1.5 text-[10px] text-foreground">
+                          {o.title}
+                        </p>
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              )}
+
+              {runsPanel}
+            </>
+          )}
         </div>
       </div>
     )
@@ -448,6 +834,7 @@ export function AnalysisPage({
 }
 
 function SavedRunsPanel({
+  title = "Saved analyses",
   runs,
   loading,
   selectedIds,
@@ -456,8 +843,12 @@ function SavedRunsPanel({
   onCompare,
   comparing,
   onOpen,
+  onDelete,
   onRefresh,
+  projects,
+  onAssignProject,
 }: {
+  title?: string
   runs: InferenceRun[]
   loading: boolean
   selectedIds: string[]
@@ -466,7 +857,10 @@ function SavedRunsPanel({
   onCompare: () => void
   comparing: boolean
   onOpen: (run: InferenceRun) => Promise<void>
+  onDelete?: (run: InferenceRun) => void
   onRefresh: () => void
+  projects?: Project[]
+  onAssignProject?: (runId: string, projectId: string) => void
 }) {
   const canCompare = selectedIds.length === 2 && !comparing
 
@@ -475,7 +869,7 @@ function SavedRunsPanel({
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2">
           <History className="h-3.5 w-3.5 text-primary" />
-          <p className="eyebrow !text-foreground">Saved analyses</p>
+          <p className="eyebrow !text-foreground">{title}</p>
         </div>
         <div className="flex items-center gap-2">
           {selectedIds.length > 0 && (
@@ -518,7 +912,8 @@ function SavedRunsPanel({
 
       {runs.length === 0 ? (
         <p className="text-xs text-muted-foreground">
-          No saved analyses yet. Classify an AOI on the map — results are stored locally.
+          No analyses in this project yet. Classify with this project active on the
+          map — or assign unassigned runs from the hub.
         </p>
       ) : (
         <ul className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
@@ -564,17 +959,48 @@ function SavedRunsPanel({
                     <div className="telemetry mt-1 text-[10px] text-muted-foreground/80">
                       {new Date(r.created_at).toLocaleString()}
                     </div>
+                    {onAssignProject && projects && projects.length > 0 && (
+                      <select
+                        className="mt-1.5 max-w-full rounded-sm border border-border bg-secondary/40 px-1.5 py-0.5 text-[10px] text-muted-foreground"
+                        defaultValue=""
+                        onClick={(e) => e.stopPropagation()}
+                        onChange={(e) => {
+                          const pid = e.target.value
+                          if (pid) onAssignProject(r.id, pid)
+                        }}
+                      >
+                        <option value="">Add to project…</option>
+                        {projects.map((p) => (
+                          <option key={p.id} value={p.id}>
+                            {p.name}
+                          </option>
+                        ))}
+                      </select>
+                    )}
                   </div>
                 </label>
-                <button
-                  type="button"
-                  disabled={loading}
-                  onClick={() => void onOpen(r)}
-                  className="flex h-8 shrink-0 items-center gap-1.5 rounded-sm border border-border px-3 text-[11px] text-muted-foreground hover:bg-secondary hover:text-foreground disabled:opacity-60"
-                >
-                  <FolderOpen className="h-3 w-3" />
-                  Open
-                </button>
+                <div className="flex shrink-0 items-center gap-1">
+                  <button
+                    type="button"
+                    disabled={loading}
+                    onClick={() => void onOpen(r)}
+                    className="flex h-8 items-center gap-1.5 rounded-sm border border-border px-3 text-[11px] text-muted-foreground hover:bg-secondary hover:text-foreground disabled:opacity-60"
+                  >
+                    <FolderOpen className="h-3 w-3" />
+                    Open
+                  </button>
+                  {onDelete && (
+                    <button
+                      type="button"
+                      disabled={loading}
+                      onClick={() => onDelete(r)}
+                      className="flex h-8 items-center justify-center rounded-sm border border-border px-2 text-muted-foreground hover:border-destructive/50 hover:text-destructive disabled:opacity-60"
+                      title="Delete analysis"
+                    >
+                      <Trash2 className="h-3 w-3" />
+                    </button>
+                  )}
+                </div>
               </li>
             )
           })}
