@@ -363,97 +363,73 @@ export function AnalysisPage({
   )
 
   if (!result) {
+    const hubSelection =
+      hubView === "list"
+        ? ("all" as const)
+        : hubView === "unassigned"
+          ? ("unassigned" as const)
+          : selectedProjectId ?? "all"
+
+    const hubActions = (
+      <>
+        <button
+          type="button"
+          onClick={onNewClassification}
+          className="flex h-9 items-center gap-1.5 rounded-sm bg-primary px-4 text-xs font-semibold text-primary-foreground"
+        >
+          <Plus className="h-3.5 w-3.5" />
+          New classification
+        </button>
+        <button
+          type="button"
+          onClick={goMap}
+          className="flex h-9 items-center gap-1.5 rounded-sm border border-border px-4 text-xs text-muted-foreground hover:bg-secondary hover:text-foreground"
+        >
+          <MapIcon className="h-3.5 w-3.5" />
+          Go to map
+        </button>
+      </>
+    )
+
     return (
       <div className="app-no-drag flex h-full min-h-0 flex-col overflow-hidden bg-background">
-        <div
-          className={cn(
-            "flex w-full min-h-0 flex-1 flex-col gap-4 px-5 py-5 sm:px-6 lg:px-8 xl:px-10",
-            hubView !== "list" && "overflow-y-auto"
-          )}
+        <ProjectsHub
+          projects={projects}
+          unassignedCount={unassignedCount}
+          selection={hubSelection}
+          creating={creating}
+          newName={newName}
+          onNewNameChange={setNewName}
+          onCreate={() => void handleCreateProject()}
+          onSelectAll={() => {
+            setHubView("list")
+            setSelectedProjectId(null)
+            clearSelection()
+          }}
+          onOpenProject={(id) => {
+            setSelectedProjectId(id)
+            setHubView("detail")
+            clearSelection()
+            onActivateProject?.(id)
+          }}
+          onOpenUnassigned={() => {
+            setHubView("unassigned")
+            setSelectedProjectId(null)
+            clearSelection()
+          }}
+          headerActions={hubActions}
         >
-          <div className="flex shrink-0 flex-wrap items-start justify-between gap-4">
-            <div className="min-w-0 max-w-xl">
-              <p className="telemetry text-[10px] text-primary">ANALYSIS</p>
-              {hubView !== "list" && (
-                <>
-                  <h1 className="mt-1 font-display text-xl font-semibold tracking-wide xl:text-2xl">
-                    {hubView === "unassigned"
-                      ? "Unassigned"
-                      : selectedProject?.name || "Project"}
-                  </h1>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    {hubView === "unassigned"
-                      ? "Older classifications not yet attached to a project."
-                      : selectedProject?.notes ||
-                        "Analyses and overlays saved under this project."}
-                  </p>
-                </>
-              )}
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-              {(hubView === "detail" || hubView === "unassigned") && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setHubView("list")
-                    setSelectedProjectId(null)
-                    clearSelection()
-                  }}
-                  className="flex h-9 items-center gap-1.5 rounded-sm border border-border px-4 text-xs text-muted-foreground hover:bg-secondary hover:text-foreground"
-                >
-                  <ArrowLeft className="h-3.5 w-3.5" />
-                  All projects
-                </button>
-              )}
-              <button
-                type="button"
-                onClick={onNewClassification}
-                className="flex h-9 items-center gap-1.5 rounded-sm bg-primary px-4 text-xs font-semibold text-primary-foreground"
-              >
-                <Plus className="h-3.5 w-3.5" />
-                New classification
-              </button>
-              <button
-                type="button"
-                onClick={goMap}
-                className="flex h-9 items-center gap-1.5 rounded-sm border border-border px-4 text-xs text-muted-foreground hover:bg-secondary hover:text-foreground"
-              >
-                <MapIcon className="h-3.5 w-3.5" />
-                Go to map
-              </button>
-            </div>
-          </div>
-
-          {hubView === "list" && (
-            <ProjectsHub
-              projects={projects}
-              unassignedCount={unassignedCount}
-              creating={creating}
-              newName={newName}
-              onNewNameChange={setNewName}
-              onCreate={() => void handleCreateProject()}
-              onOpenProject={(id) => {
-                setSelectedProjectId(id)
-                setHubView("detail")
-                clearSelection()
-                onActivateProject?.(id)
-              }}
-              onOpenUnassigned={() => {
-                setHubView("unassigned")
-                clearSelection()
-              }}
-            />
-          )}
-
           {(hubView === "detail" || hubView === "unassigned") && (
-            <>
+            <div className="flex flex-col gap-4">
               {hubView === "detail" && selectedProject && (
-                <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border/60 bg-secondary/20 px-3 py-2">
+                <div className="flex flex-wrap items-center justify-between gap-2 rounded-sm border border-border/60 bg-secondary/20 px-3 py-2">
                   <p className="text-[11px] text-muted-foreground">
                     AOI:{" "}
                     {selectedProject.label ||
                       selectedProject.area_id ||
-                      (selectedProject.polygon_geojson ? "Custom polygon" : "Not set yet")}
+                      (selectedProject.polygon_geojson
+                        ? "Custom polygon"
+                        : "Not set yet")}
                   </p>
                   <div className="flex gap-2">
                     <button
@@ -481,8 +457,8 @@ export function AnalysisPage({
               )}
 
               {hubView === "detail" && projectOverlays.length > 0 && (
-                <section className="rounded-md border border-border bg-card/40 p-5">
-                  <p className="eyebrow !text-foreground mb-3">Overlays</p>
+                <section className="rounded-sm border border-border/60 bg-card/30 p-4">
+                  <p className="eyebrow mb-3 !text-muted-foreground">Overlays</p>
                   <ul className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
                     {projectOverlays.map((o) => (
                       <li
@@ -508,9 +484,9 @@ export function AnalysisPage({
               )}
 
               {runsPanel}
-            </>
+            </div>
           )}
-        </div>
+        </ProjectsHub>
       </div>
     )
   }
