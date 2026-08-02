@@ -4,7 +4,6 @@ import {
   Columns2,
   Download,
   FolderOpen,
-  FolderKanban,
   History,
   Map as MapIcon,
   Plus,
@@ -40,6 +39,7 @@ import {
 } from "../../wailsjs/go/main/App"
 import { LulcSection } from "@/components/LulcSection"
 import { CompareAnalyses } from "@/components/CompareAnalyses"
+import { ProjectsHub } from "@/components/ProjectsHub"
 import { cn } from "@/lib/utils"
 
 const MAPBIOMAS_LEGEND = [
@@ -364,26 +364,31 @@ export function AnalysisPage({
 
   if (!result) {
     return (
-      <div className="app-no-drag flex h-full min-h-0 flex-col overflow-y-auto bg-background">
-        <div className="flex w-full flex-col gap-6 px-5 py-7 sm:px-6 lg:px-8 xl:px-10">
-          <div className="flex flex-wrap items-start justify-between gap-4">
+      <div className="app-no-drag flex h-full min-h-0 flex-col overflow-hidden bg-background">
+        <div
+          className={cn(
+            "flex w-full min-h-0 flex-1 flex-col gap-4 px-5 py-5 sm:px-6 lg:px-8 xl:px-10",
+            hubView !== "list" && "overflow-y-auto"
+          )}
+        >
+          <div className="flex shrink-0 flex-wrap items-start justify-between gap-4">
             <div className="min-w-0 max-w-xl">
               <p className="telemetry text-[10px] text-primary">ANALYSIS</p>
-              <h1 className="mt-1 font-display text-xl font-semibold tracking-wide xl:text-2xl">
-                {hubView === "list"
-                  ? "Projects"
-                  : hubView === "unassigned"
-                    ? "Unassigned"
-                    : selectedProject?.name || "Project"}
-              </h1>
-              <p className="mt-1 text-xs text-muted-foreground">
-                {hubView === "list"
-                  ? "Create a project for this farm / field — analyses and compositions stay together."
-                  : hubView === "unassigned"
-                    ? "Older classifications not yet attached to a project."
-                    : selectedProject?.notes ||
-                      "Analyses and overlays saved under this project."}
-              </p>
+              {hubView !== "list" && (
+                <>
+                  <h1 className="mt-1 font-display text-xl font-semibold tracking-wide xl:text-2xl">
+                    {hubView === "unassigned"
+                      ? "Unassigned"
+                      : selectedProject?.name || "Project"}
+                  </h1>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {hubView === "unassigned"
+                      ? "Older classifications not yet attached to a project."
+                      : selectedProject?.notes ||
+                        "Analyses and overlays saved under this project."}
+                  </p>
+                </>
+              )}
             </div>
             <div className="flex flex-wrap items-center gap-2">
               {(hubView === "detail" || hubView === "unassigned") && (
@@ -420,85 +425,24 @@ export function AnalysisPage({
           </div>
 
           {hubView === "list" && (
-            <>
-              <section className="rounded-md border border-border bg-card/40 p-5">
-                <div className="mb-3 flex flex-wrap items-end gap-2">
-                  <div className="min-w-0 flex-1">
-                    <p className="eyebrow !text-foreground mb-1.5">New project</p>
-                    <input
-                      value={newName}
-                      onChange={(e) => setNewName(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") void handleCreateProject()
-                      }}
-                      placeholder="e.g. Fazenda Norte — Talhão 3"
-                      className="h-9 w-full max-w-md rounded-sm border border-border bg-secondary/30 px-3 text-xs outline-none focus:border-primary"
-                    />
-                  </div>
-                  <button
-                    type="button"
-                    disabled={creating || !newName.trim()}
-                    onClick={() => void handleCreateProject()}
-                    className="flex h-9 items-center gap-1.5 rounded-sm bg-primary px-4 text-xs font-semibold text-primary-foreground disabled:opacity-50"
-                  >
-                    <Plus className="h-3.5 w-3.5" />
-                    Create
-                  </button>
-                </div>
-              </section>
-
-              <section className="rounded-md border border-border bg-card/40 p-5">
-                <div className="mb-3 flex items-center gap-2">
-                  <FolderKanban className="h-3.5 w-3.5 text-primary" />
-                  <p className="eyebrow !text-foreground">Your projects</p>
-                </div>
-                {projects.length === 0 ? (
-                  <p className="text-xs text-muted-foreground">
-                    No projects yet. Create one so classifications and compositions
-                    stay organized by field.
-                  </p>
-                ) : (
-                  <ul className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                    {projects.map((p) => (
-                      <li key={p.id}>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setSelectedProjectId(p.id)
-                            setHubView("detail")
-                            clearSelection()
-                            onActivateProject?.(p.id)
-                          }}
-                          className="flex w-full flex-col gap-1 rounded-sm border border-border/60 bg-secondary/30 px-3 py-3 text-left hover:border-primary/40 hover:bg-secondary/50"
-                        >
-                          <span className="truncate text-xs font-medium text-foreground">
-                            {p.name}
-                          </span>
-                          <span className="telemetry text-[10px] text-muted-foreground">
-                            {p.run_count ?? 0} analyses · {p.overlay_count ?? 0}{" "}
-                            overlays
-                            {p.label ? ` · ${p.label}` : ""}
-                          </span>
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-                {unassignedCount > 0 && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setHubView("unassigned")
-                      clearSelection()
-                    }}
-                    className="mt-3 text-[11px] text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
-                  >
-                    {unassignedCount} unassigned{" "}
-                    {unassignedCount === 1 ? "analysis" : "analyses"}
-                  </button>
-                )}
-              </section>
-            </>
+            <ProjectsHub
+              projects={projects}
+              unassignedCount={unassignedCount}
+              creating={creating}
+              newName={newName}
+              onNewNameChange={setNewName}
+              onCreate={() => void handleCreateProject()}
+              onOpenProject={(id) => {
+                setSelectedProjectId(id)
+                setHubView("detail")
+                clearSelection()
+                onActivateProject?.(id)
+              }}
+              onOpenUnassigned={() => {
+                setHubView("unassigned")
+                clearSelection()
+              }}
+            />
           )}
 
           {(hubView === "detail" || hubView === "unassigned") && (
