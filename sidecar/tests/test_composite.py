@@ -62,3 +62,23 @@ def test_presets_and_allowed():
     assert composite.RGB_PRESETS["true_color"] == ("B04", "B03", "B02")
     assert "ndvi" in composite.ALLOWED_INDICES
     assert "B11" in composite.ALLOWED_BANDS
+
+
+def test_write_rgba_geotiff(tmp_path):
+    from rasterio.transform import from_bounds
+
+    rgba = np.zeros((4, 4, 4), dtype=np.uint8)
+    rgba[..., :3] = 128
+    rgba[..., 3] = 255
+    rgba[0, 0, 3] = 0
+    transform = from_bounds(-50, -20, -49.9, -19.9, 4, 4)
+    profile = {
+        "height": 4,
+        "width": 4,
+        "crs": "EPSG:4326",
+        "transform": transform,
+    }
+    out = tmp_path / "comp.tif"
+    composite.write_rgba_geotiff(rgba, profile, out)
+    assert out.exists()
+    assert out.stat().st_size > 0

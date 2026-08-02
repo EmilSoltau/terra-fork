@@ -12,6 +12,7 @@ import (
 	"runtime"
 	"strings"
 	"sync"
+	"time"
 
 	wruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 )
@@ -442,6 +443,11 @@ func (r *Runner) Predict(ctx context.Context, req PredictRequest) (*PredictResul
 		Phenology:       sres.Phenology,
 		PhenologyStates: sres.PhenologyStates,
 		LULC:            convertLULC(sres.LULC),
+	}
+	if result.RasterTIF != "" {
+		if p, perr := promoteExportFile(result.RasterTIF, "classification.tif"); perr == nil {
+			result.RasterTIF = p
+		}
 	}
 	if result.DateRange == nil {
 		result.DateRange = []string{}
@@ -920,6 +926,7 @@ func (r *Runner) RenderComposite(ctx context.Context, req CompositeRequest) (*Co
 	var wrapped struct {
 		Extent     Bounds         `json:"extent"`
 		OverlayPNG string         `json:"overlay_png"`
+		RasterTIF  string         `json:"raster_tif"`
 		Meta       map[string]any `json:"meta"`
 	}
 	if err := json.Unmarshal([]byte(raw), &wrapped); err != nil {
@@ -932,9 +939,16 @@ func (r *Runner) RenderComposite(ctx context.Context, req CompositeRequest) (*Co
 	if err != nil {
 		return nil, fmt.Errorf("failed to encode composite PNG: %w", err)
 	}
+	rasterTIF := ""
+	if wrapped.RasterTIF != "" {
+		if p, perr := promoteExportFile(wrapped.RasterTIF, "composite.tif"); perr == nil {
+			rasterTIF = p
+		}
+	}
 	return &CompositeResult{
 		Extent:     wrapped.Extent,
 		OverlayURI: uri,
+		RasterTIF:  rasterTIF,
 		Meta:       wrapped.Meta,
 	}, nil
 }
@@ -946,4 +960,29 @@ func pngToDataURI(path string) (string, error) {
 		return "", err
 	}
 	return "data:image/png;base64," + base64.StdEncoding.EncodeToString(data), nil
+}
+
+// promoteExportFile copies a sidecar work-dir asset to a durable cache so the
+// path remains valid after the temporary work directory is removed.
+func promoteExportFile(src, basename string) (string, error) {
+	src = strings.TrimSpace(src)
+	if src == "" {
+		return "", fmt.Errorf("empty export source")
+	}
+	if _, err := os.Stat(src); err != nil {
+		return "", err
+	}
+	dir := filepath.Join(os.TempDir(), "geosense-exports")
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return "", err
+	}
+	dest := filepath.Join(dir, fmt.Sprintf("%d-%s", time.Now().UnixNano(), basename))
+	data, err := os.ReadFile(src)
+	if err != nil {
+		return "", err
+	}
+	if err := os.WriteFile(dest, data, 0o600); err != nil {
+		return "", err
+	}
+	return dest, nil
 }

@@ -159,6 +159,27 @@ def write_rgba_png(rgba: np.ndarray, out_path) -> None:
             dst.write(rgba[:, :, i], i + 1)
 
 
+def write_rgba_geotiff(rgba: np.ndarray, ref_profile: dict, out_path) -> None:
+    """Write (H,W,4) uint8 RGBA GeoTIFF using the reference grid georeferencing."""
+    import rasterio
+
+    h, w = rgba.shape[:2]
+    profile = {
+        "driver": "GTiff",
+        "height": h,
+        "width": w,
+        "count": 4,
+        "dtype": "uint8",
+        "crs": ref_profile.get("crs"),
+        "transform": ref_profile["transform"],
+        "compress": "lzw",
+        "photometric": "RGB",
+    }
+    with rasterio.open(out_path, "w", **profile) as dst:
+        for i in range(4):
+            dst.write(rgba[:, :, i], i + 1)
+
+
 def extent_from_profile(profile: dict) -> dict:
     """Lon/lat bounds from a rasterio-like profile (EPSG:4326 or projected)."""
     from pyproj import Transformer

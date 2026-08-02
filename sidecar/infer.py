@@ -1055,11 +1055,18 @@ def main():
 
         emit_progress(85, 'writing PNG')
         comp.write_rgba_png(rgba, overlay_png)
+        raster_tif = work_dir / 'composite.tif'
+        emit_progress(92, 'writing GeoTIFF')
+        try:
+            comp.write_rgba_geotiff(rgba, ref_prof, raster_tif)
+        except Exception as e:
+            fail(f'composite GeoTIFF failed: {e}')
         extent = comp.extent_from_profile(ref_prof)
         emit_progress(100, 'done')
         sys.stdout.write(json.dumps({
             'extent': extent,
             'overlay_png': str(overlay_png),
+            'raster_tif': str(raster_tif),
             'meta': meta,
         }))
         sys.stdout.flush()

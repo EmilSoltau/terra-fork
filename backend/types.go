@@ -232,11 +232,12 @@ type CompositeRequest struct {
 	StretchPct     []float64        `json:"stretch_pct,omitempty"`
 }
 
-// CompositeResult is a PNG overlay for map display.
+// CompositeResult is a PNG overlay for map display (+ optional GeoTIFF path).
 type CompositeResult struct {
-	Extent     Bounds            `json:"extent"`
-	OverlayURI string            `json:"overlay_uri"`
-	Meta       map[string]any    `json:"meta,omitempty"`
+	Extent     Bounds         `json:"extent"`
+	OverlayURI string         `json:"overlay_uri"`
+	RasterTIF  string         `json:"raster_tif,omitempty"`
+	Meta       map[string]any `json:"meta,omitempty"`
 }
 
 // sidecarResult is the raw JSON returned by the sidecar on stdout.

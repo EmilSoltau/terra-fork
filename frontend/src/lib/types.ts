@@ -256,6 +256,7 @@ export interface CompositeRequest {
 export interface CompositeResult {
   extent: Bounds
   overlay_uri: string
+  raster_tif?: string
   meta?: Record<string, unknown>
 }
 
@@ -272,4 +273,6 @@ export interface CompositionOverlay {
   bands?: [string, string, string]
   index?: CompositeIndex
   presetId?: string
+  /** Local GeoTIFF path for export (when available). */
+  raster_tif?: string
 }

@@ -11,6 +11,8 @@ export function CurrentUser():Promise<store.User>;
 
 export function ExportClassification(arg1:string):Promise<string>;
 
+export function ExportOverlayFile(arg1:string,arg2:string):Promise<string>;
+
 export function GeocodeSearch(arg1:string):Promise<Array<backend.GeocodeResult>>;
 
 export function GetBootLogs():Promise<Array<string>>;

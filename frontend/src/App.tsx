@@ -529,6 +529,7 @@ function AppBody(props: {
         bands: meta.bands,
         index: meta.index,
         presetId: meta.presetId,
+        raster_tif: res.raster_tif,
       })
       setShowCompositionOverlay(true)
       props.setShowPredictionOverlay(false)

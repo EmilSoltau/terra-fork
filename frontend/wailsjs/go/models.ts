@@ -154,6 +154,7 @@ export namespace backend {
 	export class CompositeResult {
 	    extent: Bounds;
 	    overlay_uri: string;
+	    raster_tif?: string;
 	    meta?: Record<string, any>;
 	
 	    static createFrom(source: any = {}) {
@@ -164,6 +165,7 @@ export namespace backend {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.extent = this.convertValues(source["extent"], Bounds);
 	        this.overlay_uri = source["overlay_uri"];
+	        this.raster_tif = source["raster_tif"];
 	        this.meta = source["meta"];
 	    }
 	

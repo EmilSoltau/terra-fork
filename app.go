@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -233,18 +234,40 @@ func (a *App) RenderComposite(req backend.CompositeRequest) (*backend.CompositeR
 
 // ExportClassification copies the classification GeoTIFF to a user-chosen path.
 func (a *App) ExportClassification(rasterPath string) (string, error) {
-	if strings.TrimSpace(rasterPath) == "" {
-		return "", errors.New("no raster to export")
+	return a.ExportOverlayFile(rasterPath, "terra_classification.tif")
+}
+
+// ExportOverlayFile saves an overlay asset via SaveFileDialog.
+// src may be a filesystem path or a data:image/png;base64,... URI.
+func (a *App) ExportOverlayFile(src string, defaultFilename string) (string, error) {
+	src = strings.TrimSpace(src)
+	if src == "" {
+		return "", errors.New("no overlay to export")
 	}
-	if _, err := os.Stat(rasterPath); err != nil {
-		return "", errors.New("classification raster not found (run Classify first)")
+	if strings.TrimSpace(defaultFilename) == "" {
+		defaultFilename = "terra_overlay.png"
 	}
-	dest, err := wruntime.SaveFileDialog(a.ctx, wruntime.SaveDialogOptions{
-		Title:           "Export classification GeoTIFF",
-		DefaultFilename: "terra_classification.tif",
-		Filters: []wruntime.FileFilter{
+
+	ext := strings.ToLower(filepath.Ext(defaultFilename))
+	filters := []wruntime.FileFilter{
+		{DisplayName: "PNG", Pattern: "*.png"},
+		{DisplayName: "GeoTIFF", Pattern: "*.tif;*.tiff"},
+	}
+	switch ext {
+	case ".tif", ".tiff":
+		filters = []wruntime.FileFilter{
 			{DisplayName: "GeoTIFF", Pattern: "*.tif;*.tiff"},
-		},
+		}
+	case ".png":
+		filters = []wruntime.FileFilter{
+			{DisplayName: "PNG", Pattern: "*.png"},
+		}
+	}
+
+	dest, err := wruntime.SaveFileDialog(a.ctx, wruntime.SaveDialogOptions{
+		Title:           "Export overlay",
+		DefaultFilename: defaultFilename,
+		Filters:         filters,
 	})
 	if err != nil {
 		return "", err
@@ -252,7 +275,22 @@ func (a *App) ExportClassification(rasterPath string) (string, error) {
 	if dest == "" {
 		return "", nil
 	}
-	in, err := os.Open(rasterPath)
+
+	if strings.HasPrefix(src, "data:") {
+		raw, err := decodeDataURI(src)
+		if err != nil {
+			return "", err
+		}
+		if err := os.WriteFile(dest, raw, 0o644); err != nil {
+			return "", err
+		}
+		return dest, nil
+	}
+
+	if _, err := os.Stat(src); err != nil {
+		return "", fmt.Errorf("overlay file not found (re-apply or re-run to regenerate): %s", src)
+	}
+	in, err := os.Open(src)
 	if err != nil {
 		return "", err
 	}
@@ -266,6 +304,15 @@ func (a *App) ExportClassification(rasterPath string) (string, error) {
 		return "", err
 	}
 	return dest, nil
+}
+
+func decodeDataURI(uri string) ([]byte, error) {
+	const marker = "base64,"
+	i := strings.Index(uri, marker)
+	if i < 0 {
+		return nil, errors.New("unsupported data URI")
+	}
+	return base64.StdEncoding.DecodeString(uri[i+len(marker):])
 }
 
 func (a *App) persistRunIfLoggedIn(req backend.PredictRequest, res *backend.PredictResult) {
