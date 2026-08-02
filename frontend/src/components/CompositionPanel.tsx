@@ -15,23 +15,10 @@ import type {
   CompositeKind,
   DataCubeScene,
 } from "@/lib/types"
+import { RGB_PRESETS, INDICES } from "@/lib/compositeCatalog"
 import { cn } from "@/lib/utils"
 
 const S2_BANDS = ["B02", "B03", "B04", "B05", "B06", "B07", "B08", "B8A", "B11", "B12"] as const
-
-const RGB_PRESETS: { id: string; label: string; bands: [string, string, string] }[] = [
-  { id: "true_color", label: "True color", bands: ["B04", "B03", "B02"] },
-  { id: "false_color_ir", label: "False color IR", bands: ["B08", "B04", "B03"] },
-  { id: "agriculture", label: "Agriculture", bands: ["B11", "B08", "B02"] },
-  { id: "swir", label: "SWIR", bands: ["B12", "B8A", "B04"] },
-]
-
-const INDICES: { id: CompositeIndex; label: string }[] = [
-  { id: "ndvi", label: "NDVI" },
-  { id: "ndwi", label: "NDWI" },
-  { id: "ndmi", label: "NDMI" },
-  { id: "evi", label: "EVI" },
-]
 
 function Section({
   step,

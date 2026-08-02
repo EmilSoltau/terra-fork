@@ -18,6 +18,7 @@ import { ControlPanel } from "@/components/ControlPanel"
 import { CompositionPanel } from "@/components/CompositionPanel"
 import { LeftDockRail, type LeftDockPanel } from "@/components/LeftDockRail"
 import { ResultsPanel } from "@/components/ResultsPanel"
+import { CompositionStatusPanel } from "@/components/CompositionStatusPanel"
 import { DataCubeModal } from "@/components/DataCubeModal"
 import { ConfidenceLegend } from "@/components/ConfidenceLegend"
 
@@ -111,6 +112,15 @@ export function MapScreen(props: MapScreenProps) {
   const selectDock = (id: LeftDockPanel) => {
     setLeftPanel((cur) => (cur === id ? null : id))
   }
+
+  const showCompositionStatus =
+    leftPanel === "compose" || (!props.result && !!props.composition)
+  const showPredictionStatus =
+    !showCompositionStatus && !!props.result
+
+  const selectedSceneDate =
+    props.composeScenes.find((s) => s.id === props.selectedSceneId)?.date ??
+    null
 
   return (
     <div className="relative h-full min-h-0 w-full">
@@ -236,10 +246,28 @@ export function MapScreen(props: MapScreenProps) {
         ) : null}
       </AnimatePresence>
 
-      <AnimatePresence>
-        {props.result && (
+      <AnimatePresence mode="wait" initial={false}>
+        {showCompositionStatus ? (
+          <CompositionStatusPanel
+            key="composition-status"
+            composition={props.composition}
+            sceneDate={selectedSceneDate}
+            composeOpacity={props.composeOpacity}
+            showCompositionOverlay={props.showCompositionOverlay}
+            onShowCompositionOverlayChange={
+              props.onShowCompositionOverlayChange
+            }
+            hasPrediction={!!props.result}
+            showPredictionOverlay={props.showPredictionOverlay}
+            onShowPredictionOverlayChange={
+              props.onShowPredictionOverlayChange
+            }
+            onClear={props.onClearComposition}
+          />
+        ) : showPredictionStatus ? (
           <ResultsPanel
-            result={props.result}
+            key="prediction-status"
+            result={props.result!}
             showPredictionOverlay={props.showPredictionOverlay}
             onShowPredictionOverlayChange={props.onShowPredictionOverlayChange}
             showConfidence={props.showConfidence}
@@ -251,7 +279,7 @@ export function MapScreen(props: MapScreenProps) {
             onClose={props.onCloseResult}
             onNewClassification={props.onNewClassification}
           />
-        )}
+        ) : null}
       </AnimatePresence>
 
       <DataCubeModal

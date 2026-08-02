@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { forwardRef, useState } from "react"
 import { motion } from "motion/react"
 import { X, ChevronDown, ChevronUp, ChartColumn, Plus } from "lucide-react"
 import type { PredictResult } from "@/lib/types"
@@ -18,19 +18,23 @@ interface ResultsPanelProps {
   onNewClassification: () => void
 }
 
-export function ResultsPanel({
-  result,
-  showPredictionOverlay,
-  onShowPredictionOverlayChange,
-  showConfidence,
-  onShowConfidenceChange,
-  confidenceOnTop,
-  onConfidenceOnTopChange,
-  smoothOverlay,
-  onSmoothOverlayChange,
-  onClose,
-  onNewClassification,
-}: ResultsPanelProps) {
+export const ResultsPanel = forwardRef<HTMLDivElement, ResultsPanelProps>(
+  function ResultsPanel(
+    {
+      result,
+      showPredictionOverlay,
+      onShowPredictionOverlayChange,
+      showConfidence,
+      onShowConfidenceChange,
+      confidenceOnTop,
+      onConfidenceOnTopChange,
+      smoothOverlay,
+      onSmoothOverlayChange,
+      onClose,
+      onNewClassification,
+    },
+    ref
+  ) {
   const [collapsed, setCollapsed] = useState(false)
   const { goAnalysis } = useAuth()
 
@@ -54,6 +58,7 @@ export function ResultsPanel({
 
   return (
     <motion.div
+      ref={ref}
       className="panel app-no-drag absolute bottom-3 left-[23.5rem] right-16 z-[1000] mx-auto max-w-[36rem] rounded-md"
       initial={{ opacity: 0, y: 24 }}
       animate={{ opacity: 1, y: 0 }}
@@ -191,4 +196,4 @@ export function ResultsPanel({
       )}
     </motion.div>
   )
-}
+})

@@ -33,6 +33,7 @@ import type {
   LeftDockTabsMode,
 } from "@/lib/types"
 import { leftDockTabsModeFromPrefs } from "@/lib/preferenceExtras"
+import { resolveCompositionMeta } from "@/lib/compositeCatalog"
 import { AuthProvider, useAuth } from "@/lib/auth"
 import { ThemeSync } from "@/components/ThemeSync"
 import { TitleBar } from "@/components/TitleBar"
@@ -492,14 +493,22 @@ function AppBody(props: {
       const res = (await RenderComposite(req as never)) as unknown as CompositeResult
       setComposeProgress(100)
       setComposeProgressMsg("done")
+      const meta = resolveCompositionMeta({
+        kind: composeKind,
+        bands: composeBands,
+        index: composeIndex,
+      })
       setComposition({
         overlay_uri: res.overlay_uri,
         extent: res.extent,
         opacity: composeOpacity,
-        label:
-          composeKind === "rgb"
-            ? `RGB ${composeBands.join("-")}`
-            : composeIndex.toUpperCase(),
+        label: meta.label,
+        title: meta.title,
+        description: meta.description,
+        kind: meta.kind,
+        bands: meta.bands,
+        index: meta.index,
+        presetId: meta.presetId,
       })
       setShowCompositionOverlay(true)
       props.setShowPredictionOverlay(false)

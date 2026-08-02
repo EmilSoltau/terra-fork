@@ -263,5 +263,13 @@ export interface CompositionOverlay {
   overlay_uri: string
   extent: Bounds
   opacity: number
+  /** Short telemetry line, e.g. "Agriculture · B11-B08-B02" */
   label?: string
+  /** Display name, e.g. "Agriculture" or "NDVI" */
+  title?: string
+  description?: string
+  kind?: CompositeKind
+  bands?: [string, string, string]
+  index?: CompositeIndex
+  presetId?: string
 }
