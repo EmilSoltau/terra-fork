@@ -1,8 +1,16 @@
-import { useEffect, useRef, useState } from "react"
-import { Camera, FolderOpen, History, LogOut, Save, Trash2 } from "lucide-react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import {
+  Camera,
+  ChartColumn,
+  FolderOpen,
+  LogOut,
+  Save,
+  Trash2,
+} from "lucide-react"
 import { useTheme } from "next-themes"
 import { useAuth } from "@/lib/auth"
 import { AvatarCircle } from "@/components/AvatarCircle"
+import { cn } from "@/lib/utils"
 import type { InferenceRun, LeftDockTabsMode, Preferences } from "@/lib/types"
 import {
   leftDockTabsModeFromPrefs,
@@ -10,6 +18,25 @@ import {
 } from "@/lib/preferenceExtras"
 
 const MAX_AVATAR_BYTES = 2_000_000
+
+type SettingsSectionId = "account" | "classification" | "appearance" | "session"
+
+const SECTIONS: {
+  id: SettingsSectionId
+  label: string
+  count: number
+}[] = [
+  { id: "account", label: "Account", count: 3 },
+  { id: "classification", label: "Classification", count: 2 },
+  { id: "appearance", label: "Appearance", count: 2 },
+  { id: "session", label: "Session", count: 1 },
+]
+
+const btnGhost =
+  "ar-ghost inline-flex h-8 items-center gap-1.5 rounded-sm border px-3 text-[11px] text-muted-foreground hover:text-foreground disabled:opacity-60"
+
+const btnPrimary =
+  "inline-flex h-8 items-center justify-center gap-1.5 rounded-sm bg-primary px-3 text-[11px] font-semibold text-primary-foreground disabled:opacity-60"
 
 export function ProfilePage({
   loadingRun,
@@ -29,6 +56,7 @@ export function ProfilePage({
     savePrefs,
     refreshRuns,
     goAuth,
+    goAnalysis,
   } = useAuth()
   const { setTheme: setNextTheme } = useTheme()
   const [name, setName] = useState("")
@@ -38,7 +66,22 @@ export function ProfilePage({
   const [leftDockTabs, setLeftDockTabs] =
     useState<LeftDockTabsMode>("retracted_only")
   const [busy, setBusy] = useState(false)
+  const [activeSection, setActiveSection] =
+    useState<SettingsSectionId>("account")
+  const [focusedSetting, setFocusedSetting] = useState<string | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
+  const contentRef = useRef<HTMLDivElement | null>(null)
+  const sectionRefs = useRef<Partial<Record<SettingsSectionId, HTMLElement | null>>>(
+    {}
+  )
+  const prefsReady = useRef(false)
+  const savePrefsTimer = useRef<number | null>(null)
+  const prefsDraftRef = useRef({
+    model: "spectral",
+    opacity: 0.75,
+    theme: "dark",
+    leftDockTabs: "retracted_only" as LeftDockTabsMode,
+  })
 
   useEffect(() => {
     if (!user) {
@@ -51,11 +94,101 @@ export function ProfilePage({
 
   useEffect(() => {
     if (!prefs) return
-    setModel(prefs.default_model || "spectral")
-    setOpacity(prefs.overlay_opacity ?? 0.75)
-    setTheme(prefs.theme || "dark")
-    setLeftDockTabs(leftDockTabsModeFromPrefs(prefs))
+    const next = {
+      model: prefs.default_model || "spectral",
+      opacity: prefs.overlay_opacity ?? 0.75,
+      theme: prefs.theme || "dark",
+      leftDockTabs: leftDockTabsModeFromPrefs(prefs),
+    }
+    setModel(next.model)
+    setOpacity(next.opacity)
+    setTheme(next.theme)
+    setLeftDockTabs(next.leftDockTabs)
+    prefsDraftRef.current = next
+    prefsReady.current = true
   }, [prefs])
+
+  const persistPreferences = useCallback(
+    async (next: {
+      model: string
+      opacity: number
+      theme: string
+      leftDockTabs: LeftDockTabsMode
+    }) => {
+      if (!user) return
+      const payload: Preferences = {
+        user_id: user.id,
+        default_model: next.model,
+        overlay_opacity: next.opacity,
+        theme: next.theme,
+        extras_json: mergePreferenceExtras(prefs?.extras_json, {
+          left_dock_tabs: next.leftDockTabs,
+        }),
+      }
+      await savePrefs(payload)
+      if (
+        next.theme === "dark" ||
+        next.theme === "light" ||
+        next.theme === "system"
+      ) {
+        setNextTheme(next.theme)
+      }
+    },
+    [prefs?.extras_json, savePrefs, setNextTheme, user]
+  )
+
+  const schedulePrefsSave = useCallback(
+    (patch: Partial<{
+      model: string
+      opacity: number
+      theme: string
+      leftDockTabs: LeftDockTabsMode
+    }>) => {
+      if (!prefsReady.current) return
+      prefsDraftRef.current = { ...prefsDraftRef.current, ...patch }
+      if (savePrefsTimer.current) window.clearTimeout(savePrefsTimer.current)
+      savePrefsTimer.current = window.setTimeout(() => {
+        void persistPreferences(prefsDraftRef.current)
+      }, 280)
+    },
+    [persistPreferences]
+  )
+
+  useEffect(() => {
+    return () => {
+      if (savePrefsTimer.current) window.clearTimeout(savePrefsTimer.current)
+    }
+  }, [])
+
+  const recentRuns = useMemo(() => runs.slice(0, 3), [runs])
+
+  const scrollToSection = (id: SettingsSectionId) => {
+    setActiveSection(id)
+    sectionRefs.current[id]?.scrollIntoView({ behavior: "smooth", block: "start" })
+  }
+
+  useEffect(() => {
+    const root = contentRef.current
+    if (!root) return
+    const nodes = SECTIONS.map((s) => sectionRefs.current[s.id]).filter(
+      Boolean
+    ) as HTMLElement[]
+    if (nodes.length === 0) return
+
+    const io = new IntersectionObserver(
+      (entries) => {
+        const visible = entries
+          .filter((e) => e.isIntersecting)
+          .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top)
+        const top = visible[0]?.target as HTMLElement | undefined
+        const id = top?.dataset.section as SettingsSectionId | undefined
+        if (id) setActiveSection(id)
+      },
+      { root, rootMargin: "-12% 0px -70% 0px", threshold: 0 }
+    )
+    for (const n of nodes) io.observe(n)
+    return () => io.disconnect()
+  }, [user])
 
   if (!user) return null
 
@@ -64,27 +197,6 @@ export function ProfilePage({
     setBusy(true)
     try {
       await updateProfile(name.trim())
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  const savePreferences = async () => {
-    setBusy(true)
-    try {
-      const next: Preferences = {
-        user_id: user.id,
-        default_model: model,
-        overlay_opacity: opacity,
-        theme,
-        extras_json: mergePreferenceExtras(prefs?.extras_json, {
-          left_dock_tabs: leftDockTabs,
-        }),
-      }
-      await savePrefs(next)
-      if (theme === "dark" || theme === "light" || theme === "system") {
-        setNextTheme(theme)
-      }
     } finally {
       setBusy(false)
     }
@@ -105,202 +217,383 @@ export function ProfilePage({
   }
 
   return (
-    <div className="app-no-drag flex h-full min-h-0 flex-col overflow-y-auto bg-background">
-      <div className="mx-auto flex w-full max-w-2xl flex-col gap-6 px-6 py-8">
-        <div className="flex items-center gap-4">
-          <AvatarCircle uri={user.avatar_uri} size="lg" />
-          <div>
-            <p className="telemetry text-[10px] text-primary">PROFILE</p>
-            <h1 className="mt-1 font-display text-xl font-semibold tracking-wide">{user.display_name}</h1>
-            <p className="mt-1 text-xs text-muted-foreground">{user.email}</p>
-          </div>
+    <div className="terra-workspace app-no-drag flex h-full min-h-0 overflow-hidden">
+      {/* TOC — VS Code settings tree */}
+      <aside className="ar-sidebar flex w-[15.5rem] shrink-0 flex-col">
+        <div className="border-b px-3 py-3" style={{ borderColor: "var(--ar-border)" }}>
+          <p className="telemetry text-[10px] text-primary">SETTINGS</p>
+          <p className="mt-1 truncate text-[12px] font-medium text-foreground">
+            User
+          </p>
         </div>
-
-        <section className="rounded-md border border-border bg-card/40 p-5">
-          <p className="eyebrow mb-3">Photo</p>
-          <div className="flex flex-wrap items-center gap-2">
-            <input
-              ref={fileRef}
-              type="file"
-              accept="image/png,image/jpeg,image/webp,image/gif"
-              className="hidden"
-              onChange={(e) => void onPickPhoto(e.target.files?.[0] ?? null)}
-            />
+        <nav className="flex-1 overflow-y-auto px-1.5 py-2">
+          {SECTIONS.map((s) => (
             <button
+              key={s.id}
               type="button"
-              disabled={busy}
-              onClick={() => fileRef.current?.click()}
-              className="flex h-8 items-center gap-1.5 rounded-sm border border-border px-3 text-[11px] text-muted-foreground hover:bg-secondary hover:text-foreground disabled:opacity-60"
+              onClick={() => scrollToSection(s.id)}
+              className={cn(
+                "ar-nav-item flex w-full items-center justify-between gap-2 px-2.5 py-1.5 text-left text-[12px]",
+                activeSection === s.id && "is-active"
+              )}
             >
-              <Camera className="h-3 w-3" />
-              Upload photo
+              <span className="truncate text-foreground/90">{s.label}</span>
+              <span className="telemetry shrink-0 text-[10px] text-muted-foreground">
+                ({s.count})
+              </span>
             </button>
-            {user.avatar_uri && (
-              <button
-                type="button"
-                disabled={busy}
-                onClick={() => void clearAvatar()}
-                className="flex h-8 items-center gap-1.5 rounded-sm border border-border px-3 text-[11px] text-muted-foreground hover:bg-secondary hover:text-foreground disabled:opacity-60"
-              >
-                <Trash2 className="h-3 w-3" />
-                Remove
-              </button>
-            )}
-            <span className="text-[10px] text-muted-foreground">PNG, JPEG or WebP · max 2 MB</span>
-          </div>
-        </section>
+          ))}
+        </nav>
+        <div
+          className="border-t px-3 py-2"
+          style={{ borderColor: "var(--ar-border)" }}
+        >
+          <button type="button" onClick={() => void logout()} className={btnGhost}>
+            <LogOut className="h-3 w-3" />
+            Sign out
+          </button>
+        </div>
+      </aside>
 
-        <section className="rounded-md border border-border bg-card/40 p-5">
-          <p className="eyebrow mb-3">Account</p>
-          <div className="flex flex-col gap-3">
-            <label className="flex flex-col gap-1">
-              <span className="eyebrow">Display name</span>
-              <input
-                className="field-input"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-              />
-            </label>
-            <label className="flex flex-col gap-1">
-              <span className="eyebrow">Email</span>
-              <input className="field-input opacity-70" value={user.email} readOnly />
-            </label>
-            <button
-              type="button"
-              disabled={busy || !name.trim()}
-              onClick={() => void saveAccount()}
-              className="flex h-9 w-fit items-center justify-center gap-1.5 rounded-sm bg-primary px-4 text-xs font-semibold text-primary-foreground disabled:opacity-60"
+      {/* Settings editor */}
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+        <header className="ar-header flex shrink-0 items-center justify-between gap-3 px-5 py-2.5">
+          <div className="flex items-center gap-4">
+            <span className="border-b border-foreground pb-0.5 text-[12px] font-medium text-foreground">
+              User
+            </span>
+            <span className="text-[12px] text-muted-foreground">{user.email}</span>
+          </div>
+          <span className="telemetry hidden text-[10px] text-muted-foreground sm:inline">
+            Changes apply automatically
+          </span>
+        </header>
+
+        <div ref={contentRef} className="min-h-0 flex-1 overflow-y-auto">
+          <div className="mx-auto w-full max-w-3xl px-5 py-4 sm:px-8">
+            <Section
+              id="account"
+              title="Account"
+              sectionRef={(el) => {
+                sectionRefs.current.account = el
+              }}
             >
-              <Save className="h-3 w-3" />
-              Save profile
-            </button>
-          </div>
-        </section>
-
-        <section className="rounded-md border border-border bg-card/40 p-5">
-          <p className="eyebrow mb-4">Preferences</p>
-          <div className="flex flex-col gap-4">
-            <label className="flex flex-col gap-1">
-              <span className="eyebrow">Default model</span>
-              <select
-                className="field-input"
-                value={model}
-                onChange={(e) => setModel(e.target.value)}
+              <SettingRow
+                id="account.photo"
+                title="Profile photo"
+                description="Shown in the app sidebar. PNG, JPEG or WebP, max 2 MB."
+                focused={focusedSetting === "account.photo"}
+                onFocus={() => setFocusedSetting("account.photo")}
               >
-                <option value="spectral">Random Forest (spectral)</option>
-                <option value="temporal_transformer">Temporal Transformer</option>
-                <option value="prithvi">Prithvi-EO 2.0</option>
-              </select>
-            </label>
-
-            <label className="flex flex-col gap-1">
-              <span className="eyebrow">Overlay opacity · {opacity.toFixed(2)}</span>
-              <input
-                type="range"
-                min={0.2}
-                max={1}
-                step={0.05}
-                value={opacity}
-                onChange={(e) => setOpacity(Number(e.target.value))}
-                className="w-full"
-              />
-            </label>
-
-            <label className="flex flex-col gap-1">
-              <span className="eyebrow">Theme</span>
-              <select
-                className="field-input"
-                value={theme}
-                onChange={(e) => setTheme(e.target.value)}
-              >
-                <option value="dark">Dark</option>
-                <option value="light">Light</option>
-                <option value="system">System</option>
-              </select>
-            </label>
-
-            <label className="flex flex-col gap-1">
-              <span className="eyebrow">Left dock tabs</span>
-              <select
-                className="field-input"
-                value={leftDockTabs}
-                onChange={(e) =>
-                  setLeftDockTabs(e.target.value as LeftDockTabsMode)
-                }
-              >
-                <option value="retracted_only">Only when panels are hidden</option>
-                <option value="always">Always visible</option>
-              </select>
-            </label>
-
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() => void savePreferences()}
-              className="flex h-9 w-fit items-center justify-center gap-1.5 rounded-sm bg-primary px-4 text-xs font-semibold text-primary-foreground disabled:opacity-60"
-            >
-              <Save className="h-3 w-3" />
-              Save preferences
-            </button>
-          </div>
-        </section>
-
-        <section className="rounded-md border border-border bg-card/40 p-5">
-          <div className="mb-3 flex items-center gap-2">
-            <History className="h-3.5 w-3.5 text-primary" />
-            <p className="eyebrow !text-foreground">Saved analyses</p>
-          </div>
-          {runs.length === 0 ? (
-            <p className="text-xs text-muted-foreground">
-              No saved analyses yet. Classify an area on the map — results are stored locally.
-            </p>
-          ) : (
-            <ul className="flex flex-col gap-2">
-              {runs.map((r) => (
-                <li
-                  key={r.id}
-                  className="flex items-center justify-between gap-3 rounded-sm border border-border/60 bg-secondary/30 px-3 py-2.5 text-xs"
-                >
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className="truncate font-medium text-foreground">
-                        {r.label || r.model_kind}
-                      </span>
-                      <span className="telemetry shrink-0 text-muted-foreground">
-                        {r.n_dates} scenes
-                      </span>
-                    </div>
-                    <div className="mt-0.5 text-muted-foreground">
-                      {r.model_kind} · {r.period_start} → {r.period_end}
-                    </div>
-                    <div className="telemetry mt-1 text-[10px] text-muted-foreground/80">
-                      {new Date(r.created_at).toLocaleString()}
-                    </div>
-                  </div>
+                <div className="flex flex-wrap items-center gap-3">
+                  <AvatarCircle uri={user.avatar_uri} size="lg" />
+                  <input
+                    ref={fileRef}
+                    type="file"
+                    accept="image/png,image/jpeg,image/webp,image/gif"
+                    className="hidden"
+                    onChange={(e) =>
+                      void onPickPhoto(e.target.files?.[0] ?? null)
+                    }
+                  />
                   <button
                     type="button"
-                    disabled={!!loadingRun}
-                    onClick={() => void onOpenRun(r)}
-                    className="flex h-8 shrink-0 items-center gap-1.5 rounded-sm border border-border px-3 text-[11px] text-muted-foreground hover:bg-secondary hover:text-foreground disabled:opacity-60"
+                    disabled={busy}
+                    onClick={() => fileRef.current?.click()}
+                    className={btnGhost}
                   >
-                    <FolderOpen className="h-3 w-3" />
-                    Open
+                    <Camera className="h-3 w-3" />
+                    Upload
                   </button>
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
+                  {user.avatar_uri && (
+                    <button
+                      type="button"
+                      disabled={busy}
+                      onClick={() => void clearAvatar()}
+                      className={btnGhost}
+                    >
+                      <Trash2 className="h-3 w-3" />
+                      Remove
+                    </button>
+                  )}
+                </div>
+              </SettingRow>
 
-        <button
-          type="button"
-          onClick={() => void logout()}
-          className="flex h-9 w-fit items-center justify-center gap-1.5 rounded-sm border border-border px-4 text-xs text-muted-foreground hover:bg-secondary hover:text-foreground"
-        >
-          <LogOut className="h-3 w-3" />
-          Sign out
-        </button>
+              <SettingRow
+                id="account.displayName"
+                title="Display name"
+                description="Name shown in the title bar and analysis headers."
+                focused={focusedSetting === "account.displayName"}
+                onFocus={() => setFocusedSetting("account.displayName")}
+              >
+                <div className="flex max-w-md flex-wrap items-center gap-2">
+                  <input
+                    className="field-input ar-inset max-w-xs"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    onFocus={() => setFocusedSetting("account.displayName")}
+                  />
+                  <button
+                    type="button"
+                    disabled={busy || !name.trim()}
+                    onClick={() => void saveAccount()}
+                    className={btnPrimary}
+                  >
+                    <Save className="h-3 w-3" />
+                    Save
+                  </button>
+                </div>
+              </SettingRow>
+
+              <SettingRow
+                id="account.email"
+                title="Email"
+                description="Local account identifier. Not editable."
+                focused={focusedSetting === "account.email"}
+                onFocus={() => setFocusedSetting("account.email")}
+              >
+                <input
+                  className="field-input ar-inset max-w-md opacity-70"
+                  value={user.email}
+                  readOnly
+                  onFocus={() => setFocusedSetting("account.email")}
+                />
+              </SettingRow>
+            </Section>
+
+            <Section
+              id="classification"
+              title="Classification"
+              sectionRef={(el) => {
+                sectionRefs.current.classification = el
+              }}
+            >
+              <SettingRow
+                id="classification.model"
+                title="Default model"
+                description="Model pre-selected when opening New classification on the map."
+                focused={focusedSetting === "classification.model"}
+                onFocus={() => setFocusedSetting("classification.model")}
+              >
+                <select
+                  className="field-input ar-inset max-w-md"
+                  value={model}
+                  onFocus={() => setFocusedSetting("classification.model")}
+                  onChange={(e) => {
+                    const next = e.target.value
+                    setModel(next)
+                    schedulePrefsSave({ model: next })
+                  }}
+                >
+                  <option value="spectral">Random Forest (spectral)</option>
+                  <option value="temporal_transformer">
+                    Temporal Transformer
+                  </option>
+                  <option value="prithvi">Prithvi-EO 2.0</option>
+                </select>
+              </SettingRow>
+
+              <SettingRow
+                id="classification.opacity"
+                title={`Overlay opacity · ${opacity.toFixed(2)}`}
+                description="Default opacity for prediction and composition overlays on the map."
+                focused={focusedSetting === "classification.opacity"}
+                onFocus={() => setFocusedSetting("classification.opacity")}
+              >
+                <input
+                  type="range"
+                  min={0.2}
+                  max={1}
+                  step={0.05}
+                  value={opacity}
+                  className="w-full max-w-md accent-primary"
+                  onFocus={() => setFocusedSetting("classification.opacity")}
+                  onChange={(e) => {
+                    const next = Number(e.target.value)
+                    setOpacity(next)
+                    schedulePrefsSave({ opacity: next })
+                  }}
+                />
+              </SettingRow>
+            </Section>
+
+            <Section
+              id="appearance"
+              title="Appearance"
+              sectionRef={(el) => {
+                sectionRefs.current.appearance = el
+              }}
+            >
+              <SettingRow
+                id="appearance.theme"
+                title="Color theme"
+                description="Controls the overall light/dark appearance of TERRA."
+                focused={focusedSetting === "appearance.theme"}
+                onFocus={() => setFocusedSetting("appearance.theme")}
+              >
+                <select
+                  className="field-input ar-inset max-w-xs"
+                  value={theme}
+                  onFocus={() => setFocusedSetting("appearance.theme")}
+                  onChange={(e) => {
+                    const next = e.target.value
+                    setTheme(next)
+                    schedulePrefsSave({ theme: next })
+                  }}
+                >
+                  <option value="dark">Dark</option>
+                  <option value="light">Light</option>
+                  <option value="system">System</option>
+                </select>
+              </SettingRow>
+
+              <SettingRow
+                id="appearance.dock"
+                title="Left dock tabs"
+                description="When the map left dock tabs should stay visible."
+                focused={focusedSetting === "appearance.dock"}
+                onFocus={() => setFocusedSetting("appearance.dock")}
+              >
+                <select
+                  className="field-input ar-inset max-w-md"
+                  value={leftDockTabs}
+                  onFocus={() => setFocusedSetting("appearance.dock")}
+                  onChange={(e) => {
+                    const next = e.target.value as LeftDockTabsMode
+                    setLeftDockTabs(next)
+                    schedulePrefsSave({ leftDockTabs: next })
+                  }}
+                >
+                  <option value="retracted_only">
+                    Only when panels are hidden
+                  </option>
+                  <option value="always">Always visible</option>
+                </select>
+              </SettingRow>
+            </Section>
+
+            <Section
+              id="session"
+              title="Session"
+              sectionRef={(el) => {
+                sectionRefs.current.session = el
+              }}
+            >
+              <SettingRow
+                id="session.analyses"
+                title="Saved analyses"
+                description="Full history lives in the Analysis hub. Recent runs are listed below."
+                focused={focusedSetting === "session.analyses"}
+                onFocus={() => setFocusedSetting("session.analyses")}
+              >
+                <button
+                  type="button"
+                  onClick={goAnalysis}
+                  className={btnGhost}
+                  onFocus={() => setFocusedSetting("session.analyses")}
+                >
+                  <ChartColumn className="h-3 w-3" />
+                  Open analyses
+                </button>
+                {recentRuns.length === 0 ? (
+                  <p className="mt-3 text-[11px] text-muted-foreground">
+                    No recent analyses yet.
+                  </p>
+                ) : (
+                  <ul className="mt-3 flex flex-col gap-1.5">
+                    {recentRuns.map((r) => (
+                      <li
+                        key={r.id}
+                        className="ar-raised flex items-center justify-between gap-3 px-3 py-2 text-[11px]"
+                      >
+                        <div className="min-w-0">
+                          <div className="truncate font-medium text-foreground">
+                            {r.label || r.model_kind}
+                          </div>
+                          <div className="mt-0.5 truncate text-muted-foreground">
+                            {r.model_kind} · {r.period_start} → {r.period_end}
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          disabled={!!loadingRun}
+                          onClick={() => void onOpenRun(r)}
+                          className={btnGhost}
+                        >
+                          <FolderOpen className="h-3 w-3" />
+                          Open
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </SettingRow>
+            </Section>
+          </div>
+        </div>
       </div>
+    </div>
+  )
+}
+
+function Section({
+  id,
+  title,
+  children,
+  sectionRef,
+}: {
+  id: SettingsSectionId
+  title: string
+  children: React.ReactNode
+  sectionRef: (el: HTMLElement | null) => void
+}) {
+  return (
+    <section
+      ref={sectionRef}
+      data-section={id}
+      className="mb-8 scroll-mt-3"
+    >
+      <h2 className="mb-1 border-b pb-2 font-display text-[15px] font-semibold tracking-wide text-foreground"
+        style={{ borderColor: "var(--ar-border)" }}
+      >
+        {title}
+      </h2>
+      <div className="flex flex-col">{children}</div>
+    </section>
+  )
+}
+
+function SettingRow({
+  id,
+  title,
+  description,
+  children,
+  focused,
+  onFocus,
+}: {
+  id: string
+  title: string
+  description: string
+  children: React.ReactNode
+  focused: boolean
+  onFocus: () => void
+}) {
+  return (
+    <div
+      data-setting={id}
+      className={cn(
+        "settings-row relative border-l-2 py-3.5 pl-4 pr-2 transition-colors",
+        focused
+          ? "border-[var(--ar-select)] bg-[var(--ar-raised)]"
+          : "border-transparent hover:bg-[color-mix(in_srgb,var(--ar-raised)_55%,transparent)]"
+      )}
+      onMouseDown={onFocus}
+    >
+      <div className="text-[13px] font-medium text-foreground">{title}</div>
+      <p className="mt-1 max-w-2xl text-[12px] leading-relaxed text-muted-foreground">
+        {description}
+      </p>
+      <div className="mt-2.5">{children}</div>
     </div>
   )
 }

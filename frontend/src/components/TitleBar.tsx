@@ -46,7 +46,7 @@ export function TitleBar({ view, result, projectSwitcher }: TitleBarProps) {
               ? "sign in"
               : screen === "analysis"
                 ? "analysis"
-                : "profile"}
+                : "settings"}
         </span>
         {projectSwitcher}
       </div>

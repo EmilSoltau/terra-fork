@@ -30,11 +30,11 @@ export function AuthPage() {
   }
 
   return (
-    <div className="app-no-drag flex h-full min-h-0 flex-col overflow-y-auto bg-background">
-      <div className="mx-auto flex w-full max-w-md flex-1 flex-col justify-center gap-6 px-6 py-10">
+    <div className="terra-workspace app-no-drag flex h-full min-h-0 flex-col overflow-y-auto">
+      <div className="mx-auto flex w-full max-w-md flex-1 flex-col justify-center gap-4 px-5 py-10 sm:px-6">
         <div>
           <p className="telemetry text-[10px] text-primary">AUTH</p>
-          <h1 className="mt-1 font-display text-xl font-semibold tracking-wide">
+          <h1 className="mt-0.5 font-display text-xl font-semibold tracking-wide">
             {mode === "login" ? "Sign in" : "Create account"}
           </h1>
           <p className="mt-1 text-xs text-muted-foreground">
@@ -42,8 +42,12 @@ export function AuthPage() {
           </p>
         </div>
 
-        <div className="flex gap-1 rounded-sm bg-secondary/60 p-0.5">
-          <TabButton active={mode === "login"} onClick={() => setMode("login")} icon={<LogIn className="h-3 w-3" />}>
+        <div className="ar-raised flex gap-0.5 p-0.5">
+          <TabButton
+            active={mode === "login"}
+            onClick={() => setMode("login")}
+            icon={<LogIn className="h-3 w-3" />}
+          >
             Login
           </TabButton>
           <TabButton
@@ -55,14 +59,17 @@ export function AuthPage() {
           </TabButton>
         </div>
 
-        <form onSubmit={submit} className="flex flex-col gap-3 rounded-md border border-border bg-card/40 p-5">
+        <form
+          onSubmit={submit}
+          className="ar-section flex flex-col gap-3 p-4"
+        >
           {mode === "register" && (
             <Field label="Display name">
               <input
                 required
                 value={displayName}
                 onChange={(e) => setDisplayName(e.target.value)}
-                className="field-input"
+                className="field-input ar-inset"
                 placeholder="Your name"
                 autoComplete="name"
               />
@@ -74,7 +81,7 @@ export function AuthPage() {
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="field-input"
+              className="field-input ar-inset"
               placeholder="you@example.com"
               autoComplete="email"
             />
@@ -86,9 +93,11 @@ export function AuthPage() {
               minLength={6}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="field-input"
+              className="field-input ar-inset"
               placeholder="Min. 6 characters"
-              autoComplete={mode === "login" ? "current-password" : "new-password"}
+              autoComplete={
+                mode === "login" ? "current-password" : "new-password"
+              }
             />
           </Field>
 
@@ -107,7 +116,13 @@ export function AuthPage() {
   )
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function Field({
+  label,
+  children,
+}: {
+  label: string
+  children: React.ReactNode
+}) {
   return (
     <label className="flex flex-col gap-1">
       <span className="eyebrow">{label}</span>
@@ -132,8 +147,8 @@ function TabButton({
       type="button"
       onClick={onClick}
       className={cn(
-        "flex flex-1 items-center justify-center gap-1.5 rounded-sm py-2 text-[11px] font-medium transition-colors",
-        active ? "bg-card text-foreground" : "text-muted-foreground hover:text-foreground"
+        "ar-nav-item flex flex-1 items-center justify-center gap-1.5 rounded-sm py-2 text-[11px] font-medium",
+        active && "is-active"
       )}
     >
       {icon}
