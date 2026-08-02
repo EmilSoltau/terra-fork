@@ -286,10 +286,10 @@
 }
 
 /*
-  Analysis result — Dark Modern plane language (scoped).
+  Workspace chrome — Dark Modern plane language (scoped).
   Accent / CTA stay TERRA ochre (--p-accent). Selection uses VS Code blue.
 */
-.analysis-result {
+.terra-workspace {
   --ar-bg: #1f1f1f;
   --ar-panel: #181818;
   --ar-raised: #252526;
@@ -300,7 +300,7 @@
   color: rgb(var(--p-text));
 }
 
-:root[data-theme="light"] .analysis-result {
+:root[data-theme="light"] .terra-workspace {
   --ar-bg: rgb(var(--p-ink));
   --ar-panel: rgb(var(--p-surface));
   --ar-raised: rgb(var(--p-surface-raised));
@@ -309,9 +309,14 @@
   --ar-muted: rgb(var(--p-muted));
 }
 
-.analysis-result .ar-header {
+.terra-workspace .ar-header {
   background: var(--ar-panel);
   border-bottom: 1px solid var(--ar-border);
+}
+
+.terra-workspace .ar-sidebar {
+  background: var(--ar-panel);
+  border-right: 1px solid var(--ar-border);
 }
 
 .ar-section {
@@ -354,6 +359,23 @@
 
 .ar-track {
   background: var(--ar-bg, rgb(var(--p-ink) / 0.55));
+}
+
+.ar-nav-item {
+  border-radius: var(--radius-sm);
+}
+
+.ar-nav-item:hover {
+  background: var(--ar-raised, rgb(var(--p-surface-raised)));
+}
+
+.ar-nav-item.is-active {
+  background: color-mix(
+    in srgb,
+    var(--ar-select, rgb(var(--p-accent))) 45%,
+    transparent
+  );
+  color: rgb(var(--p-text));
 }
 
 .hairline {

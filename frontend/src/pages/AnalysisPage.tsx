@@ -383,7 +383,7 @@ export function AnalysisPage({
         <button
           type="button"
           onClick={goMap}
-          className="flex h-9 items-center gap-1.5 rounded-sm border border-border px-4 text-xs text-muted-foreground hover:bg-secondary hover:text-foreground"
+          className="ar-ghost flex h-9 items-center gap-1.5 rounded-sm border px-4 text-xs text-muted-foreground hover:text-foreground"
         >
           <MapIcon className="h-3.5 w-3.5" />
           Go to map
@@ -392,7 +392,7 @@ export function AnalysisPage({
     )
 
     return (
-      <div className="app-no-drag flex h-full min-h-0 flex-col overflow-hidden bg-background">
+      <div className="terra-workspace app-no-drag flex h-full min-h-0 flex-col overflow-hidden">
         <ProjectsHub
           projects={projects}
           unassignedCount={unassignedCount}
@@ -420,9 +420,9 @@ export function AnalysisPage({
           headerActions={hubActions}
         >
           {(hubView === "detail" || hubView === "unassigned") && (
-            <div className="flex flex-col gap-4">
+            <div className="flex flex-col gap-3">
               {hubView === "detail" && selectedProject && (
-                <div className="flex flex-wrap items-center justify-between gap-2 rounded-sm border border-border/60 bg-secondary/20 px-3 py-2">
+                <div className="ar-raised flex flex-wrap items-center justify-between gap-2 px-3 py-2">
                   <p className="text-[11px] text-muted-foreground">
                     AOI:{" "}
                     {selectedProject.label ||
@@ -438,7 +438,7 @@ export function AnalysisPage({
                         onActivateProject?.(selectedProject.id)
                         goMap()
                       }}
-                      className="flex h-8 items-center gap-1.5 rounded-sm border border-border px-3 text-[11px] text-muted-foreground hover:bg-secondary hover:text-foreground"
+                      className="ar-ghost flex h-8 items-center gap-1.5 rounded-sm border px-3 text-[11px] text-muted-foreground hover:text-foreground"
                     >
                       <MapIcon className="h-3 w-3" />
                       Open on map
@@ -446,7 +446,7 @@ export function AnalysisPage({
                     <button
                       type="button"
                       onClick={() => void handleDeleteProject(selectedProject.id)}
-                      className="flex h-8 items-center gap-1.5 rounded-sm border border-border px-3 text-[11px] text-muted-foreground hover:text-destructive"
+                      className="ar-ghost flex h-8 items-center gap-1.5 rounded-sm border px-3 text-[11px] text-muted-foreground hover:text-destructive"
                       title="Delete project (runs become unassigned)"
                     >
                       <Trash2 className="h-3 w-3" />
@@ -457,15 +457,12 @@ export function AnalysisPage({
               )}
 
               {hubView === "detail" && projectOverlays.length > 0 && (
-                <section className="rounded-sm border border-border/60 bg-card/30 p-4">
+                <section className="ar-section p-4">
                   <p className="eyebrow mb-3 !text-muted-foreground">Overlays</p>
                   <ul className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
                     {projectOverlays.map((o) => (
-                      <li
-                        key={o.id}
-                        className="overflow-hidden rounded-sm border border-border/60 bg-secondary/20"
-                      >
-                        <div className="aspect-square bg-secondary">
+                      <li key={o.id} className="ar-raised overflow-hidden">
+                        <div className="ar-inset aspect-square border-0">
                           {o.overlay_uri ? (
                             <img
                               src={o.overlay_uri}
@@ -532,7 +529,7 @@ export function AnalysisPage({
     "ar-ghost flex h-8 items-center gap-1.5 rounded-sm border px-3 text-[11px] text-muted-foreground hover:text-foreground"
 
   return (
-    <div className="analysis-result app-no-drag flex h-full min-h-0 flex-col overflow-hidden">
+    <div className="terra-workspace app-no-drag flex h-full min-h-0 flex-col overflow-hidden">
       <header className="ar-header sticky top-0 z-10 shrink-0 px-5 py-3.5 sm:px-6 lg:px-8">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="min-w-0 flex-1">

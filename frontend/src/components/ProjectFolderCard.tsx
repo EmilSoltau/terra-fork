@@ -45,21 +45,22 @@ export function ProjectFolderCard({
       type="button"
       onClick={onOpen}
       className={cn(
-        "group flex w-full flex-col rounded-sm border text-left transition-colors",
-        selected
-          ? "border-border bg-surface-raised"
-          : "border-border/60 bg-surface hover:border-border hover:bg-surface-raised",
+        "group flex w-full flex-col text-left transition-colors",
+        selected ? "ar-select" : "ar-raised hover:brightness-110",
         "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary/50",
         className
       )}
     >
       <div
         className="flex min-h-0 flex-1 items-center justify-center px-4 pt-5 pb-2"
-        style={{ background: "rgb(var(--p-ink) / 0.28)" }}
+        style={{
+          background: "var(--ar-bg, rgb(var(--p-ink)))",
+          borderBottom: "1px solid var(--ar-border, rgb(var(--p-line) / 0.35))",
+        }}
       >
         <FolderGlyph className="h-14 w-[4.25rem] shrink-0 transition-transform group-hover:scale-[1.04]" />
       </div>
-      <div className="mt-auto min-w-0 border-t border-border/40 px-3.5 py-3">
+      <div className="mt-auto min-w-0 px-3.5 py-3">
         <p className="truncate font-display text-sm font-semibold tracking-wide text-foreground">
           {project.name}
         </p>

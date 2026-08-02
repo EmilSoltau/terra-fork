@@ -67,12 +67,8 @@ export function ProjectsHub({
           "Analyses and overlays saved under this project."
 
   return (
-    <div className="flex h-full min-h-0 w-full">
-      {/* Explorer — tonal lift only, quiet chrome */}
-      <aside
-        className="flex w-[16.5rem] shrink-0 flex-col border-r border-border/70"
-        style={{ background: "rgb(var(--p-surface-raised))" }}
-      >
+    <div className="terra-workspace flex h-full min-h-0 w-full">
+      <aside className="ar-sidebar flex w-[16.5rem] shrink-0 flex-col">
         <div className="flex shrink-0 items-center justify-between gap-2 px-3.5 pb-2 pt-4">
           <div className="min-w-0">
             <p className="font-display text-sm font-semibold tracking-wide text-foreground">
@@ -87,7 +83,7 @@ export function ProjectsHub({
             type="button"
             title="New project"
             onClick={() => setShowCreate(true)}
-            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-sm text-muted-foreground hover:bg-ink/35 hover:text-foreground"
+            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-sm text-muted-foreground hover:bg-[var(--ar-raised)] hover:text-foreground"
           >
             <Plus className="h-3.5 w-3.5" />
           </button>
@@ -100,8 +96,7 @@ export function ProjectsHub({
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Search…"
-              className="h-8 w-full rounded-sm border border-border/80 py-0 pl-8 pr-2 text-[11px] outline-none placeholder:text-muted-foreground/70 focus:border-primary/60"
-              style={{ background: "rgb(var(--p-ink) / 0.4)" }}
+              className="ar-inset h-8 w-full py-0 pl-8 pr-2 text-[11px] outline-none placeholder:text-muted-foreground/70 focus:border-primary/60"
             />
           </label>
         </div>
@@ -111,10 +106,10 @@ export function ProjectsHub({
             type="button"
             onClick={onSelectAll}
             className={cn(
-              "mb-1 flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-[11px]",
+              "ar-nav-item mb-1 flex w-full items-center gap-2 px-2 py-1.5 text-left text-[11px]",
               selection === "all"
-                ? "bg-ink/45 text-foreground"
-                : "text-muted-foreground hover:bg-ink/30 hover:text-foreground"
+                ? "is-active"
+                : "text-muted-foreground hover:text-foreground"
             )}
           >
             <FolderKanban className="h-3.5 w-3.5 shrink-0 text-primary/75" />
@@ -135,10 +130,10 @@ export function ProjectsHub({
                     type="button"
                     onClick={() => onOpenProject(p.id)}
                     className={cn(
-                      "flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-[11px]",
+                      "ar-nav-item flex w-full items-center gap-2 px-2 py-1.5 text-left text-[11px]",
                       active
-                        ? "bg-ink/45 text-foreground"
-                        : "text-muted-foreground hover:bg-ink/30 hover:text-foreground"
+                        ? "is-active"
+                        : "text-muted-foreground hover:text-foreground"
                     )}
                   >
                     <FolderKanban
@@ -166,10 +161,10 @@ export function ProjectsHub({
             type="button"
             onClick={onOpenUnassigned}
             className={cn(
-              "mt-3 flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-[11px]",
+              "ar-nav-item mt-3 flex w-full items-center gap-2 px-2 py-1.5 text-left text-[11px]",
               selection === "unassigned"
-                ? "bg-ink/45 text-foreground"
-                : "text-muted-foreground hover:bg-ink/30 hover:text-foreground"
+                ? "is-active"
+                : "text-muted-foreground hover:text-foreground"
             )}
           >
             <Inbox className="h-3.5 w-3.5 shrink-0" />
@@ -183,7 +178,13 @@ export function ProjectsHub({
         </div>
 
         {showCreate && (
-          <div className="shrink-0 border-t border-border/60 bg-ink/25 p-3">
+          <div
+            className="shrink-0 p-3"
+            style={{
+              borderTop: "1px solid var(--ar-border)",
+              background: "var(--ar-bg)",
+            }}
+          >
             <input
               value={newName}
               onChange={(e) => onNewNameChange(e.target.value)}
@@ -196,8 +197,7 @@ export function ProjectsHub({
               }}
               autoFocus
               placeholder="Project name"
-              className="h-8 w-full rounded-sm border border-border/80 px-2 text-[11px] outline-none focus:border-primary/60"
-              style={{ background: "rgb(var(--p-ink) / 0.4)" }}
+              className="ar-inset h-8 w-full px-2 text-[11px] outline-none focus:border-primary/60"
             />
             <div className="mt-1.5 flex gap-1">
               <button
@@ -214,7 +214,7 @@ export function ProjectsHub({
                   setShowCreate(false)
                   onNewNameChange("")
                 }}
-                className="h-7 rounded-sm border border-border/70 px-2 text-[10px] text-muted-foreground hover:bg-ink/35"
+                className="ar-ghost h-7 rounded-sm border px-2 text-[10px] text-muted-foreground"
               >
                 Cancel
               </button>
@@ -223,15 +223,8 @@ export function ProjectsHub({
         )}
       </aside>
 
-      {/* Main pane */}
-      <main
-        className="flex min-h-0 min-w-0 flex-1 flex-col"
-        style={{ background: "rgb(var(--p-ink))" }}
-      >
-        <header
-          className="flex shrink-0 flex-wrap items-start justify-between gap-3 border-b border-border/50 px-5 py-4 sm:px-6 lg:px-8"
-          style={{ background: "rgb(var(--p-surface) / 0.55)" }}
-        >
+      <main className="flex min-h-0 min-w-0 flex-1 flex-col">
+        <header className="ar-header flex shrink-0 flex-wrap items-start justify-between gap-3 px-5 py-4 sm:px-6 lg:px-8">
           <div className="min-w-0">
             <p className="telemetry text-[10px] text-primary">ANALYSIS</p>
             <h1 className="mt-0.5 font-display text-xl font-semibold tracking-wide">
@@ -248,49 +241,46 @@ export function ProjectsHub({
           {children ? (
             children
           ) : filtered.length === 0 ? (
-              <div
-                className="flex min-h-[18rem] flex-col items-center justify-center rounded-sm border border-dashed border-border/60 px-6 py-16 text-center"
-                style={{ background: "rgb(var(--p-surface) / 0.4)" }}
-              >
-                <FolderKanban className="mb-3 h-8 w-8 text-primary/70" />
-                <p className="text-sm text-foreground">
-                  {projects.length === 0
-                    ? "No projects yet"
-                    : "No matching projects"}
-                </p>
-                <p className="mt-1 max-w-sm text-xs text-muted-foreground">
-                  {projects.length === 0
-                    ? "Create a project so classifications and compositions stay organized by field."
-                    : "Try a different search term."}
-                </p>
-                {projects.length === 0 && (
-                  <button
-                    type="button"
-                    onClick={() => setShowCreate(true)}
-                    className="mt-4 flex h-9 items-center gap-1.5 rounded-sm bg-primary px-4 text-xs font-semibold text-primary-foreground"
-                  >
-                    <Plus className="h-3.5 w-3.5" />
-                    New project
-                  </button>
-                )}
-              </div>
-            ) : (
-              <div>
-                <p className="eyebrow mb-3 !text-muted-foreground">Folders</p>
-                <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-                  {filtered.map((p) => (
-                    <li key={p.id} className="min-h-[10.5rem]">
-                      <ProjectFolderCard
-                        project={p}
-                        onOpen={() => onOpenProject(p.id)}
-                        selected={selection === p.id}
-                        className="h-full min-h-[10.5rem]"
-                      />
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
+            <div className="ar-section flex min-h-[18rem] flex-col items-center justify-center border-dashed px-6 py-16 text-center">
+              <FolderKanban className="mb-3 h-8 w-8 text-primary/70" />
+              <p className="text-sm text-foreground">
+                {projects.length === 0
+                  ? "No projects yet"
+                  : "No matching projects"}
+              </p>
+              <p className="mt-1 max-w-sm text-xs text-muted-foreground">
+                {projects.length === 0
+                  ? "Create a project so classifications and compositions stay organized by field."
+                  : "Try a different search term."}
+              </p>
+              {projects.length === 0 && (
+                <button
+                  type="button"
+                  onClick={() => setShowCreate(true)}
+                  className="mt-4 flex h-9 items-center gap-1.5 rounded-sm bg-primary px-4 text-xs font-semibold text-primary-foreground"
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                  New project
+                </button>
+              )}
+            </div>
+          ) : (
+            <div>
+              <p className="eyebrow mb-3 !text-muted-foreground">Folders</p>
+              <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                {filtered.map((p) => (
+                  <li key={p.id} className="min-h-[10.5rem]">
+                    <ProjectFolderCard
+                      project={p}
+                      onOpen={() => onOpenProject(p.id)}
+                      selected={selection === p.id}
+                      className="h-full min-h-[10.5rem]"
+                    />
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
         </div>
       </main>
     </div>
