@@ -25,37 +25,42 @@ The spectral Random Forest path reproduces the method described in:
 ## Research methods and feature requests
 
 TERRA is an open-source Earth Observation platform developed alongside an ongoing
-academic research program (undergraduate research, a Master’s degree, and planned
-doctoral work). The project is **research-driven**: the desktop app is where
-methods can be investigated, prototyped, validated, and eventually turned into
-usable remote-sensing workflows—not a product that dictates the science.
+academic research program, spanning undergraduate research, a Master's degree,
+and future doctoral work. Rather than being software-driven, the project is
+research-driven: the platform serves as a vehicle for investigating, developing,
+validating, and disseminating new methods that can ultimately improve practical
+Earth Observation and remote sensing workflows—a place where research ideas can
+be experimentally evaluated, refined, and eventually translated into tools that
+support real-world Earth Observation practice.
 
 Research capabilities—such as crop classification pipelines, change detection,
 image segmentation, topography-related workflows, canopy diagnostics, and other
-advanced EO methods—are not copied straight from published papers into the app.
-They follow a full research cycle: problem formulation, literature review,
-hypothesis development, experimental prototyping, algorithm design, validation,
-and iterative refinement. Methods from the literature are critically analyzed,
-adapted when appropriate, compared with alternatives, and extended when new ideas
-emerge, before they become part of the public platform.
+advanced Earth Observation methods—are not incorporated directly from published
+papers. Instead, they are developed through a complete research cycle involving
+problem formulation, literature review, scientific investigation, hypothesis
+development, experimental prototyping, algorithm design, validation, and
+iterative refinement. Existing methods from the literature are critically
+analyzed, adapted when appropriate, compared against alternative approaches,
+and, where possible, extended with new ideas before becoming part of the
+platform.
 
-While under active investigation, these modules live in a **private research
-repository**. Only after they reach an appropriate level of scientific maturity,
-reproducibility, technical validation, documentation, and usability are they
-exported and integrated into this public desktop application.
+These research modules are maintained in a private research repository while
+they are under active investigation. Only after reaching an appropriate level of
+scientific maturity, reproducibility, technical validation, documentation, and
+usability are they exported and integrated into the public desktop application.
 
-Two longer **user manuals** (general audience and academic/researcher—covering
-methods, model development, and validation) and related **scientific research
-reports** are being prepared in **Overleaf**. Until they are published, use the
-short [User guide](docs/USER_GUIDE.md) below.
+Two longer user manuals (one for a general audience and one for academic /
+research users, covering methods, model development, and validation) and related
+scientific research reports are being prepared in Overleaf. Until they are
+published, use the short [User guide](docs/USER_GUIDE.md) below.
 
-To discuss research directions or request features in these domains (e.g. crop
-classification, change detection, segmentation, canopy diagnostics, or other EO
-methods), contact
-**[joao_leonardi.melo@somosicev.com](mailto:joao_leonardi.melo@somosicev.com)** or
-**[opensource.leonardi@gmail.com](mailto:opensource.leonardi@gmail.com)**.
-Reserve [GitHub Issues](https://github.com/rexionmars/TERRA/issues) for bugs and
-improvements to functionality already available in the public project.
+If you would like to discuss research directions or request features in these
+domains (e.g. crop classification, change detection, segmentation, canopy
+diagnostics, or other Earth Observation methods), please contact
+**[joao_leonardi.melo@somosicev.com](mailto:joao_leonardi.melo@somosicev.com)**
+or **[opensource.leonardi@gmail.com](mailto:opensource.leonardi@gmail.com)**.
+GitHub Issues should be reserved for bug reports, feature requests, and
+improvements related to functionality already available in the public project.
 
 <p align="center">
   <img src="docs/img/new_version/terra_crop_classification.jpeg" alt="TERRA map workspace with classification and Overlay Tools" width="900" />
