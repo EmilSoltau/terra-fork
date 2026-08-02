@@ -6,6 +6,16 @@ commitment; items may move as research and user needs evolve.
 Track progress and proposals via [GitHub Issues](https://github.com/rexionmars/TERRA/issues)
 (label suggestions: `enhancement`, `packaging`, `analysis`).
 
+## Shipped recently
+
+Desktop product shell updates already on `main` (see gallery in the README):
+
+- [x] **Projects** hub, map project switcher, AOI vs `run-*` naming
+- [x] **Compositions** dock + **Overlay Tools** (visibility, swipe, opacity, export)
+- [x] Dark Modern **Analysis** / **Compare** / **Settings** workspaces
+- [x] **What’s New** modal after product version bumps
+- [x] Dual **LITE / FULL** installer packaging workflow (tag a MINOR to publish)
+
 ## Near term (packaging & distribution)
 
 - [ ] Cut a **MINOR** release (`v0.3.0`) that publishes LITE and FULL zip assets
@@ -16,11 +26,15 @@ Track progress and proposals via [GitHub Issues](https://github.com/rexionmars/T
 - [ ] Optional FULL variant (or documented path) that bundles **torch** for
       Temporal Transformer / Prithvi without a separate venv.
 - [ ] Keep wiki Install/User guide in sync when install story changes.
+- [ ] Publish the two long-form user manuals (general + academic/researcher).
 
 ## Product analysis (desktop)
 
-Prototypes already exist in related research notebooks; the goal is to expose
-them as first-class TERRA workflows (map overlays, charts, saved runs).
+Research-grade methods (change detection, crop diagnostics, topography-related
+workflows, segmentation, and similar) advance in a **private research
+repository** under literature review → implementation → tests, then export into
+TERRA when ready. To discuss those themes, contact the emails listed in the
+README research notice — not only GitHub Issues.
 
 | Theme | Direction |
 |-------|-----------|
@@ -56,3 +70,5 @@ them as first-class TERRA workflows (map overlays, charts, saved runs).
 Open an issue describing the user problem, a sketch of the UI/flow, and whether
 a research prototype already exists. Prefer small, reviewable PRs aligned with
 [CONTRIBUTING.md](../CONTRIBUTING.md) and SemVer ([RELEASING.md](RELEASING.md)).
+For research-method feature requests (crop change, segmentation, etc.), email
+the contacts in the README instead of (or in addition to) opening an issue.

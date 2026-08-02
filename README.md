@@ -5,9 +5,11 @@
 </p>
 
 Desktop application for land-cover classification from Sentinel-2 time series.
-Draw or import an area of interest, preview scenes, run a classifier, and inspect
-prediction overlays, confidence, phenology, and saved analyses — including
-side-by-side comparison of two runs.
+Draw or import an area of interest, organize work in **Projects**, preview
+band **compositions**, run a classifier, manage overlays from **Overlay Tools**,
+and inspect prediction confidence, phenology, and saved analyses — including
+side-by-side **Compare** of two runs. After updates, a **What’s New** modal
+summarizes product changes.
 
 Imagery is read on demand from the Sentinel-2 L2A STAC catalog (Microsoft
 Planetary Computer) as Cloud-Optimized GeoTIFFs — only the polygon window and the
@@ -20,11 +22,31 @@ The spectral Random Forest path reproduces the method described in:
 > Series.* XLIV Brazilian Symposium on Telecommunications and Signal Processing
 > (SBrT 2026), Salvador, BA, Brazil.
 
+### Research methods and feature requests
+
+> **TERRA is an open-source product shell.** Capabilities such as crop
+> classification pipelines, change detection, topography-related workflows,
+> segmentation, and similar research-grade methods are developed under academic
+> review (literature → implementation → tests) in a **private research
+> repository**, then exported into this project when they are ready for the
+> desktop app.
+>
+> If you want to request or discuss features in those domains (e.g. crop change,
+> segmentation, canopy diagnostics), please contact
+> **[joao_leonardi.melo@somosicev.com](mailto:joao_leonardi.melo@somosicev.com)**
+> or **[opensource.leonardi@gmail.com](mailto:opensource.leonardi@gmail.com)**.
+> GitHub Issues remain the right place for bugs and UI/product shell
+> improvements already in scope here.
+
+Two longer **user manuals** are in preparation: one for a general audience, and
+one for academic / research users (methods, model development, and validation).
+Until they ship, use the short [User guide](docs/USER_GUIDE.md) below.
+
 <p align="center">
-  <img src="docs/img/KML_ROI.jpeg" alt="TERRA map with a custom AOI over Campo Maior, Piauí" width="900" />
+  <img src="docs/img/new_version/terra_crop_classification.jpeg" alt="TERRA map workspace with classification and Overlay Tools" width="900" />
 </p>
 
-<p align="center"><em>Map workspace — AOI, period, model, and Classify</em></p>
+<p align="center"><em>Map workspace — classify an AOI, then manage overlays in Overlay Tools</em></p>
 
 ## Statement of need
 
@@ -47,7 +69,8 @@ account for the app itself.
 
 | Doc | Contents |
 |-----|----------|
-| [User guide](docs/USER_GUIDE.md) | AOI → classify → Analysis → Compare |
+| [User guide](docs/USER_GUIDE.md) | AOI → Projects → classify → Overlay Tools → Analysis → Compare |
+| User manuals (in preparation) | General audience + academic/researcher manuals (methods & models) |
 | [Install](docs/INSTALL.md) | LITE vs FULL releases, Python env, from-source |
 | [Releasing](docs/RELEASING.md) | SemVer tags, when to bump, when not to release |
 | [Roadmap](docs/ROADMAP.md) | Planned packaging and analysis features |
@@ -63,27 +86,53 @@ account for the app itself.
    `pip install -r requirements.txt` for **LITE** (see [Install](docs/INSTALL.md)).
 2. Download from [releases](https://github.com/rexionmars/TERRA/releases) **or** run `wails dev` from source.
 3. Open TERRA (set `GEOSENSE_PYTHON` only if using LITE / a custom interpreter).
-4. Select embedded area **A** (or draw an AOI), set a seasonal date range, model **spectral**.
-5. Click **Classify** and inspect overlays / class stats in Analysis.
+4. Create or open a **Project**, set an AOI (embedded area **A**, draw, or import),
+   pick a seasonal date range, model **spectral**, then **Classify**.
+5. Use **Overlay Tools** (top-right) for prediction/composition visibility, swipe,
+   opacity, and export — then open **Analysis** for cover map, VI, and phenology.
 
 Full walkthrough: [docs/USER_GUIDE.md](docs/USER_GUIDE.md).
 
 ## Overview
 
+- Organize work in **Projects** (AOI name vs inference **run-*** labels stay
+  separate); switch projects from the title bar.
 - Select any area: draw a polygon, search a location, or import a KML/GeoJSON
   file. Three validated study areas from the reference work are included as
   examples.
+- Left dock: **New classification** or **Compositions** (RGB / indices on a
+  chosen Sentinel-2 scene).
 - Choose an acquisition period and a maximum cloud cover. By default one scene
   per month (lowest cloud cover) is selected; optionally preview the Sentinel-2
   data cube before classifying.
 - Run **Random Forest** (spectro-temporal features), **Temporal Transformer**,
   or **Prithvi-EO 2.0** embeddings (NASA/IBM), in map or temporal mode.
-- Inspect prediction and confidence overlays, MapBiomas reference layers, class
-  statistics, vegetation indices, and phenology.
-- Save analyses locally and **compare two runs** side by side (overlays, class
-  distribution, phenology / NDVI when available).
+- Manage prediction, confidence, and composition overlays from **Overlay Tools**
+  (visibility, swipe, opacity, AOI contour, export).
+- Inspect MapBiomas reference layers, class statistics, vegetation indices, and
+  phenology in **Analysis**; **Compare** two saved runs side by side.
+- **Settings** (account, classification defaults, appearance, session) and a
+  **What’s New** modal after version bumps.
 
 ## Gallery
+
+### Product UI
+
+| Projects | Classification map |
+|:--------:|:------------------:|
+| ![Projects hub](docs/img/new_version/terra_project_overview.jpeg) | ![Classification workspace](docs/img/new_version/terra_crop_classification.jpeg) |
+
+| Band compositions | Overlay Tools preview |
+|:-----------------:|:---------------------:|
+| ![Compositions panel](docs/img/new_version/terra_compsition_management.jpeg) | ![Overlay preview modal](docs/img/new_version/terra_run_modal_overlay_preview.jpeg) |
+
+| Analysis | Settings |
+|:--------:|:--------:|
+| ![Analysis overview](docs/img/new_version/terra_run_overview.jpeg) | ![Settings workspace](docs/img/new_version/terra_settings.jpeg) |
+
+<p align="center"><em>Projects, map + Overlay Tools, compositions, analysis, and Settings</em></p>
+
+### Model outputs
 
 | MapBiomas reference | Random Forest | Temporal Transformer |
 |:-------------------:|:-------------:|:--------------------:|
@@ -202,4 +251,6 @@ include Esri World Imagery and EOX Sentinel-2 cloudless 2025.
 MIT. See [LICENSE](LICENSE).
 
 Contributions, bug reports, and support requests: [CONTRIBUTING.md](CONTRIBUTING.md)
-and [GitHub Issues](https://github.com/rexionmars/TERRA/issues).
+and [GitHub Issues](https://github.com/rexionmars/TERRA/issues). For
+research-method feature requests, see the notice above and contact the listed
+emails.
