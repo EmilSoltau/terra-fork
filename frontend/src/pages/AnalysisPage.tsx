@@ -395,6 +395,10 @@ export function AnalysisPage({
     [plotAssets]
   )
 
+  useEffect(() => {
+    if (renamingTitle) titleInputRef.current?.focus()
+  }, [renamingTitle])
+
   if (compare) {
     return (
       <CompareAnalyses
@@ -604,10 +608,6 @@ export function AnalysisPage({
   const btnGhost =
     "ar-ghost flex h-8 items-center gap-1.5 rounded-sm border px-3 text-[11px] text-muted-foreground hover:text-foreground"
 
-  useEffect(() => {
-    if (renamingTitle) titleInputRef.current?.focus()
-  }, [renamingTitle])
-
   const startTitleRename = () => {
     if (!onAreaLabelChange) return
     cancelTitleRenameRef.current = false
@@ -697,8 +697,11 @@ export function AnalysisPage({
             <p className="mt-0.5 text-xs text-muted-foreground">
               {hasClassification ? (
                 <>
-                  {result.n_dates} scenes · {result.date_range[0]} →{" "}
-                  {result.date_range[1]} · {modelLabel}
+                  {result.n_dates} scenes
+                  {result.date_range?.[0] && result.date_range?.[1]
+                    ? ` · ${result.date_range[0]} → ${result.date_range[1]}`
+                    : ""}{" "}
+                  · {modelLabel}
                   {result.mean_confidence > 0 && (
                     <> · mean conf {(result.mean_confidence * 100).toFixed(0)}%</>
                   )}
