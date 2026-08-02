@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
-import { toast } from "sonner"
+import { notifyError, notifySuccess } from "@/lib/notify"
 import { useTheme } from "next-themes"
 import {
   ListEmbeddedAreas,
@@ -137,7 +137,7 @@ function App() {
   useEffect(() => {
     ListEmbeddedAreas()
       .then((a) => setAreas((a ?? []) as unknown as Area[]))
-      .catch((e) => toast.error("Failed to load examples: " + e))
+      .catch((e) => notifyError("Failed to load examples", e))
   }, [])
 
   useEffect(() => {
@@ -233,20 +233,20 @@ function App() {
             }
           }
         } catch (e) {
-          toast.error("Invalid file: " + e)
+          notifyError("Invalid file", e)
           return
         }
         if (!geom) {
-          toast.error("No polygon found in the file.")
+          notifyError("No polygon found in the file.")
           return
         }
         setActiveExample("")
         setCustomPolygon(geom)
-        toast.success("Polygon imported.")
+        notifySuccess("Polygon imported.")
       }
       input.click()
     } catch (e) {
-      toast.error("Import failed: " + e)
+      notifyError("Import failed", e)
     }
   }
 
@@ -370,11 +370,11 @@ function AppBody(props: {
 
   const handleViewDataCube = async () => {
     if (!props.start || !props.end) {
-      toast.error("Set the acquisition period.")
+      notifyError("Set the acquisition period.")
       return
     }
     if (!props.customPolygon && !props.activeExample) {
-      toast.error("Define an area: draw, search, or load an example.")
+      notifyError("Define an area: draw, search, or load an example.")
       return
     }
     const useExample =
@@ -398,7 +398,7 @@ function AppBody(props: {
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e)
       setDataCubeError(msg)
-      toast.error("Data cube error: " + msg)
+      notifyError("Data cube error", msg)
     } finally {
       setDataCubeLoading(false)
     }
@@ -406,11 +406,11 @@ function AppBody(props: {
 
   const handleRun = async () => {
     if (!props.start || !props.end) {
-      toast.error("Set the acquisition period.")
+      notifyError("Set the acquisition period.")
       return
     }
     if (!props.customPolygon && !props.activeExample) {
-      toast.error("Define an area: draw, search, or load an example.")
+      notifyError("Define an area: draw, search, or load an example.")
       return
     }
     props.setRunning(true)
@@ -438,7 +438,7 @@ function AppBody(props: {
         ? props.areas.find((a) => a.id === props.activeExample)?.label
         : "Custom AOI"
       props.setAnalysisLabel(label)
-      toast.success(`Classification complete — ${res.n_dates} scenes (saved).`, {
+      notifySuccess(`Classification complete — ${res.n_dates} scenes (saved).`, undefined, {
         action: {
           label: "View analysis",
           onClick: () => goAnalysis(),
@@ -446,7 +446,7 @@ function AppBody(props: {
       })
       void refreshRuns()
     } catch (e) {
-      toast.error("Inference error: " + e)
+      notifyError("Inference error", e)
     } finally {
       props.setRunning(false)
     }
@@ -456,7 +456,7 @@ function AppBody(props: {
     const useExample =
       !!props.activeExample && !!props.areas.find((a) => a.id === props.activeExample)
     if (!useExample && !props.customPolygon) {
-      toast.error("Draw a polygon or select example A/B/C.")
+      notifyError("Draw a polygon or select example A/B/C.")
       return
     }
     props.setLulcRunning(true)
@@ -520,12 +520,12 @@ function AppBody(props: {
         phenology_states: prev?.phenology_states ?? [],
         lulc,
       })
-      toast.success("Land cover / land use ready on map.", {
+      notifySuccess("Land cover / land use ready on map.", undefined, {
         action: { label: "Open analysis", onClick: () => goAnalysis() },
       })
       goMap()
     } catch (e) {
-      toast.error("LULC analysis error: " + e)
+      notifyError("LULC analysis error", e)
     } finally {
       props.setLulcRunning(false)
       props.setProgress(0)
@@ -561,9 +561,9 @@ function AppBody(props: {
           }
         }
         goAnalysis()
-        toast.success("Analysis restored.")
+        notifySuccess("Analysis restored.")
       } catch (e) {
-        toast.error("Could not load analysis: " + e)
+        notifyError("Could not load analysis", e)
       } finally {
         setLoadingRun(false)
       }

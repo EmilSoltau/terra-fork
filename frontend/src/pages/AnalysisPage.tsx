@@ -8,7 +8,7 @@ import {
   Map as MapIcon,
   Plus,
 } from "lucide-react"
-import { toast } from "sonner"
+import { notifyError, notifyExportFail, notifyExportOk } from "@/lib/notify"
 import {
   LineChart,
   Line,
@@ -85,7 +85,7 @@ export function AnalysisPage({
     const runA = runs.find((r) => r.id === selectedIds[0])
     const runB = runs.find((r) => r.id === selectedIds[1])
     if (!runA || !runB) {
-      toast.error("Selected analyses are no longer available")
+      notifyError("Selected analyses are no longer available")
       return
     }
     setComparing(true)
@@ -96,7 +96,7 @@ export function AnalysisPage({
       ])
       setCompare({ runA, runB, resultA, resultB })
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : String(e))
+      notifyError("Compare failed", e)
     } finally {
       setComparing(false)
     }
@@ -207,9 +207,9 @@ export function AnalysisPage({
     if (!result.raster_tif) return
     try {
       const dest = await ExportClassification(result.raster_tif)
-      if (dest) toast.success(`Exported to ${dest}`)
+      if (dest) notifyExportOk(dest)
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : String(e))
+      notifyExportFail(e)
     }
   }
 
