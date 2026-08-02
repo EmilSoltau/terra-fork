@@ -407,7 +407,11 @@ func (a *App) persistAnalysis(req backend.PredictRequest, res *backend.PredictRe
 		AssetsRelPath:  assetsRel,
 		NDates:         res.NDates,
 		Label:          label,
+		ProjectID:      strings.TrimSpace(req.ProjectID),
 	})
+	if strings.TrimSpace(req.ProjectID) != "" {
+		st.TouchProject(req.ProjectID)
+	}
 }
 
 // ListRuns returns recent inference runs (signed-in user, or local guest).
@@ -630,32 +634,20 @@ func (a *App) ClearAvatar() (*store.User, error) {
 	return updated, nil
 }
 
-// GetPreferences returns preferences for the logged-in user.
+// GetPreferences returns preferences for the logged-in user (or local guest).
 func (a *App) GetPreferences() (*store.Preferences, error) {
 	if err := a.requireStore(); err != nil {
 		return nil, err
 	}
-	a.mu.RLock()
-	u := a.currentUser
-	a.mu.RUnlock()
-	if u == nil {
-		return nil, store.ErrUnauthorized
-	}
-	return a.store.GetPreferences(u.ID)
+	return a.store.GetPreferences(a.effectiveUserID())
 }
 
-// SavePreferences persists preferences for the logged-in user.
+// SavePreferences persists preferences for the logged-in user (or local guest).
 func (a *App) SavePreferences(prefs store.Preferences) error {
 	if err := a.requireStore(); err != nil {
 		return err
 	}
-	a.mu.RLock()
-	u := a.currentUser
-	a.mu.RUnlock()
-	if u == nil {
-		return store.ErrUnauthorized
-	}
-	prefs.UserID = u.ID
+	prefs.UserID = a.effectiveUserID()
 	return a.store.SavePreferences(prefs)
 }
 

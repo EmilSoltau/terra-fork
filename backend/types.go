@@ -48,6 +48,8 @@ type PredictRequest struct {
 	ModelKind string `json:"model_kind"`
 	// PrithviMode is "pixel" or "patch" (used when ModelKind is "prithvi").
 	PrithviMode string `json:"prithvi_mode"`
+	// ProjectID optionally attaches the saved run to a project.
+	ProjectID string `json:"project_id,omitempty"`
 }
 
 // sidecarRequest is the JSON contract written to the Python sidecar stdin.

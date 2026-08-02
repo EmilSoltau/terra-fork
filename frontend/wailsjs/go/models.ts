@@ -540,6 +540,7 @@ export namespace backend {
 	    mode: string;
 	    model_kind: string;
 	    prithvi_mode: string;
+	    project_id?: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new PredictRequest(source);
@@ -557,6 +558,7 @@ export namespace backend {
 	        this.mode = source["mode"];
 	        this.model_kind = source["model_kind"];
 	        this.prithvi_mode = source["prithvi_mode"];
+	        this.project_id = source["project_id"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
@@ -683,6 +685,33 @@ export namespace backend {
 
 }
 
+export namespace main {
+	
+	export class SaveProjectOverlayRequest {
+	    project_id: string;
+	    kind: string;
+	    title: string;
+	    meta_json: string;
+	    overlay_uri: string;
+	    raster_tif: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new SaveProjectOverlayRequest(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.project_id = source["project_id"];
+	        this.kind = source["kind"];
+	        this.title = source["title"];
+	        this.meta_json = source["meta_json"];
+	        this.overlay_uri = source["overlay_uri"];
+	        this.raster_tif = source["raster_tif"];
+	    }
+	}
+
+}
+
 export namespace store {
 	
 	export class InferenceRun {
@@ -700,6 +729,7 @@ export namespace store {
 	    assets_relpath?: string;
 	    n_dates: number;
 	    label?: string;
+	    project_id?: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new InferenceRun(source);
@@ -721,6 +751,7 @@ export namespace store {
 	        this.assets_relpath = source["assets_relpath"];
 	        this.n_dates = source["n_dates"];
 	        this.label = source["label"];
+	        this.project_id = source["project_id"];
 	    }
 	}
 	export class Preferences {
@@ -741,6 +772,68 @@ export namespace store {
 	        this.overlay_opacity = source["overlay_opacity"];
 	        this.theme = source["theme"];
 	        this.extras_json = source["extras_json"];
+	    }
+	}
+	export class Project {
+	    id: string;
+	    user_id: string;
+	    name: string;
+	    notes?: string;
+	    created_at: string;
+	    updated_at: string;
+	    polygon_geojson?: string;
+	    area_id?: string;
+	    label?: string;
+	    run_count?: number;
+	    overlay_count?: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new Project(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.user_id = source["user_id"];
+	        this.name = source["name"];
+	        this.notes = source["notes"];
+	        this.created_at = source["created_at"];
+	        this.updated_at = source["updated_at"];
+	        this.polygon_geojson = source["polygon_geojson"];
+	        this.area_id = source["area_id"];
+	        this.label = source["label"];
+	        this.run_count = source["run_count"];
+	        this.overlay_count = source["overlay_count"];
+	    }
+	}
+	export class ProjectOverlay {
+	    id: string;
+	    project_id: string;
+	    kind: string;
+	    title: string;
+	    meta_json?: string;
+	    png_relpath?: string;
+	    tif_relpath?: string;
+	    created_at: string;
+	    overlay_uri?: string;
+	    raster_tif?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new ProjectOverlay(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.project_id = source["project_id"];
+	        this.kind = source["kind"];
+	        this.title = source["title"];
+	        this.meta_json = source["meta_json"];
+	        this.png_relpath = source["png_relpath"];
+	        this.tif_relpath = source["tif_relpath"];
+	        this.created_at = source["created_at"];
+	        this.overlay_uri = source["overlay_uri"];
+	        this.raster_tif = source["raster_tif"];
 	    }
 	}
 	export class User {
