@@ -39,7 +39,7 @@ export function AppSidebar({
         {!loading && (
           <NavItem
             active={screen === "auth" || screen === "profile"}
-            title={user ? "Profile" : "Sign in"}
+            title={user ? "Settings" : "Sign in"}
             onClick={() => (user ? goProfile() : goAuth())}
             icon={
               user?.avatar_uri ? (

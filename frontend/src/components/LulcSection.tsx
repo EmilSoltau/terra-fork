@@ -9,10 +9,9 @@ const CALENDAR_NOTES: Record<string, string> = {
 interface LulcSectionProps {
   lulc: LULCAnalysis
   areaId?: string
-  areaLabel?: string
 }
 
-export function LulcSection({ lulc, areaId, areaLabel }: LulcSectionProps) {
+export function LulcSection({ lulc, areaId }: LulcSectionProps) {
   const m = lulc.metrics
   const calendar = areaId ? CALENDAR_NOTES[areaId] : undefined
   const hasCompare = (lulc.pred_vs_ref?.length ?? 0) > 0
@@ -24,7 +23,6 @@ export function LulcSection({ lulc, areaId, areaLabel }: LulcSectionProps) {
           <p className="eyebrow">Land cover / land use</p>
           <h2 className="mt-1 font-display text-base font-semibold tracking-wide">
             MapBiomas {lulc.year || 2023}
-            {areaLabel ? ` — ${areaLabel}` : ""}
           </h2>
           <p className="mt-1 text-[11px] text-muted-foreground">
             {lulc.source || "MapBiomas Collection 10"} · descriptive composition

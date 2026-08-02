@@ -228,3 +228,21 @@ func (a *App) UpdateProjectAOI(projectID, areaID, polygonGeoJSON, label string) 
 	}
 	return a.store.UpdateProject(userID, *p)
 }
+
+// UpdateProjectRunLabels renames all inference runs attached to a project.
+func (a *App) UpdateProjectRunLabels(projectID, label string) (int64, error) {
+	if err := a.requireStore(); err != nil {
+		return 0, err
+	}
+	projectID = strings.TrimSpace(projectID)
+	label = strings.TrimSpace(label)
+	if projectID == "" || label == "" {
+		return 0, errors.New("project id and label are required")
+	}
+	userID := a.effectiveUserID()
+	// Ensure the project belongs to this user.
+	if _, err := a.store.GetProject(userID, projectID); err != nil {
+		return 0, err
+	}
+	return a.store.UpdateProjectRunLabels(userID, projectID, label)
+}

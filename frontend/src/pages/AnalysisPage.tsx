@@ -47,6 +47,7 @@ import {
   type AnalysisPlotAsset,
 } from "@/components/AnalysisPlotModal"
 import { cn } from "@/lib/utils"
+import { displayRunLabel } from "@/lib/aoiLabel"
 
 const MAPBIOMAS_LEGEND = [
   { id: 3, name: "Forest Formation", color: "#006d2c" },
@@ -116,6 +117,14 @@ export function AnalysisPage({
     () => projects.find((p) => p.id === selectedProjectId) ?? null,
     [projects, selectedProjectId]
   )
+
+  const analysisProject = useMemo(() => {
+    const id = activeProjectId || selectedProjectId
+    if (!id) return null
+    return projects.find((p) => p.id === id) ?? selectedProject
+  }, [activeProjectId, selectedProjectId, projects, selectedProject])
+
+  const projectTitle = analysisProject?.name?.trim() || ""
 
   const unassignedCount = useMemo(
     () => runs.filter((r) => !r.project_id).length,
@@ -294,7 +303,7 @@ export function AnalysisPage({
 
   const handleDeleteRun = useCallback(
     async (run: InferenceRun) => {
-      const label = run.label || run.model_kind || "this analysis"
+      const label = displayRunLabel(run.label)
       if (!window.confirm(`Delete “${label}”? This cannot be undone.`)) return
       try {
         await DeleteAnalysis(run.id)
@@ -621,7 +630,11 @@ export function AnalysisPage({
       return
     }
     const next = titleDraft.trim()
-    if (next && onAreaLabelChange) onAreaLabelChange(next)
+    if (next && onAreaLabelChange) {
+      onAreaLabelChange(next)
+      void refreshRuns()
+      if (selectedProjectId) void loadProjectDetail(selectedProjectId)
+    }
     setRenamingTitle(false)
   }
 
@@ -637,16 +650,20 @@ export function AnalysisPage({
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="min-w-0 flex-1">
             <p className="telemetry text-[10px] text-primary">ANALYSIS</p>
+            <h1 className="mt-0.5 truncate font-display text-xl font-semibold tracking-wide xl:text-2xl">
+              {hasClassification ? "Cover map" : "Land cover / land use"}
+              {projectTitle ? ` — ${projectTitle}` : ""}
+            </h1>
             {renamingTitle ? (
               <form
-                className="mt-0.5 flex max-w-xl items-center gap-2"
+                className="mt-1.5 flex max-w-xl items-center gap-2"
                 onSubmit={(e) => {
                   e.preventDefault()
                   commitTitleRename()
                 }}
               >
-                <span className="shrink-0 font-display text-xl font-semibold tracking-wide text-muted-foreground xl:text-2xl">
-                  {hasClassification ? "Cover map" : "Land cover / land use"} —
+                <span className="telemetry shrink-0 text-[10px] text-muted-foreground">
+                  AOI
                 </span>
                 <input
                   ref={titleInputRef}
@@ -661,40 +678,42 @@ export function AnalysisPage({
                   onBlur={() => commitTitleRename()}
                   maxLength={64}
                   placeholder="Area name"
-                  aria-label="Area name"
-                  className="ar-inset min-w-0 flex-1 px-2 py-1 font-display text-xl font-semibold tracking-wide text-foreground outline-none focus:ring-1 focus:ring-primary/50 xl:text-2xl"
+                  aria-label="AOI name"
+                  className="ar-inset min-w-0 flex-1 px-2 py-1 text-sm font-medium text-foreground outline-none focus:ring-1 focus:ring-primary/50"
                 />
                 <button
                   type="submit"
                   className="flex size-8 shrink-0 items-center justify-center rounded-sm text-primary hover:bg-[var(--ar-raised)]"
-                  title="Save name"
+                  title="Save AOI name"
                 >
                   <Check className="size-4" />
                 </button>
               </form>
-            ) : (
-              <h1 className="mt-0.5 font-display text-xl font-semibold tracking-wide xl:text-2xl">
-                <span>
-                  {hasClassification ? "Cover map" : "Land cover / land use"}
+            ) : onAreaLabelChange || areaLabel ? (
+              <div className="mt-1.5 flex min-w-0 items-center gap-2">
+                <span className="telemetry shrink-0 text-[10px] text-muted-foreground">
+                  AOI
                 </span>
                 {onAreaLabelChange ? (
                   <button
                     type="button"
                     onClick={startTitleRename}
-                    title="Rename area"
-                    className="group ml-1 inline-flex max-w-full items-baseline gap-1.5 rounded-sm px-1 py-0.5 text-left hover:bg-[var(--ar-raised)]"
+                    title="Rename AOI"
+                    className="group inline-flex min-w-0 max-w-full items-center gap-1.5 rounded-sm px-1 py-0.5 text-left hover:bg-[var(--ar-raised)]"
                   >
-                    <span className="truncate">
-                      {areaLabel ? `— ${areaLabel}` : "— Name this area…"}
+                    <span className="truncate text-sm font-medium text-foreground">
+                      {areaLabel || "Name this area…"}
                     </span>
-                    <Pencil className="size-3.5 shrink-0 opacity-40 group-hover:opacity-90" />
+                    <Pencil className="size-3 shrink-0 opacity-40 group-hover:opacity-90" />
                   </button>
-                ) : areaLabel ? (
-                  <span>{` — ${areaLabel}`}</span>
-                ) : null}
-              </h1>
-            )}
-            <p className="mt-0.5 text-xs text-muted-foreground">
+                ) : (
+                  <span className="truncate text-sm font-medium text-foreground">
+                    {areaLabel}
+                  </span>
+                )}
+              </div>
+            ) : null}
+            <p className="mt-1 text-xs text-muted-foreground">
               {hasClassification ? (
                 <>
                   {result.n_dates} scenes
@@ -740,9 +759,7 @@ export function AnalysisPage({
 
       <div className="min-h-0 flex-1 overflow-y-auto">
         <div className="flex w-full flex-col gap-3 px-5 py-4 sm:px-6 lg:px-8">
-          {lulc && (
-            <LulcSection lulc={lulc} areaId={areaId} areaLabel={areaLabel} />
-          )}
+          {lulc && <LulcSection lulc={lulc} areaId={areaId} />}
 
           {hasClassification && (
             <section className="ar-section p-4">
@@ -1103,7 +1120,7 @@ function SavedRunsPanel({
                         </span>
                       )}
                       <span className="truncate font-medium text-foreground">
-                        {r.label || r.model_kind}
+                        {displayRunLabel(r.label)}
                       </span>
                       <span className="telemetry shrink-0 text-muted-foreground">
                         {r.n_dates} scenes
