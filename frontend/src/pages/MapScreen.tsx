@@ -251,10 +251,6 @@ export function MapScreen(props: MapScreenProps) {
             onModelKindChange={props.onModelKindChange}
             prithviMode={props.prithviMode}
             onPrithviModeChange={props.onPrithviModeChange}
-            overlayOpacity={props.overlayOpacity}
-            onOpacityChange={props.onOpacityChange}
-            smoothOverlay={props.smoothOverlay}
-            onSmoothOverlayChange={props.onSmoothOverlayChange}
             running={props.running}
             progress={props.progress}
             progressMsg={props.progressMsg}
@@ -293,8 +289,6 @@ export function MapScreen(props: MapScreenProps) {
             stretchLow={props.composeStretchLow}
             stretchHigh={props.composeStretchHigh}
             onStretchChange={props.onComposeStretchChange}
-            opacity={props.composeOpacity}
-            onOpacityChange={props.onComposeOpacityChange}
             running={props.composeRunning}
             progress={props.composeProgress}
             progressMsg={props.composeProgressMsg}
@@ -319,16 +313,6 @@ export function MapScreen(props: MapScreenProps) {
           <ResultsPanel
             key="prediction-status"
             result={props.result!}
-            showPredictionOverlay={props.showPredictionOverlay}
-            onShowPredictionOverlayChange={props.onShowPredictionOverlayChange}
-            showConfidence={props.showConfidence}
-            onShowConfidenceChange={props.onShowConfidenceChange}
-            confidenceOnTop={props.confidenceOnTop}
-            onConfidenceOnTopChange={props.onConfidenceOnTopChange}
-            smoothOverlay={props.smoothOverlay}
-            onSmoothOverlayChange={props.onSmoothOverlayChange}
-            swipeCompare={props.swipeCompare}
-            onSwipeCompareChange={props.onSwipeCompareChange}
             onClose={props.onCloseResult}
             onNewClassification={props.onNewClassification}
           />

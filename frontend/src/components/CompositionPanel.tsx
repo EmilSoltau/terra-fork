@@ -2,7 +2,6 @@ import { forwardRef, useMemo, useState } from "react"
 import { motion } from "motion/react"
 import {
   ChevronLeft,
-  Layers,
   Loader2,
   CheckCircle2,
   Pencil,
@@ -65,8 +64,6 @@ export interface CompositionPanelProps {
   stretchLow: number
   stretchHigh: number
   onStretchChange: (low: number, high: number) => void
-  opacity: number
-  onOpacityChange: (v: number) => void
   running: boolean
   progress: number
   progressMsg: string
@@ -107,8 +104,6 @@ export const CompositionPanel = forwardRef<
     stretchLow,
     stretchHigh,
     onStretchChange,
-    opacity,
-    onOpacityChange,
     running,
     progress,
     progressMsg,
@@ -383,18 +378,6 @@ export const CompositionPanel = forwardRef<
               />
             </div>
           </label>
-          <label className="flex flex-col gap-1 text-[10px] text-muted-foreground">
-            Opacity {Math.round(opacity * 100)}%
-            <input
-              type="range"
-              min={0.15}
-              max={1}
-              step={0.05}
-              value={opacity}
-              onChange={(e) => onOpacityChange(Number(e.target.value))}
-              className="w-full accent-primary"
-            />
-          </label>
 
           {running && (
             <div className="flex flex-col gap-1">
@@ -434,9 +417,9 @@ export const CompositionPanel = forwardRef<
               Apply
             </button>
           </div>
-          <p className="flex items-center gap-1 text-[10px] text-muted-foreground">
-            <Layers className="size-3" />
-            Applying hides the prediction overlay; toggle both from Results.
+          <p className="text-[10px] text-muted-foreground">
+            Applying hides the prediction overlay; toggle visibility and
+            opacity from Overlay Tools.
           </p>
         </Section>
       </motion.div>

@@ -39,10 +39,6 @@ interface ControlPanelProps {
   onModelKindChange: (m: ModelKind) => void
   prithviMode: "pixel" | "patch"
   onPrithviModeChange: (m: "pixel" | "patch") => void
-  overlayOpacity: number
-  onOpacityChange: (v: number) => void
-  smoothOverlay: boolean
-  onSmoothOverlayChange: (v: boolean) => void
   running: boolean
   progress: number
   progressMsg: string
@@ -101,10 +97,6 @@ export const ControlPanel = forwardRef<HTMLDivElement, ControlPanelProps>(
     onModelKindChange,
     prithviMode,
     onPrithviModeChange,
-    overlayOpacity,
-    onOpacityChange,
-    smoothOverlay,
-    onSmoothOverlayChange,
     running,
     progress,
     progressMsg,
@@ -387,35 +379,6 @@ export const ControlPanel = forwardRef<HTMLDivElement, ControlPanelProps>(
             Cumulative temporal mode is available with Random Forest only.
           </p>
         )}
-        <div className="flex flex-col gap-1">
-          <div className="flex items-center justify-between">
-            <span className="eyebrow">overlay opacity</span>
-            <span className="telemetry text-xs text-foreground">
-              {Math.round(overlayOpacity * 100)}%
-            </span>
-          </div>
-          <input
-            type="range"
-            min={0}
-            max={1}
-            step={0.05}
-            value={overlayOpacity}
-            onChange={(e) => onOpacityChange(parseFloat(e.target.value))}
-            className="accent-[var(--primary)]"
-          />
-        </div>
-        <label className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
-          <input
-            type="checkbox"
-            checked={smoothOverlay}
-            onChange={(e) => onSmoothOverlayChange(e.target.checked)}
-            className="accent-primary"
-          />
-          Smooth prediction overlay
-        </label>
-        <p className="-mt-1 text-[10px] leading-snug text-muted-foreground/80">
-          Contour style — solid classes, curved boundaries
-        </p>
       </Section>
 
       <div className="mt-auto flex flex-col gap-2 pt-2">
