@@ -188,6 +188,9 @@ export interface Preferences {
   extras_json?: string
 }
 
+/** How vertical left-dock tabs behave (stored in extras_json.left_dock_tabs). */
+export type LeftDockTabsMode = "retracted_only" | "always"
+
 export interface InferenceRun {
   id: string
   user_id: string
@@ -230,4 +233,35 @@ export interface DataCubeResult {
   date_range: string[]
   monthly_best: boolean
   max_cloud: number
+}
+
+export type CompositeKind = "rgb" | "index"
+export type CompositeIndex = "ndvi" | "ndwi" | "ndmi" | "evi"
+
+export interface CompositeRequest {
+  area_id: string
+  polygon_geojson: GeoJSONGeometry | null
+  start: string
+  end: string
+  max_cloud: number
+  monthly_best: boolean
+  tiles: string[]
+  scene_id: string
+  kind: CompositeKind
+  bands?: string[]
+  index?: CompositeIndex
+  stretch_pct?: number[]
+}
+
+export interface CompositeResult {
+  extent: Bounds
+  overlay_uri: string
+  meta?: Record<string, unknown>
+}
+
+export interface CompositionOverlay {
+  overlay_uri: string
+  extent: Bounds
+  opacity: number
+  label?: string
 }

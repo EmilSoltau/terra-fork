@@ -1,5 +1,5 @@
-import { useState } from "react"
-import { AnimatePresence, motion } from "motion/react"
+import { forwardRef, useState } from "react"
+import { motion } from "motion/react"
 import {
   Play,
   Loader2,
@@ -51,6 +51,10 @@ interface ControlPanelProps {
   onViewDataCube: () => void
   lulcRunning?: boolean
   dataCubeLoading?: boolean
+  /** Hide this panel (dock tabs remain). */
+  onCollapse?: () => void
+  /** Tailwind left offset, e.g. left-3 or left-14 */
+  panelOffsetClass?: string
 }
 
 function Section({
@@ -73,7 +77,8 @@ function Section({
   )
 }
 
-export function ControlPanel(props: ControlPanelProps) {
+export const ControlPanel = forwardRef<HTMLDivElement, ControlPanelProps>(
+  function ControlPanel(props, ref) {
   const {
     areas,
     activeExample,
@@ -108,43 +113,29 @@ export function ControlPanel(props: ControlPanelProps) {
     onViewDataCube,
     lulcRunning = false,
     dataCubeLoading = false,
+    onCollapse,
   } = props
 
-  const [collapsed, setCollapsed] = useState(false)
   const [showExamples, setShowExamples] = useState(false)
   const canLULC = hasArea
   const busy = running || lulcRunning || dataCubeLoading
 
   return (
-    <AnimatePresence mode="wait" initial={false}>
-      {collapsed ? (
-        <motion.button
-          key="collapsed"
-          onClick={() => setCollapsed(false)}
-          className="panel app-no-drag absolute left-3 top-3 z-[1000] flex h-9 w-9 items-center justify-center rounded-sm text-muted-foreground hover:text-foreground"
-          title="Show controls"
-          initial={{ opacity: 0, scale: 0.8 }}
-          animate={{ opacity: 1, scale: 1 }}
-          exit={{ opacity: 0, scale: 0.8 }}
-          transition={{ type: "spring", stiffness: 420, damping: 32 }}
-        >
-          <ChevronRight className="size-4" />
-        </motion.button>
-      ) : (
-        <motion.div
-          key="panel"
-          className="panel app-no-drag panel-scroll absolute left-3 top-3 bottom-3 z-[1000] flex w-[19rem] flex-col gap-4 overflow-y-auto rounded-md p-4"
-          initial={{ opacity: 0, x: -28 }}
-          animate={{ opacity: 1, x: 0 }}
-          exit={{ opacity: 0, x: -28 }}
-          transition={{ type: "spring", stiffness: 360, damping: 34 }}
-        >
+      <motion.div
+        ref={ref}
+        className={`panel app-no-drag panel-scroll absolute ${props.panelOffsetClass ?? "left-3"} top-3 bottom-3 z-[1000] flex w-[19rem] flex-col gap-4 overflow-y-auto rounded-md p-4`}
+        initial={{ opacity: 0, x: -28 }}
+        animate={{ opacity: 1, x: 0 }}
+        exit={{ opacity: 0, x: -28 }}
+        transition={{ type: "spring", stiffness: 360, damping: 34 }}
+      >
       <div className="flex items-center justify-between">
         <h1 className="text-sm font-semibold">New classification</h1>
         <button
-          onClick={() => setCollapsed(true)}
+          type="button"
+          onClick={() => onCollapse?.()}
           className="text-muted-foreground hover:text-foreground"
-          title="Collapse"
+          title="Hide panel"
         >
           <ChevronLeft className="size-4" />
         </button>
@@ -484,8 +475,6 @@ export function ControlPanel(props: ControlPanelProps) {
           )}
         </button>
       </div>
-        </motion.div>
-      )}
-    </AnimatePresence>
+      </motion.div>
   )
-}
+})

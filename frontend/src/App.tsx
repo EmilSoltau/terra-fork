@@ -7,6 +7,7 @@ import {
   Predict,
   AnalyzeLULC,
   ListDataCube,
+  RenderComposite,
   OpenExternal,
   RevealMainWindow,
 } from "../wailsjs/go/main/App"
@@ -23,7 +24,15 @@ import type {
   LULCAnalysis,
   DataCubeResult,
   DataCubeRequest,
+  DataCubeScene,
+  CompositionOverlay,
+  CompositeRequest,
+  CompositeKind,
+  CompositeIndex,
+  CompositeResult,
+  LeftDockTabsMode,
 } from "@/lib/types"
+import { leftDockTabsModeFromPrefs } from "@/lib/preferenceExtras"
 import { AuthProvider, useAuth } from "@/lib/auth"
 import { ThemeSync } from "@/components/ThemeSync"
 import { TitleBar } from "@/components/TitleBar"
@@ -113,6 +122,8 @@ function App() {
   const [lulcRunning, setLulcRunning] = useState(false)
   const [booting, setBooting] = useState(true)
   const [splashExiting, setSplashExiting] = useState(false)
+  const [leftDockTabs, setLeftDockTabs] =
+    useState<LeftDockTabsMode>("retracted_only")
   const { setTheme } = useTheme()
 
   const applyPrefs = useCallback(
@@ -130,6 +141,7 @@ function App() {
       if (p.theme === "dark" || p.theme === "light" || p.theme === "system") {
         setTheme(p.theme)
       }
+      setLeftDockTabs(leftDockTabsModeFromPrefs(p))
     },
     [setTheme]
   )
@@ -302,6 +314,7 @@ function App() {
             setAnalysisLabel={setAnalysisLabel}
             lulcRunning={lulcRunning}
             setLulcRunning={setLulcRunning}
+            leftDockTabs={leftDockTabs}
             onSelectExample={handleSelectExample}
             onClearArea={clearArea}
             onImportPolygon={handleImportPolygon}
@@ -357,6 +370,7 @@ function AppBody(props: {
   setAnalysisLabel: (v: string | undefined) => void
   lulcRunning: boolean
   setLulcRunning: (v: boolean) => void
+  leftDockTabs: LeftDockTabsMode
   onSelectExample: (id: string) => void
   onClearArea: () => void
   onImportPolygon: () => void
@@ -367,6 +381,125 @@ function AppBody(props: {
   const [dataCubeLoading, setDataCubeLoading] = useState(false)
   const [dataCubeError, setDataCubeError] = useState<string | null>(null)
   const [dataCubeResult, setDataCubeResult] = useState<DataCubeResult | null>(null)
+
+  const [composition, setComposition] = useState<CompositionOverlay | null>(null)
+  const [composeRunning, setComposeRunning] = useState(false)
+  const [composeProgress, setComposeProgress] = useState(0)
+  const [composeProgressMsg, setComposeProgressMsg] = useState("")
+  const [composeScenes, setComposeScenes] = useState<DataCubeScene[]>([])
+  const [composeScenesLoading, setComposeScenesLoading] = useState(false)
+  const [composeScenesError, setComposeScenesError] = useState<string | null>(null)
+  const [selectedSceneId, setSelectedSceneId] = useState("")
+  const [composeKind, setComposeKind] = useState<CompositeKind>("rgb")
+  const [composeBands, setComposeBands] = useState<[string, string, string]>([
+    "B04",
+    "B03",
+    "B02",
+  ])
+  const [composeIndex, setComposeIndex] = useState<CompositeIndex>("ndvi")
+  const [composeStretchLow, setComposeStretchLow] = useState(2)
+  const [composeStretchHigh, setComposeStretchHigh] = useState(98)
+  const [composeOpacity, setComposeOpacity] = useState(0.85)
+
+  const clearAreaAndComposition = useCallback(() => {
+    setComposition(null)
+    setComposeScenes([])
+    setSelectedSceneId("")
+    setComposeScenesError(null)
+    props.onClearArea()
+  }, [props.onClearArea])
+
+  const handleListComposeScenes = async () => {
+    if (!props.start || !props.end) {
+      toast.error("Set the acquisition period.")
+      return
+    }
+    if (!props.customPolygon && !props.activeExample) {
+      toast.error("Define an area: draw, search, or load an example.")
+      return
+    }
+    const useExample =
+      !!props.activeExample && !!props.areas.find((a) => a.id === props.activeExample)
+    const req: DataCubeRequest = {
+      area_id: useExample ? props.activeExample : "",
+      polygon_geojson: useExample ? null : props.customPolygon,
+      start: props.start,
+      end: props.end,
+      max_cloud: props.maxCloud,
+      monthly_best: props.monthlyBest,
+      tiles: [],
+    }
+    setComposeScenesLoading(true)
+    setComposeScenesError(null)
+    try {
+      const res = (await ListDataCube(req as never)) as unknown as DataCubeResult
+      setComposeScenes(res.scenes ?? [])
+      if ((res.scenes?.length ?? 0) === 0) {
+        toast.message("No scenes found for this period / cloud filter.")
+      } else if (!selectedSceneId && res.scenes[0]) {
+        setSelectedSceneId(res.scenes[0].id)
+      }
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e)
+      setComposeScenesError(msg)
+      toast.error("Scene list error: " + msg)
+    } finally {
+      setComposeScenesLoading(false)
+    }
+  }
+
+  const handleApplyComposition = async () => {
+    if (!selectedSceneId) {
+      toast.error("Select a scene first.")
+      return
+    }
+    if (!props.start || !props.end) {
+      toast.error("Set the acquisition period.")
+      return
+    }
+    if (!props.customPolygon && !props.activeExample) {
+      toast.error("Define an area first.")
+      return
+    }
+    const useExample =
+      !!props.activeExample && !!props.areas.find((a) => a.id === props.activeExample)
+    const req: CompositeRequest = {
+      area_id: useExample ? props.activeExample : "",
+      polygon_geojson: useExample ? null : props.customPolygon,
+      start: props.start,
+      end: props.end,
+      max_cloud: props.maxCloud,
+      monthly_best: props.monthlyBest,
+      tiles: [],
+      scene_id: selectedSceneId,
+      kind: composeKind,
+      bands: composeKind === "rgb" ? [...composeBands] : undefined,
+      index: composeKind === "index" ? composeIndex : undefined,
+      stretch_pct: [composeStretchLow, composeStretchHigh],
+    }
+    setComposeRunning(true)
+    setComposeProgress(5)
+    setComposeProgressMsg("requesting composite…")
+    try {
+      const res = (await RenderComposite(req as never)) as unknown as CompositeResult
+      setComposeProgress(100)
+      setComposeProgressMsg("done")
+      setComposition({
+        overlay_uri: res.overlay_uri,
+        extent: res.extent,
+        opacity: composeOpacity,
+        label:
+          composeKind === "rgb"
+            ? `RGB ${composeBands.join("-")}`
+            : composeIndex.toUpperCase(),
+      })
+      toast.success("Composition applied to map.")
+    } catch (e) {
+      toast.error("Composition error: " + e)
+    } finally {
+      setComposeRunning(false)
+    }
+  }
 
   const handleViewDataCube = async () => {
     if (!props.start || !props.end) {
@@ -628,6 +761,11 @@ function AppBody(props: {
               showConfidence={props.showConfidence}
               confidenceOnTop={props.confidenceOnTop}
               smoothOverlay={props.smoothOverlay}
+              composition={
+                composition
+                  ? { ...composition, opacity: composeOpacity }
+                  : null
+              }
               areaLabel={areaLabel}
               hasArea={props.hasArea}
               start={props.start}
@@ -640,6 +778,19 @@ function AppBody(props: {
               running={props.running}
               progress={props.progress}
               progressMsg={props.progressMsg}
+              composeRunning={composeRunning}
+              composeProgress={composeProgress}
+              composeProgressMsg={composeProgressMsg}
+              composeScenes={composeScenes}
+              composeScenesLoading={composeScenesLoading}
+              composeScenesError={composeScenesError}
+              selectedSceneId={selectedSceneId}
+              composeKind={composeKind}
+              composeBands={composeBands}
+              composeIndex={composeIndex}
+              composeStretchLow={composeStretchLow}
+              composeStretchHigh={composeStretchHigh}
+              composeOpacity={composeOpacity}
               onViewChange={props.setView}
               onPolygonDrawn={(geom) => {
                 props.setCustomPolygon(geom)
@@ -649,7 +800,7 @@ function AppBody(props: {
               onLocationSelect={(lat, lon) =>
                 props.setFlyTo({ lat, lon, key: Date.now() })
               }
-              onClearArea={props.onClearArea}
+              onClearArea={clearAreaAndComposition}
               onImportPolygon={props.onImportPolygon}
               onStartChange={props.setStart}
               onEndChange={props.setEnd}
@@ -662,6 +813,18 @@ function AppBody(props: {
               onShowConfidenceChange={props.setShowConfidence}
               onConfidenceOnTopChange={props.setConfidenceOnTop}
               onSmoothOverlayChange={props.setSmoothOverlay}
+              onSelectScene={setSelectedSceneId}
+              onComposeKindChange={setComposeKind}
+              onComposeBandsChange={setComposeBands}
+              onComposeIndexChange={setComposeIndex}
+              onComposeStretchChange={(low, high) => {
+                setComposeStretchLow(low)
+                setComposeStretchHigh(high)
+              }}
+              onComposeOpacityChange={setComposeOpacity}
+              onListComposeScenes={() => void handleListComposeScenes()}
+              onApplyComposition={() => void handleApplyComposition()}
+              onClearComposition={() => setComposition(null)}
               onRun={handleRun}
               onAnalyzeLULC={handleAnalyzeLULC}
               lulcRunning={props.lulcRunning}
@@ -679,6 +842,7 @@ function AppBody(props: {
                 setDataCubeOpen(false)
                 setDataCubeError(null)
               }}
+              leftDockTabs={props.leftDockTabs}
             />
           )}
           {screen === "analysis" && (

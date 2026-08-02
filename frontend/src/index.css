@@ -416,6 +416,16 @@
   transform: none;
 }
 
+/* Left dock — vertical named tabs for Classify / Compositions */
+.left-dock-tab-label {
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+  white-space: nowrap;
+  letter-spacing: 0.04em;
+  line-height: 1.1;
+  user-select: none;
+}
+
 /* AOI name chip — glued to contour edge, rotation applied inline */
 .aoi-label {
   background: transparent !important;

@@ -15,7 +15,7 @@ import L from "leaflet"
 // touch-finish incompatibility. Must run before any L.Control.Draw is created.
 import "./leafletDrawPatch"
 import type { LatLngBoundsExpression } from "leaflet"
-import type { Area, PredictResult, GeoJSONGeometry } from "@/lib/types"
+import type { Area, PredictResult, GeoJSONGeometry, CompositionOverlay } from "@/lib/types"
 import { majoritySmoothOverlay } from "@/lib/smoothOverlay"
 
 interface MapViewProps {
@@ -31,6 +31,7 @@ interface MapViewProps {
   /** When true (default), keep class prediction under the confidence overlay. */
   confidenceOnTop: boolean
   smoothOverlay: boolean
+  composition?: CompositionOverlay | null
   areaLabel?: string
   onViewChange: (v: { lat: number; lon: number; zoom: number }) => void
 }
@@ -248,6 +249,34 @@ function FitBounds({
       )
     }
   }, [map, customPolygon, result])
+  return null
+}
+
+function FitComposition({
+  composition,
+  hasPrediction,
+}: {
+  composition: CompositionOverlay | null | undefined
+  hasPrediction: boolean
+}) {
+  const map = useMap()
+  useEffect(() => {
+    if (!composition || hasPrediction) return
+    const e = composition.extent
+    if (
+      !e ||
+      (e.lon_min === 0 && e.lon_max === 0 && e.lat_min === 0 && e.lat_max === 0)
+    ) {
+      return
+    }
+    map.fitBounds(
+      [
+        [e.lat_min, e.lon_min],
+        [e.lat_max, e.lon_max],
+      ],
+      { padding: [40, 40] }
+    )
+  }, [map, composition?.overlay_uri, hasPrediction])
   return null
 }
 
@@ -671,6 +700,7 @@ export function MapView({
   showConfidence,
   confidenceOnTop,
   smoothOverlay,
+  composition = null,
   areaLabel,
   onViewChange,
 }: MapViewProps) {
@@ -693,9 +723,35 @@ export function MapView({
       result.extent.lat_max === 0
     )
 
+  const compositionBounds: LatLngBoundsExpression | null =
+    composition &&
+    !(
+      composition.extent.lon_min === 0 &&
+      composition.extent.lon_max === 0 &&
+      composition.extent.lat_min === 0 &&
+      composition.extent.lat_max === 0
+    )
+      ? [
+          [composition.extent.lat_min, composition.extent.lon_min],
+          [composition.extent.lat_max, composition.extent.lon_max],
+        ]
+      : null
+
   // Confidence is semi-transparent, so prediction always shows through unless
   // we hide it. When confidenceOnTop is off, show confidence alone.
   const showPredictionUnderConfidence = !showConfidence || confidenceOnTop
+  const compositionLayer =
+    composition && compositionBounds && composition.overlay_uri ? (
+      <PredictionOverlay
+        key="composition"
+        url={composition.overlay_uri}
+        bounds={compositionBounds}
+        opacity={composition.opacity}
+        smooth={false}
+        zIndex={350}
+      />
+    ) : null
+
   const predictionLayer =
     result &&
     hasValidExtent &&
@@ -788,6 +844,7 @@ export function MapView({
           />
         ))}
 
+      {compositionLayer}
       {predictionLayer}
       {confidenceLayer}
 
@@ -798,6 +855,7 @@ export function MapView({
       <DrawControl customPolygon={customPolygon} onPolygonDrawn={onPolygonDrawn} />
       <FlyToController flyTo={flyTo} />
       <FitBounds customPolygon={customPolygon} result={result} />
+      <FitComposition composition={composition} hasPrediction={!!result} />
       <ViewReporter onViewChange={onViewChange} />
       <BasemapDateAttribution />
     </MapContainer>

@@ -3,7 +3,11 @@ import { Camera, FolderOpen, History, LogOut, Save, Trash2 } from "lucide-react"
 import { useTheme } from "next-themes"
 import { useAuth } from "@/lib/auth"
 import { AvatarCircle } from "@/components/AvatarCircle"
-import type { InferenceRun, Preferences } from "@/lib/types"
+import type { InferenceRun, LeftDockTabsMode, Preferences } from "@/lib/types"
+import {
+  leftDockTabsModeFromPrefs,
+  mergePreferenceExtras,
+} from "@/lib/preferenceExtras"
 
 const MAX_AVATAR_BYTES = 2_000_000
 
@@ -31,6 +35,8 @@ export function ProfilePage({
   const [model, setModel] = useState("spectral")
   const [opacity, setOpacity] = useState(0.75)
   const [theme, setTheme] = useState("dark")
+  const [leftDockTabs, setLeftDockTabs] =
+    useState<LeftDockTabsMode>("retracted_only")
   const [busy, setBusy] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
 
@@ -48,6 +54,7 @@ export function ProfilePage({
     setModel(prefs.default_model || "spectral")
     setOpacity(prefs.overlay_opacity ?? 0.75)
     setTheme(prefs.theme || "dark")
+    setLeftDockTabs(leftDockTabsModeFromPrefs(prefs))
   }, [prefs])
 
   if (!user) return null
@@ -70,7 +77,9 @@ export function ProfilePage({
         default_model: model,
         overlay_opacity: opacity,
         theme,
-        extras_json: prefs?.extras_json || "{}",
+        extras_json: mergePreferenceExtras(prefs?.extras_json, {
+          left_dock_tabs: leftDockTabs,
+        }),
       }
       await savePrefs(next)
       if (theme === "dark" || theme === "light" || theme === "system") {
@@ -207,6 +216,20 @@ export function ProfilePage({
                 <option value="dark">Dark</option>
                 <option value="light">Light</option>
                 <option value="system">System</option>
+              </select>
+            </label>
+
+            <label className="flex flex-col gap-1">
+              <span className="eyebrow">Left dock tabs</span>
+              <select
+                className="field-input"
+                value={leftDockTabs}
+                onChange={(e) =>
+                  setLeftDockTabs(e.target.value as LeftDockTabsMode)
+                }
+              >
+                <option value="retracted_only">Only when panels are hidden</option>
+                <option value="always">Always visible</option>
               </select>
             </label>
 
