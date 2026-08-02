@@ -40,6 +40,10 @@ export interface MapScreenProps {
   showPredictionOverlay: boolean
   showCompositionOverlay: boolean
   composition: CompositionOverlay | null
+  /** Session gallery of applied compositions (newest first). */
+  compositionGallery?: CompositionOverlay[]
+  onSelectComposition?: (id: string) => void
+  onRemoveComposition?: (id: string) => void
   swipeCompare: boolean
   swipeRatio: number
   areaLabel?: string
@@ -174,6 +178,9 @@ export function MapScreen(props: MapScreenProps) {
         onClose={() => setOverlayToolsOpen(false)}
         result={props.result}
         composition={props.composition}
+        compositionGallery={props.compositionGallery ?? []}
+        onSelectComposition={props.onSelectComposition}
+        onRemoveComposition={props.onRemoveComposition}
         areaLabel={props.areaLabel}
         modelKind={props.modelKind}
         composeSceneDate={

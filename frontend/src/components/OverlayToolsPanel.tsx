@@ -9,6 +9,7 @@ import {
   ChevronDown,
   ChevronUp,
   ImageIcon,
+  Eye,
 } from "lucide-react"
 import { notifyExportFail, notifyExportOk } from "@/lib/notify"
 import {
@@ -31,6 +32,9 @@ export interface OverlayToolsPanelProps {
   onClose: () => void
   result: PredictResult | null
   composition: CompositionOverlay | null
+  compositionGallery?: CompositionOverlay[]
+  onSelectComposition?: (id: string) => void
+  onRemoveComposition?: (id: string) => void
   areaLabel?: string
   modelKind?: ModelKind
   composeSceneDate?: string | null
@@ -100,6 +104,9 @@ function OverlayAssetCard({
   params,
   previewUri,
   pixelated,
+  active,
+  onActivate,
+  onRemove,
   onExportPng,
   onExportTif,
   canExportTif,
@@ -108,13 +115,30 @@ function OverlayAssetCard({
   params: string
   previewUri?: string
   pixelated?: boolean
+  active?: boolean
+  onActivate?: () => void
+  onRemove?: () => void
   onExportPng?: () => void
   onExportTif?: () => void
   canExportTif?: boolean
 }) {
   return (
-    <div className="flex gap-2.5 rounded-sm border border-border/70 bg-secondary/20 p-2">
-      <div className="relative size-16 shrink-0 overflow-hidden rounded-sm border border-border/50 bg-secondary">
+    <div
+      className={cn(
+        "flex gap-2.5 rounded-sm border bg-secondary/20 p-2",
+        active ? "border-primary/50" : "border-border/70"
+      )}
+    >
+      <button
+        type="button"
+        disabled={!onActivate}
+        onClick={onActivate}
+        className={cn(
+          "relative size-16 shrink-0 overflow-hidden rounded-sm border border-border/50 bg-secondary",
+          onActivate && "cursor-pointer hover:opacity-90"
+        )}
+        title={onActivate ? "Show on map" : undefined}
+      >
         {previewUri ? (
           <img
             src={previewUri}
@@ -129,12 +153,30 @@ function OverlayAssetCard({
             <ImageIcon className="size-5 opacity-50" />
           </div>
         )}
-      </div>
+      </button>
       <div className="flex min-w-0 flex-1 flex-col gap-1.5">
         <div className="min-w-0">
-          <p className="truncate text-[11px] font-medium text-foreground">
-            {title}
-          </p>
+          <div className="flex items-start gap-1">
+            <p className="min-w-0 flex-1 truncate text-[11px] font-medium text-foreground">
+              {title}
+            </p>
+            {active && (
+              <span className="inline-flex shrink-0 items-center gap-0.5 text-[9px] uppercase tracking-wide text-primary">
+                <Eye className="size-2.5" />
+                map
+              </span>
+            )}
+            {onRemove && (
+              <button
+                type="button"
+                onClick={onRemove}
+                className="shrink-0 text-muted-foreground hover:text-foreground"
+                title="Remove from gallery"
+              >
+                <X className="size-3" />
+              </button>
+            )}
+          </div>
           <p className="telemetry mt-0.5 line-clamp-2 text-[10px] leading-snug text-muted-foreground">
             {params}
           </p>
@@ -190,6 +232,9 @@ export function OverlayToolsPanel(props: OverlayToolsPanelProps) {
     onClose,
     result,
     composition,
+    compositionGallery = [],
+    onSelectComposition,
+    onRemoveComposition,
     areaLabel,
     modelKind,
     composeSceneDate,
@@ -212,6 +257,13 @@ export function OverlayToolsPanel(props: OverlayToolsPanelProps) {
     aoiContourScheme,
     onAoiContourSchemeChange,
   } = props
+
+  const gallery =
+    compositionGallery.length > 0
+      ? compositionGallery
+      : composition?.overlay_uri
+        ? [composition]
+        : []
 
   const cards = useMemo(() => {
     const list: ReactNode[] = []
@@ -296,43 +348,60 @@ export function OverlayToolsPanel(props: OverlayToolsPanelProps) {
       )
     }
 
-    if (composition?.overlay_uri) {
+    for (const item of gallery) {
+      if (!item.overlay_uri) continue
       const bandOrIndex =
-        composition.kind === "index" && composition.index
-          ? composition.index.toUpperCase()
-          : composition.bands?.join("-")
+        item.kind === "index" && item.index
+          ? item.index.toUpperCase()
+          : item.bands?.join("-")
       const paramLine = [
         bandOrIndex,
-        composeSceneDate || null,
-        composition.kind === "rgb"
+        item.sceneDate ||
+          (item.id === composition?.id ? composeSceneDate : null) ||
+          null,
+        item.kind === "rgb"
           ? "RGB composite"
-          : composition.kind === "index"
+          : item.kind === "index"
             ? "Spectral index"
             : null,
-        `opacity ${Math.round((composition.opacity ?? composeOpacity) * 100)}%`,
+        `opacity ${Math.round((item.opacity ?? composeOpacity) * 100)}%`,
       ]
         .filter(Boolean)
         .join(" · ")
 
       list.push(
         <OverlayAssetCard
-          key="composition"
-          title={composition.title || composition.label || "Composition"}
+          key={item.id || item.overlay_uri}
+          title={item.title || item.label || "Composition"}
           params={paramLine}
-          previewUri={composition.overlay_uri}
+          previewUri={item.overlay_uri}
+          active={composition?.id === item.id && showCompositionOverlay}
+          onActivate={
+            onSelectComposition && item.id
+              ? () => onSelectComposition(item.id)
+              : undefined
+          }
+          onRemove={
+            onRemoveComposition && item.id
+              ? () => onRemoveComposition(item.id)
+              : undefined
+          }
           onExportPng={() =>
-            void exportAsset(composition.overlay_uri, "terra_composition.png")
+            void exportAsset(
+              item.overlay_uri,
+              `terra_${(item.title || "composition").replace(/\s+/g, "_").toLowerCase()}.png`
+            )
           }
           onExportTif={
-            composition.raster_tif
+            item.raster_tif
               ? () =>
                   void exportAsset(
-                    composition.raster_tif!,
-                    "terra_composition.tif"
+                    item.raster_tif!,
+                    `terra_${(item.title || "composition").replace(/\s+/g, "_").toLowerCase()}.tif`
                   )
               : undefined
           }
-          canExportTif={!!composition.raster_tif}
+          canExportTif={!!item.raster_tif}
         />
       )
     }
@@ -340,11 +409,15 @@ export function OverlayToolsPanel(props: OverlayToolsPanelProps) {
     return list
   }, [
     result,
+    gallery,
     composition,
     areaLabel,
     modelKind,
     composeSceneDate,
     composeOpacity,
+    showCompositionOverlay,
+    onSelectComposition,
+    onRemoveComposition,
   ])
 
   return (

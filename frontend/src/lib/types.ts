@@ -261,6 +261,8 @@ export interface CompositeResult {
 }
 
 export interface CompositionOverlay {
+  /** Client session id — stable key for the overlay gallery. */
+  id: string
   overlay_uri: string
   extent: Bounds
   opacity: number
@@ -273,6 +275,8 @@ export interface CompositionOverlay {
   bands?: [string, string, string]
   index?: CompositeIndex
   presetId?: string
+  /** Scene acquisition date captured at apply time. */
+  sceneDate?: string
   /** Local GeoTIFF path for export (when available). */
   raster_tif?: string
 }

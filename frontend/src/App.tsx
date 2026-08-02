@@ -410,6 +410,10 @@ function AppBody(props: {
   const [dataCubeResult, setDataCubeResult] = useState<DataCubeResult | null>(null)
 
   const [composition, setComposition] = useState<CompositionOverlay | null>(null)
+  /** Session gallery of applied compositions (newest first); map shows `composition`. */
+  const [compositionGallery, setCompositionGallery] = useState<
+    CompositionOverlay[]
+  >([])
   const [showCompositionOverlay, setShowCompositionOverlay] = useState(true)
   const [composeRunning, setComposeRunning] = useState(false)
   const [composeProgress, setComposeProgress] = useState(0)
@@ -431,6 +435,7 @@ function AppBody(props: {
 
   const clearAreaAndComposition = useCallback(() => {
     setComposition(null)
+    setCompositionGallery([])
     setShowCompositionOverlay(true)
     setComposeScenes([])
     setSelectedSceneId("")
@@ -518,7 +523,13 @@ function AppBody(props: {
         bands: composeBands,
         index: composeIndex,
       })
-      setComposition({
+      const sceneDate =
+        composeScenes.find((s) => s.id === selectedSceneId)?.date ?? undefined
+      const entry: CompositionOverlay = {
+        id:
+          typeof crypto !== "undefined" && "randomUUID" in crypto
+            ? crypto.randomUUID()
+            : `comp-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
         overlay_uri: res.overlay_uri,
         extent: res.extent,
         opacity: composeOpacity,
@@ -529,8 +540,11 @@ function AppBody(props: {
         bands: meta.bands,
         index: meta.index,
         presetId: meta.presetId,
+        sceneDate,
         raster_tif: res.raster_tif,
-      })
+      }
+      setComposition(entry)
+      setCompositionGallery((prev) => [entry, ...prev].slice(0, 12))
       setShowCompositionOverlay(true)
       props.setShowPredictionOverlay(false)
       toast.success("Composition applied to map.")
@@ -896,7 +910,25 @@ function AppBody(props: {
               onApplyComposition={() => void handleApplyComposition()}
               onClearComposition={() => {
                 setComposition(null)
+                setCompositionGallery([])
                 setShowCompositionOverlay(true)
+              }}
+              compositionGallery={compositionGallery}
+              onSelectComposition={(id) => {
+                const hit = compositionGallery.find((c) => c.id === id)
+                if (hit) {
+                  setComposition(hit)
+                  setShowCompositionOverlay(true)
+                }
+              }}
+              onRemoveComposition={(id) => {
+                setCompositionGallery((prev) => {
+                  const next = prev.filter((c) => c.id !== id)
+                  setComposition((cur) =>
+                    cur?.id === id ? (next[0] ?? null) : cur
+                  )
+                  return next
+                })
               }}
               onSwipeCompareChange={props.setSwipeCompare}
               onSwipeRatioChange={props.setSwipeRatio}
