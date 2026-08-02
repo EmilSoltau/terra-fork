@@ -628,6 +628,7 @@ export namespace backend {
 	    overlay_uri: string;
 	    confidence_uri: string;
 	    ndvi_mean_uri: string;
+	    true_color_uri: string;
 	    reference_uri: string;
 	    raster_tif: string;
 	    mean_confidence: number;
@@ -650,6 +651,7 @@ export namespace backend {
 	        this.overlay_uri = source["overlay_uri"];
 	        this.confidence_uri = source["confidence_uri"];
 	        this.ndvi_mean_uri = source["ndvi_mean_uri"];
+	        this.true_color_uri = source["true_color_uri"];
 	        this.reference_uri = source["reference_uri"];
 	        this.raster_tif = source["raster_tif"];
 	        this.mean_confidence = source["mean_confidence"];

@@ -340,6 +340,7 @@ func (a *App) persistAnalysis(req backend.PredictRequest, res *backend.PredictRe
 	_ = store.WriteDataURIFile(res.OverlayURI, filepath.Join(assetsDir, "overlay.png"))
 	_ = store.WriteDataURIFile(res.ConfidenceURI, filepath.Join(assetsDir, "confidence.png"))
 	_ = store.WriteDataURIFile(res.NDVIMeanURI, filepath.Join(assetsDir, "ndvi_mean.png"))
+	_ = store.WriteDataURIFile(res.TrueColorURI, filepath.Join(assetsDir, "true_color.png"))
 	_ = store.WriteDataURIFile(res.ReferenceURI, filepath.Join(assetsDir, "reference.png"))
 	if res.LULC != nil && res.LULC.MapURI != "" {
 		_ = store.WriteDataURIFile(res.LULC.MapURI, filepath.Join(assetsDir, "lulc_map.png"))
@@ -357,6 +358,7 @@ func (a *App) persistAnalysis(req backend.PredictRequest, res *backend.PredictRe
 	stored.OverlayURI = ""
 	stored.ConfidenceURI = ""
 	stored.NDVIMeanURI = ""
+	stored.TrueColorURI = ""
 	stored.ReferenceURI = ""
 	if stored.LULC != nil {
 		lulcCopy := *stored.LULC
@@ -391,6 +393,7 @@ func (a *App) persistAnalysis(req backend.PredictRequest, res *backend.PredictRe
 		"area_id":         req.AreaID,
 		"has_reference":   res.ReferenceURI != "",
 		"has_ndvi_mean":   res.NDVIMeanURI != "",
+		"has_true_color":  res.TrueColorURI != "",
 	})
 
 	_, _ = st.SaveRun(store.InferenceRun{
@@ -464,6 +467,9 @@ func (a *App) LoadAnalysis(runID string) (*backend.PredictResult, error) {
 	}
 	if uri, err := store.ReadFileDataURI(filepath.Join(assetsDir, "ndvi_mean.png"), "image/png"); err == nil {
 		res.NDVIMeanURI = uri
+	}
+	if uri, err := store.ReadFileDataURI(filepath.Join(assetsDir, "true_color.png"), "image/png"); err == nil {
+		res.TrueColorURI = uri
 	}
 	if uri, err := store.ReadFileDataURI(filepath.Join(assetsDir, "reference.png"), "image/png"); err == nil {
 		res.ReferenceURI = uri

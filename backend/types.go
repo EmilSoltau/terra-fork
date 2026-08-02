@@ -249,6 +249,7 @@ type sidecarResult struct {
 	RasterTIF       string                `json:"raster_tif"`
 	ConfidencePNG   string                `json:"confidence_png"`
 	NDVIMeanPNG     string                `json:"ndvi_mean_png"`
+	TrueColorPNG    string                `json:"true_color_png"`
 	ReferencePNG    string                `json:"reference_png"`
 	MeanConfidence  float64               `json:"mean_confidence"`
 	NDates          int                   `json:"n_dates"`
@@ -280,6 +281,7 @@ type PredictResult struct {
 	OverlayURI      string                `json:"overlay_uri"`
 	ConfidenceURI   string                `json:"confidence_uri"`
 	NDVIMeanURI     string                `json:"ndvi_mean_uri"`
+	TrueColorURI    string                `json:"true_color_uri"`
 	ReferenceURI    string                `json:"reference_uri"`
 	RasterTIF       string                `json:"raster_tif"`
 	MeanConfidence  float64               `json:"mean_confidence"`

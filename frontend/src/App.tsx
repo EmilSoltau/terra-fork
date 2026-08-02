@@ -888,6 +888,7 @@ function AppBody(props: {
         overlay_uri: keepClassification && prev?.overlay_uri ? prev.overlay_uri : mapUri,
         confidence_uri: prev?.confidence_uri ?? "",
         ndvi_mean_uri: prev?.ndvi_mean_uri ?? "",
+        true_color_uri: prev?.true_color_uri ?? "",
         reference_uri: mapUri || prev?.reference_uri || "",
         raster_tif: prev?.raster_tif ?? "",
         mean_confidence: prev?.mean_confidence ?? 0,

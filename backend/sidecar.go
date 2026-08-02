@@ -420,6 +420,12 @@ func (r *Runner) Predict(ctx context.Context, req PredictRequest) (*PredictResul
 			ndviMeanURI = uri
 		}
 	}
+	trueColorURI := ""
+	if sres.TrueColorPNG != "" {
+		if uri, cerr := pngToDataURI(sres.TrueColorPNG); cerr == nil {
+			trueColorURI = uri
+		}
+	}
 	referenceURI := ""
 	if sres.ReferencePNG != "" {
 		if uri, cerr := pngToDataURI(sres.ReferencePNG); cerr == nil {
@@ -432,6 +438,7 @@ func (r *Runner) Predict(ctx context.Context, req PredictRequest) (*PredictResul
 		OverlayURI:      overlayURI,
 		ConfidenceURI:   confidenceURI,
 		NDVIMeanURI:     ndviMeanURI,
+		TrueColorURI:    trueColorURI,
 		ReferenceURI:    referenceURI,
 		RasterTIF:       sres.RasterTIF,
 		MeanConfidence:  sres.MeanConfidence,

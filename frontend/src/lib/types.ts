@@ -147,6 +147,7 @@ export interface PredictResult {
   overlay_uri: string
   confidence_uri: string
   ndvi_mean_uri: string
+  true_color_uri: string
   reference_uri: string
   raster_tif: string
   mean_confidence: number

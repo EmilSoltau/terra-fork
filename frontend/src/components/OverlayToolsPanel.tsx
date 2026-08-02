@@ -348,6 +348,26 @@ export function OverlayToolsPanel(props: OverlayToolsPanelProps) {
       )
     }
 
+    if (result?.true_color_uri) {
+      const range =
+        result.date_range?.length === 2
+          ? `${result.date_range[0]} → ${result.date_range[1]}`
+          : null
+      list.push(
+        <OverlayAssetCard
+          key="true-color"
+          title="Satellite true color"
+          params={["peak-NDVI scene · B04-B03-B02", range]
+            .filter(Boolean)
+            .join(" · ")}
+          previewUri={result.true_color_uri}
+          onExportPng={() =>
+            void exportAsset(result.true_color_uri!, "terra_true_color.png")
+          }
+        />
+      )
+    }
+
     for (const item of gallery) {
       if (!item.overlay_uri) continue
       const bandOrIndex =

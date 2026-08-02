@@ -563,14 +563,23 @@ def write_ndvi_mean_png(ndvi_mean, valid_mask, out_path):
 
 
 def compute_aoi_vi_series(products, polygon, ref_prof):
-    """Mean ± std NDVI/EVI/SAVI per date; also spatial NDVI temporal mean."""
+    """Mean ± std NDVI/EVI/SAVI per date; also spatial NDVI temporal mean.
+
+    Also keeps reflectance for the peak-NDVI scene so we can write a true-color
+    AOI chip aligned to the same grid as the other overlays.
+    """
+    import composite as comp
+
     series = []
     dates = []
     ndvi_means = []
     ndvi_stack = []
+    best_ndvi = -1.0
+    best_rgb = None  # (red, green, blue, valid_mask)
     for product in products:
         try:
             blue = load_band_to_reference_grid(product, "B02", polygon, ref_prof) / 10000.0
+            green = load_band_to_reference_grid(product, "B03", polygon, ref_prof) / 10000.0
             red = load_band_to_reference_grid(product, "B04", polygon, ref_prof) / 10000.0
             nir = load_band_to_reference_grid(product, "B08", polygon, ref_prof) / 10000.0
             ndvi = calculate_ndvi(nir, red)
@@ -581,12 +590,21 @@ def compute_aoi_vi_series(products, polygon, ref_prof):
                 continue
             date_str = product["date"].strftime("%Y-%m-%d")
             dates.append(product["date"])
-            ndvi_means.append(float(np.mean(ndvi[valid])))
+            mean_ndvi = float(np.mean(ndvi[valid]))
+            ndvi_means.append(mean_ndvi)
             ndvi_stack.append(ndvi.astype(np.float32))
+            if mean_ndvi > best_ndvi:
+                best_ndvi = mean_ndvi
+                best_rgb = (
+                    red.astype(np.float32),
+                    green.astype(np.float32),
+                    blue.astype(np.float32),
+                    valid,
+                )
             series.append(
                 {
                     "date": date_str,
-                    "ndvi_mean": round(float(np.mean(ndvi[valid])), 4),
+                    "ndvi_mean": round(mean_ndvi, 4),
                     "ndvi_std": round(float(np.std(ndvi[valid])), 4),
                     "evi_mean": round(float(np.mean(evi[valid])), 4),
                     "evi_std": round(float(np.std(evi[valid])), 4),
@@ -611,7 +629,13 @@ def compute_aoi_vi_series(products, polygon, ref_prof):
                 0.0,
             ).astype(np.float32)
         valid_mask = nonzero.any(axis=0)
-    return series, dates, ndvi_means, ndvi_mean_map, valid_mask
+
+    true_color_rgba = None
+    if best_rgb is not None:
+        r, g, b, mask = best_rgb
+        true_color_rgba = comp.rgb_to_rgba(r, g, b, mask)
+
+    return series, dates, ndvi_means, ndvi_mean_map, valid_mask, true_color_rgba
 
 
 def classify_temporal_transformer(products, polygon, ref_profile, model_dir):
@@ -1247,8 +1271,9 @@ def main():
 
     emit_progress(88, 'computing vegetation index series and phenology')
     import phenology as pheno
-    vi_series, vi_dates, ndvi_means, ndvi_mean_map, ndvi_valid = compute_aoi_vi_series(
-        products, polygon, ref_profile
+    import composite as comp
+    vi_series, vi_dates, ndvi_means, ndvi_mean_map, ndvi_valid, true_color_rgba = (
+        compute_aoi_vi_series(products, polygon, ref_profile)
     )
     phenology = pheno.phenology_metrics(ndvi_means, vi_dates) if vi_dates else {
         'sos_doy': None, 'pos_doy': None, 'eos_doy': None, 'los_days': None,
@@ -1261,6 +1286,7 @@ def main():
     raster_tif = work_dir / 'classification_map.tif'
     confidence_png = work_dir / 'confidence.png'
     ndvi_mean_png = work_dir / 'ndvi_mean.png'
+    true_color_png = work_dir / 'true_color.png'
     reference_png = work_dir / 'reference.png'
     write_overlay_png(classification_map, overlay_png)
     write_classification_tif(classification_map, ref_profile, raster_tif)
@@ -1271,6 +1297,10 @@ def main():
     if ndvi_mean_map is not None and ndvi_valid is not None:
         write_ndvi_mean_png(ndvi_mean_map, ndvi_valid, ndvi_mean_png)
         ndvi_mean_path = str(ndvi_mean_png)
+    true_color_path = ''
+    if true_color_rgba is not None:
+        comp.write_rgba_png(true_color_rgba, true_color_png)
+        true_color_path = str(true_color_png)
     reference_path = ''
     if mb_map is not None:
         # Mask reference to AOI footprint (same as classification valid pixels).
@@ -1319,6 +1349,7 @@ def main():
         'raster_tif': str(raster_tif),
         'confidence_png': str(confidence_png),
         'ndvi_mean_png': ndvi_mean_path,
+        'true_color_png': true_color_path,
         'reference_png': reference_path,
         'mean_confidence': round(mean_conf, 4),
         'n_dates': len(products),
