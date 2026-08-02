@@ -31,6 +31,8 @@ export interface MapScreenProps {
   showConfidence: boolean
   confidenceOnTop: boolean
   smoothOverlay: boolean
+  showPredictionOverlay: boolean
+  showCompositionOverlay: boolean
   composition: CompositionOverlay | null
   areaLabel?: string
   hasArea: boolean
@@ -74,6 +76,8 @@ export interface MapScreenProps {
   onShowConfidenceChange: (v: boolean) => void
   onConfidenceOnTopChange: (v: boolean) => void
   onSmoothOverlayChange: (v: boolean) => void
+  onShowPredictionOverlayChange: (v: boolean) => void
+  onShowCompositionOverlayChange: (v: boolean) => void
   onSelectScene: (id: string) => void
   onComposeKindChange: (k: CompositeKind) => void
   onComposeBandsChange: (b: [string, string, string]) => void
@@ -122,6 +126,8 @@ export function MapScreen(props: MapScreenProps) {
         showConfidence={props.showConfidence}
         confidenceOnTop={props.confidenceOnTop}
         smoothOverlay={props.smoothOverlay}
+        showPredictionOverlay={props.showPredictionOverlay}
+        showCompositionOverlay={props.showCompositionOverlay}
         composition={props.composition}
         areaLabel={props.areaLabel}
         onViewChange={props.onViewChange}
@@ -221,6 +227,8 @@ export function MapScreen(props: MapScreenProps) {
             progress={props.composeProgress}
             progressMsg={props.composeProgressMsg}
             hasOverlay={!!props.composition}
+            showCompositionOverlay={props.showCompositionOverlay}
+            onShowCompositionOverlayChange={props.onShowCompositionOverlayChange}
             onApply={props.onApplyComposition}
             onClear={props.onClearComposition}
             onCollapse={() => setLeftPanel(null)}
@@ -232,6 +240,8 @@ export function MapScreen(props: MapScreenProps) {
         {props.result && (
           <ResultsPanel
             result={props.result}
+            showPredictionOverlay={props.showPredictionOverlay}
+            onShowPredictionOverlayChange={props.onShowPredictionOverlayChange}
             showConfidence={props.showConfidence}
             onShowConfidenceChange={props.onShowConfidenceChange}
             confidenceOnTop={props.confidenceOnTop}

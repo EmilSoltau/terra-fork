@@ -31,6 +31,10 @@ interface MapViewProps {
   /** When true (default), keep class prediction under the confidence overlay. */
   confidenceOnTop: boolean
   smoothOverlay: boolean
+  /** When false, hide the classification / LULC overlay. */
+  showPredictionOverlay?: boolean
+  /** When false, hide the band composition overlay. */
+  showCompositionOverlay?: boolean
   composition?: CompositionOverlay | null
   areaLabel?: string
   onViewChange: (v: { lat: number; lon: number; zoom: number }) => void
@@ -700,6 +704,8 @@ export function MapView({
   showConfidence,
   confidenceOnTop,
   smoothOverlay,
+  showPredictionOverlay = true,
+  showCompositionOverlay = true,
   composition = null,
   areaLabel,
   onViewChange,
@@ -741,7 +747,10 @@ export function MapView({
   // we hide it. When confidenceOnTop is off, show confidence alone.
   const showPredictionUnderConfidence = !showConfidence || confidenceOnTop
   const compositionLayer =
-    composition && compositionBounds && composition.overlay_uri ? (
+    composition &&
+    showCompositionOverlay &&
+    compositionBounds &&
+    composition.overlay_uri ? (
       <PredictionOverlay
         key="composition"
         url={composition.overlay_uri}
@@ -754,6 +763,7 @@ export function MapView({
 
   const predictionLayer =
     result &&
+    showPredictionOverlay &&
     hasValidExtent &&
     overlayBounds &&
     overlayUrl &&

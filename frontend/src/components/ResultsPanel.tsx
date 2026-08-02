@@ -6,6 +6,8 @@ import { useAuth } from "@/lib/auth"
 
 interface ResultsPanelProps {
   result: PredictResult
+  showPredictionOverlay: boolean
+  onShowPredictionOverlayChange: (v: boolean) => void
   showConfidence: boolean
   onShowConfidenceChange: (v: boolean) => void
   confidenceOnTop: boolean
@@ -18,6 +20,8 @@ interface ResultsPanelProps {
 
 export function ResultsPanel({
   result,
+  showPredictionOverlay,
+  onShowPredictionOverlayChange,
   showConfidence,
   onShowConfidenceChange,
   confidenceOnTop,
@@ -109,6 +113,17 @@ export function ResultsPanel({
           <hr className="hairline" />
           <div className="flex flex-col gap-3 p-3">
             <div className="grid grid-cols-2 gap-x-3 gap-y-2">
+              <label className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                <input
+                  type="checkbox"
+                  checked={showPredictionOverlay}
+                  onChange={(e) =>
+                    onShowPredictionOverlayChange(e.target.checked)
+                  }
+                  className="accent-primary"
+                />
+                Show prediction overlay
+              </label>
               <label className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
                 <input
                   type="checkbox"

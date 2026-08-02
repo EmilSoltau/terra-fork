@@ -84,6 +84,8 @@ export interface CompositionPanelProps {
   progress: number
   progressMsg: string
   hasOverlay: boolean
+  showCompositionOverlay: boolean
+  onShowCompositionOverlayChange: (v: boolean) => void
   onApply: () => void
   onClear: () => void
   onCollapse: () => void
@@ -126,6 +128,8 @@ export const CompositionPanel = forwardRef<
     progress,
     progressMsg,
     hasOverlay,
+    showCompositionOverlay,
+    onShowCompositionOverlayChange,
     onApply,
     onClear,
     onCollapse,
@@ -409,6 +413,20 @@ export const CompositionPanel = forwardRef<
             />
           </label>
 
+          {hasOverlay && (
+            <label className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+              <input
+                type="checkbox"
+                checked={showCompositionOverlay}
+                onChange={(e) =>
+                  onShowCompositionOverlayChange(e.target.checked)
+                }
+                className="accent-primary"
+              />
+              Show on map
+            </label>
+          )}
+
           {running && (
             <div className="flex flex-col gap-1">
               <div className="h-1 overflow-hidden rounded-full bg-secondary">
@@ -449,7 +467,7 @@ export const CompositionPanel = forwardRef<
           </div>
           <p className="flex items-center gap-1 text-[10px] text-muted-foreground">
             <Layers className="size-3" />
-            Overlay sits under classification when both are shown.
+            Applying hides the prediction overlay; toggle both from Results.
           </p>
         </Section>
       </motion.div>

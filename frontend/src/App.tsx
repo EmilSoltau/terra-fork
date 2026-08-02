@@ -114,6 +114,7 @@ function App() {
   const [showConfidence, setShowConfidence] = useState(false)
   const [confidenceOnTop, setConfidenceOnTop] = useState(true)
   const [smoothOverlay, setSmoothOverlay] = useState(false)
+  const [showPredictionOverlay, setShowPredictionOverlay] = useState(true)
   const [running, setRunning] = useState<boolean>(false)
   const [progress, setProgress] = useState<number>(0)
   const [progressMsg, setProgressMsg] = useState<string>("")
@@ -204,6 +205,7 @@ function App() {
     setActiveExample(id)
     setCustomPolygon(area.geometry)
     setResult(null)
+    setShowPredictionOverlay(true)
     setAnalysisLabel(undefined)
   }
 
@@ -286,6 +288,7 @@ function App() {
             showConfidence={showConfidence}
             confidenceOnTop={confidenceOnTop}
             smoothOverlay={smoothOverlay}
+            showPredictionOverlay={showPredictionOverlay}
             running={running}
             progress={progress}
             progressMsg={progressMsg}
@@ -307,6 +310,7 @@ function App() {
             setShowConfidence={setShowConfidence}
             setConfidenceOnTop={setConfidenceOnTop}
             setSmoothOverlay={setSmoothOverlay}
+            setShowPredictionOverlay={setShowPredictionOverlay}
             setRunning={setRunning}
             setProgress={setProgress}
             setProgressMsg={setProgressMsg}
@@ -342,6 +346,7 @@ function AppBody(props: {
   showConfidence: boolean
   confidenceOnTop: boolean
   smoothOverlay: boolean
+  showPredictionOverlay: boolean
   running: boolean
   progress: number
   progressMsg: string
@@ -363,6 +368,7 @@ function AppBody(props: {
   setShowConfidence: (v: boolean) => void
   setConfidenceOnTop: (v: boolean) => void
   setSmoothOverlay: (v: boolean) => void
+  setShowPredictionOverlay: (v: boolean) => void
   setRunning: (v: boolean) => void
   setProgress: (v: number) => void
   setProgressMsg: (v: string) => void
@@ -383,6 +389,7 @@ function AppBody(props: {
   const [dataCubeResult, setDataCubeResult] = useState<DataCubeResult | null>(null)
 
   const [composition, setComposition] = useState<CompositionOverlay | null>(null)
+  const [showCompositionOverlay, setShowCompositionOverlay] = useState(true)
   const [composeRunning, setComposeRunning] = useState(false)
   const [composeProgress, setComposeProgress] = useState(0)
   const [composeProgressMsg, setComposeProgressMsg] = useState("")
@@ -403,6 +410,7 @@ function AppBody(props: {
 
   const clearAreaAndComposition = useCallback(() => {
     setComposition(null)
+    setShowCompositionOverlay(true)
     setComposeScenes([])
     setSelectedSceneId("")
     setComposeScenesError(null)
@@ -493,6 +501,8 @@ function AppBody(props: {
             ? `RGB ${composeBands.join("-")}`
             : composeIndex.toUpperCase(),
       })
+      setShowCompositionOverlay(true)
+      props.setShowPredictionOverlay(false)
       toast.success("Composition applied to map.")
     } catch (e) {
       toast.error("Composition error: " + e)
@@ -567,6 +577,7 @@ function AppBody(props: {
     try {
       const res = (await Predict(req as never)) as unknown as PredictResult
       props.setResult(res)
+      props.setShowPredictionOverlay(true)
       const label = useExample
         ? props.areas.find((a) => a.id === props.activeExample)?.label
         : "Custom AOI"
@@ -633,6 +644,7 @@ function AppBody(props: {
       // Keep prior classification if any; otherwise expose LULC as the map overlay.
       const prev = props.result
       const keepClassification = !!prev && ((prev.n_dates ?? 0) > 0 || !!prev.overlay_uri)
+      props.setShowPredictionOverlay(true)
       props.setResult({
         extent: keepClassification && prev ? prev.extent : extent,
         overlay_uri: keepClassification && prev?.overlay_uri ? prev.overlay_uri : mapUri,
@@ -672,6 +684,7 @@ function AppBody(props: {
       try {
         const res = (await LoadAnalysis(run.id)) as unknown as PredictResult
         props.setResult(res)
+        props.setShowPredictionOverlay(true)
         if (isModelKind(run.model_kind)) props.setModelKind(run.model_kind)
         props.setAnalysisLabel(run.label || "Saved analysis")
         const aoi = parseRunPolygon(run.polygon_geojson, props.areas)
@@ -717,16 +730,18 @@ function AppBody(props: {
 
   const backToAnalysesList = useCallback(() => {
     props.setResult(null)
+    props.setShowPredictionOverlay(true)
     props.setAnalysisLabel(undefined)
     goAnalysis()
-  }, [goAnalysis, props.setResult, props.setAnalysisLabel])
+  }, [goAnalysis, props.setResult, props.setShowPredictionOverlay, props.setAnalysisLabel])
 
   const startNewClassification = useCallback(() => {
     props.setResult(null)
+    props.setShowPredictionOverlay(true)
     props.setAnalysisLabel(undefined)
     props.onClearArea()
     goMap()
-  }, [goMap, props.setResult, props.setAnalysisLabel, props.onClearArea])
+  }, [goMap, props.setResult, props.setShowPredictionOverlay, props.setAnalysisLabel, props.onClearArea])
 
   const areaLabel = useMemo(() => {
     if (props.analysisLabel) return props.analysisLabel
@@ -761,6 +776,8 @@ function AppBody(props: {
               showConfidence={props.showConfidence}
               confidenceOnTop={props.confidenceOnTop}
               smoothOverlay={props.smoothOverlay}
+              showPredictionOverlay={props.showPredictionOverlay}
+              showCompositionOverlay={showCompositionOverlay}
               composition={
                 composition
                   ? { ...composition, opacity: composeOpacity }
@@ -813,6 +830,8 @@ function AppBody(props: {
               onShowConfidenceChange={props.setShowConfidence}
               onConfidenceOnTopChange={props.setConfidenceOnTop}
               onSmoothOverlayChange={props.setSmoothOverlay}
+              onShowPredictionOverlayChange={props.setShowPredictionOverlay}
+              onShowCompositionOverlayChange={setShowCompositionOverlay}
               onSelectScene={setSelectedSceneId}
               onComposeKindChange={setComposeKind}
               onComposeBandsChange={setComposeBands}
@@ -824,12 +843,16 @@ function AppBody(props: {
               onComposeOpacityChange={setComposeOpacity}
               onListComposeScenes={() => void handleListComposeScenes()}
               onApplyComposition={() => void handleApplyComposition()}
-              onClearComposition={() => setComposition(null)}
+              onClearComposition={() => {
+                setComposition(null)
+                setShowCompositionOverlay(true)
+              }}
               onRun={handleRun}
               onAnalyzeLULC={handleAnalyzeLULC}
               lulcRunning={props.lulcRunning}
               onCloseResult={() => {
                 props.setResult(null)
+                props.setShowPredictionOverlay(true)
                 props.setAnalysisLabel(undefined)
               }}
               onNewClassification={startNewClassification}
