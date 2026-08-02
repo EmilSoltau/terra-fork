@@ -22,25 +22,40 @@ The spectral Random Forest path reproduces the method described in:
 > Series.* XLIV Brazilian Symposium on Telecommunications and Signal Processing
 > (SBrT 2026), Salvador, BA, Brazil.
 
-### Research methods and feature requests
+## Research methods and feature requests
 
-> **TERRA is an open-source product shell.** Capabilities such as crop
-> classification pipelines, change detection, topography-related workflows,
-> segmentation, and similar research-grade methods are developed under academic
-> review (literature → implementation → tests) in a **private research
-> repository**, then exported into this project when they are ready for the
-> desktop app.
->
-> If you want to request or discuss features in those domains (e.g. crop change,
-> segmentation, canopy diagnostics), please contact
-> **[joao_leonardi.melo@somosicev.com](mailto:joao_leonardi.melo@somosicev.com)**
-> or **[opensource.leonardi@gmail.com](mailto:opensource.leonardi@gmail.com)**.
-> GitHub Issues remain the right place for bugs and UI/product shell
-> improvements already in scope here.
+TERRA is an open-source Earth Observation platform developed alongside an ongoing
+academic research program (undergraduate research, a Master’s degree, and planned
+doctoral work). The project is **research-driven**: the desktop app is where
+methods can be investigated, prototyped, validated, and eventually turned into
+usable remote-sensing workflows—not a product that dictates the science.
 
-Two longer **user manuals** are in preparation: one for a general audience, and
-one for academic / research users (methods, model development, and validation).
-Until they ship, use the short [User guide](docs/USER_GUIDE.md) below.
+Research capabilities—such as crop classification pipelines, change detection,
+image segmentation, topography-related workflows, canopy diagnostics, and other
+advanced EO methods—are not copied straight from published papers into the app.
+They follow a full research cycle: problem formulation, literature review,
+hypothesis development, experimental prototyping, algorithm design, validation,
+and iterative refinement. Methods from the literature are critically analyzed,
+adapted when appropriate, compared with alternatives, and extended when new ideas
+emerge, before they become part of the public platform.
+
+While under active investigation, these modules live in a **private research
+repository**. Only after they reach an appropriate level of scientific maturity,
+reproducibility, technical validation, documentation, and usability are they
+exported and integrated into this public desktop application.
+
+Two longer **user manuals** (general audience and academic/researcher—covering
+methods, model development, and validation) and related **scientific research
+reports** are being prepared in **Overleaf**. Until they are published, use the
+short [User guide](docs/USER_GUIDE.md) below.
+
+To discuss research directions or request features in these domains (e.g. crop
+classification, change detection, segmentation, canopy diagnostics, or other EO
+methods), contact
+**[joao_leonardi.melo@somosicev.com](mailto:joao_leonardi.melo@somosicev.com)** or
+**[opensource.leonardi@gmail.com](mailto:opensource.leonardi@gmail.com)**.
+Reserve [GitHub Issues](https://github.com/rexionmars/TERRA/issues) for bugs and
+improvements to functionality already available in the public project.
 
 <p align="center">
   <img src="docs/img/new_version/terra_crop_classification.jpeg" alt="TERRA map workspace with classification and Overlay Tools" width="900" />
@@ -70,7 +85,7 @@ account for the app itself.
 | Doc | Contents |
 |-----|----------|
 | [User guide](docs/USER_GUIDE.md) | AOI → Projects → classify → Overlay Tools → Analysis → Compare |
-| User manuals (in preparation) | General audience + academic/researcher manuals (methods & models) |
+| User manuals & reports (in preparation) | General + academic manuals and research reports (drafted in Overleaf) |
 | [Install](docs/INSTALL.md) | LITE vs FULL releases, Python env, from-source |
 | [Releasing](docs/RELEASING.md) | SemVer tags, when to bump, when not to release |
 | [Roadmap](docs/ROADMAP.md) | Planned packaging and analysis features |
@@ -116,8 +131,6 @@ Full walkthrough: [docs/USER_GUIDE.md](docs/USER_GUIDE.md).
 
 ## Gallery
 
-### Product UI
-
 | Projects | Classification map |
 |:--------:|:------------------:|
 | ![Projects hub](docs/img/new_version/terra_project_overview.jpeg) | ![Classification workspace](docs/img/new_version/terra_crop_classification.jpeg) |
@@ -131,18 +144,6 @@ Full walkthrough: [docs/USER_GUIDE.md](docs/USER_GUIDE.md).
 | ![Analysis overview](docs/img/new_version/terra_run_overview.jpeg) | ![Settings workspace](docs/img/new_version/terra_settings.jpeg) |
 
 <p align="center"><em>Projects, map + Overlay Tools, compositions, analysis, and Settings</em></p>
-
-### Model outputs
-
-| MapBiomas reference | Random Forest | Temporal Transformer |
-|:-------------------:|:-------------:|:--------------------:|
-| ![MapBiomas for ROI](docs/img/mapbiomas_for_roi.jpeg) | ![RF prediction](docs/img/RF_prediction.jpeg) | ![TT prediction](docs/img/Temporal_transformers_prediction.jpeg) |
-
-<p align="center">
-  <img src="docs/img/comparasion_TT_RF.jpeg" alt="Compare analyses: Temporal Transformer vs Random Forest" width="900" />
-</p>
-
-<p align="center"><em>Compare mode — prediction and confidence for two saved analyses</em></p>
 
 ## Download
 
