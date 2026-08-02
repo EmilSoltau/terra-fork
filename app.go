@@ -381,12 +381,19 @@ func (a *App) persistAnalysis(req backend.PredictRequest, res *backend.PredictRe
 	} else if req.AreaID != "" {
 		poly = fmt.Sprintf(`{"area_id":%q}`, req.AreaID)
 	}
-	label := strings.TrimSpace(req.Label)
-	if label == "" {
-		label = strings.TrimSpace(req.AreaID)
+	aoiLabel := strings.TrimSpace(req.Label)
+	if aoiLabel == "" {
+		aoiLabel = strings.TrimSpace(req.AreaID)
 	}
-	if label == "" {
-		label = "Custom AOI"
+	if aoiLabel == "" {
+		aoiLabel = "Custom AOI"
+	}
+	runLabel := strings.TrimSpace(req.RunLabel)
+	if runLabel == "" {
+		runLabel = makeRunLabel(aoiLabel)
+	}
+	if !strings.HasPrefix(strings.ToLower(runLabel), "run-") {
+		runLabel = "run-" + runLabel
 	}
 	summary, _ := json.Marshal(map[string]any{
 		"class_stats":     res.ClassStats,
@@ -394,6 +401,7 @@ func (a *App) persistAnalysis(req backend.PredictRequest, res *backend.PredictRe
 		"n_dates":         res.NDates,
 		"mean_confidence": res.MeanConfidence,
 		"area_id":         req.AreaID,
+		"aoi_label":       aoiLabel,
 		"has_reference":   res.ReferenceURI != "",
 		"has_ndvi_mean":   res.NDVIMeanURI != "",
 		"has_true_color":  res.TrueColorURI != "",
@@ -412,7 +420,7 @@ func (a *App) persistAnalysis(req backend.PredictRequest, res *backend.PredictRe
 		OverlayRelPath: filepath.Join(assetsRel, "overlay.png"),
 		AssetsRelPath:  assetsRel,
 		NDates:         res.NDates,
-		Label:          label,
+		Label:          runLabel,
 		ProjectID:      strings.TrimSpace(req.ProjectID),
 	})
 	if strings.TrimSpace(req.ProjectID) != "" {
@@ -675,4 +683,37 @@ func mapStoreErr(err error) error {
 	default:
 		return err
 	}
+}
+
+// makeRunLabel builds run-<slug>-<yyyyMMdd-HHmmss> from an AOI hint.
+func makeRunLabel(aoiHint string) string {
+	slug := slugifyRunHint(aoiHint)
+	if slug == "" {
+		slug = "aoi"
+	}
+	stamp := time.Now().Format("20060102-150405")
+	return fmt.Sprintf("run-%s-%s", slug, stamp)
+}
+
+func slugifyRunHint(s string) string {
+	s = strings.ToLower(strings.TrimSpace(s))
+	var b strings.Builder
+	lastDash := false
+	for _, r := range s {
+		ok := (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9')
+		if ok {
+			b.WriteRune(r)
+			lastDash = false
+			continue
+		}
+		if !lastDash {
+			b.WriteByte('-')
+			lastDash = true
+		}
+	}
+	out := strings.Trim(b.String(), "-")
+	if len(out) > 28 {
+		out = strings.TrimRight(out[:28], "-")
+	}
+	return out
 }

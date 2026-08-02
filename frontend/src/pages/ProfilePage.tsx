@@ -16,6 +16,7 @@ import {
   leftDockTabsModeFromPrefs,
   mergePreferenceExtras,
 } from "@/lib/preferenceExtras"
+import { displayRunLabel } from "@/lib/aoiLabel"
 
 const MAX_AVATAR_BYTES = 2_000_000
 
@@ -508,7 +509,7 @@ export function ProfilePage({
                       >
                         <div className="min-w-0">
                           <div className="truncate font-medium text-foreground">
-                            {r.label || r.model_kind}
+                            {displayRunLabel(r.label) || r.model_kind}
                           </div>
                           <div className="mt-0.5 truncate text-muted-foreground">
                             {r.model_kind} · {r.period_start} → {r.period_end}

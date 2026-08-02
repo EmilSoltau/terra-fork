@@ -42,6 +42,7 @@ import type {
   SaveProjectOverlayRequest,
 } from "@/lib/types"
 import { leftDockTabsModeFromPrefs, parsePreferenceExtras } from "@/lib/preferenceExtras"
+import { makeRunLabel, resolveAoiDisplayLabel, aoiLabelFromRunSummary } from "@/lib/aoiLabel"
 import { projectOverlayToComposition } from "@/lib/projectOverlays"
 import { ProjectSwitcher } from "@/components/ProjectSwitcher"
 import { resolveCompositionMeta } from "@/lib/compositeCatalog"
@@ -869,6 +870,12 @@ function AppBody(props: {
     props.setResult(null)
     const useExample =
       !!props.activeExample && !!props.areas.find((a) => a.id === props.activeExample)
+    const aoiLabel =
+      props.analysisLabel?.trim() ||
+      (useExample
+        ? props.areas.find((a) => a.id === props.activeExample)?.label
+        : undefined) ||
+      (useExample ? props.activeExample : "Custom AOI")
     const req: PredictRequest = {
       area_id: useExample ? props.activeExample : "",
       polygon_geojson: useExample ? null : props.customPolygon,
@@ -881,12 +888,8 @@ function AppBody(props: {
       model_kind: props.modelKind,
       prithvi_mode: props.prithviMode,
       project_id: activeProjectId || undefined,
-      label:
-        props.analysisLabel?.trim() ||
-        (useExample
-          ? props.areas.find((a) => a.id === props.activeExample)?.label
-          : undefined) ||
-        (useExample ? props.activeExample : "Custom AOI"),
+      label: aoiLabel,
+      run_label: makeRunLabel(aoiLabel),
     }
     try {
       const res = (await Predict(req as never)) as unknown as PredictResult
@@ -1007,8 +1010,18 @@ function AppBody(props: {
         props.setResult(res)
         props.setShowPredictionOverlay(true)
         if (isModelKind(run.model_kind)) props.setModelKind(run.model_kind)
-        props.setAnalysisLabel(run.label || "Saved analysis")
-        if (run.label?.trim()) void persistAoiLabel(run.label.trim())
+        const extras = parsePreferenceExtras(prefs?.extras_json)
+        const project = projects.find(
+          (p) => p.id === (run.project_id || activeProjectId || "")
+        )
+        const displayLabel = resolveAoiDisplayLabel({
+          analysisLabel: props.analysisLabel,
+          projectLabel: project?.label,
+          prefsAoiLabel: extras.aoi_label,
+          summaryAoiLabel: aoiLabelFromRunSummary(run.summary),
+        })
+        props.setAnalysisLabel(displayLabel)
+        if (displayLabel) void persistAoiLabel(displayLabel)
         const aoi = parseRunPolygon(run.polygon_geojson, props.areas)
         props.setActiveExample(aoi.exampleId)
         props.setCustomPolygon(aoi.polygon)
@@ -1041,6 +1054,7 @@ function AppBody(props: {
     [
       goAnalysis,
       props.areas,
+      props.analysisLabel,
       props.setResult,
       props.setModelKind,
       props.setAnalysisLabel,
@@ -1048,6 +1062,9 @@ function AppBody(props: {
       props.setCustomPolygon,
       props.setFlyTo,
       persistAoiLabel,
+      prefs?.extras_json,
+      projects,
+      activeProjectId,
     ]
   )
 
@@ -1082,6 +1099,30 @@ function AppBody(props: {
     props.setSwipeRatio,
     props.onClearArea,
   ])
+  const applyAoiRename = useCallback(
+    async (label: string) => {
+      const next = label.trim()
+      if (!next) return
+      props.setAnalysisLabel(next)
+      void persistAoiLabel(next)
+      if (activeProjectId) {
+        try {
+          await syncProjectAoi(activeProjectId, next)
+          await refreshProjects()
+        } catch {
+          /* best-effort */
+        }
+      }
+    },
+    [
+      activeProjectId,
+      persistAoiLabel,
+      props.setAnalysisLabel,
+      refreshProjects,
+      syncProjectAoi,
+    ]
+  )
+
   const areaLabel = useMemo(() => {
     if (props.analysisLabel) return props.analysisLabel
     if (props.activeExample) {
@@ -1149,9 +1190,7 @@ function AppBody(props: {
                   swipeRatio={props.swipeRatio}
                   areaLabel={areaLabel}
                   onAreaLabelChange={(label) => {
-                    props.setAnalysisLabel(label)
-                    void persistAoiLabel(label)
-                    if (activeProjectId) void syncProjectAoi(activeProjectId, label)
+                    void applyAoiRename(label)
                   }}
                   aoiContourScheme={props.aoiContourScheme}
                   onAoiContourSchemeChange={props.setAoiContourScheme}
@@ -1284,9 +1323,7 @@ function AppBody(props: {
                   onBackToList={backToAnalysesList}
                   onNewClassification={startNewClassification}
                   onAreaLabelChange={(label) => {
-                    props.setAnalysisLabel(label)
-                    void persistAoiLabel(label)
-                    if (activeProjectId) void syncProjectAoi(activeProjectId, label)
+                    void applyAoiRename(label)
                   }}
                   onActivateProject={(id) => void activateProject(id)}
                   activeProjectId={activeProjectId}

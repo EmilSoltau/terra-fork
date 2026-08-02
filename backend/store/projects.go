@@ -183,6 +183,27 @@ func (s *Store) GetProject(userID, projectID string) (*Project, error) {
 	return &p, nil
 }
 
+// UpdateProjectRunLabels sets label on every run linked to the project.
+func (s *Store) UpdateProjectRunLabels(userID, projectID, label string) (int64, error) {
+	if userID == "" {
+		userID = LocalUserID
+	}
+	projectID = strings.TrimSpace(projectID)
+	label = strings.TrimSpace(label)
+	if projectID == "" || label == "" {
+		return 0, ErrInvalidInput
+	}
+	res, err := s.db.Exec(
+		`UPDATE inference_runs SET label = ? WHERE user_id = ? AND project_id = ?`,
+		label, userID, projectID,
+	)
+	if err != nil {
+		return 0, err
+	}
+	n, _ := res.RowsAffected()
+	return n, nil
+}
+
 // ListRunsByProject lists runs for a project. Empty projectID lists unassigned runs.
 func (s *Store) ListRunsByProject(userID, projectID string, limit int) ([]InferenceRun, error) {
 	if userID == "" {

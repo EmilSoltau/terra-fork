@@ -15,6 +15,7 @@ import type {
   PhenologyMetrics,
   PredictResult,
 } from "@/lib/types"
+import { displayRunLabel } from "@/lib/aoiLabel"
 
 function modelLabel(kind: string): string {
   if (kind === "temporal_transformer") return "Temporal Transformer"
@@ -24,7 +25,8 @@ function modelLabel(kind: string): string {
 }
 
 function runTitle(run: InferenceRun): string {
-  return run.label?.trim() || modelLabel(run.model_kind)
+  const t = displayRunLabel(run.label)
+  return t === "run-untitled" ? modelLabel(run.model_kind) : t
 }
 
 function extentsDiffer(a: PredictResult, b: PredictResult): boolean {
