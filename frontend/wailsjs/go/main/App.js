@@ -26,20 +26,16 @@ export function GetBootLogs() {
   return window['go']['main']['App']['GetBootLogs']();
 }
 
-export function RevealMainWindow() {
-  return window['go']['main']['App']['RevealMainWindow']();
-}
-
 export function GetPreferences() {
   return window['go']['main']['App']['GetPreferences']();
 }
 
-export function ListEmbeddedAreas() {
-  return window['go']['main']['App']['ListEmbeddedAreas']();
-}
-
 export function ListDataCube(arg1) {
   return window['go']['main']['App']['ListDataCube'](arg1);
+}
+
+export function ListEmbeddedAreas() {
+  return window['go']['main']['App']['ListEmbeddedAreas']();
 }
 
 export function ListRuns(arg1) {
@@ -68,6 +64,14 @@ export function Predict(arg1) {
 
 export function Register(arg1, arg2, arg3) {
   return window['go']['main']['App']['Register'](arg1, arg2, arg3);
+}
+
+export function RenderComposite(arg1) {
+  return window['go']['main']['App']['RenderComposite'](arg1);
+}
+
+export function RevealMainWindow() {
+  return window['go']['main']['App']['RevealMainWindow']();
 }
 
 export function SavePreferences(arg1) {

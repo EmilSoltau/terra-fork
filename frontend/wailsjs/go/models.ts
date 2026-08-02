@@ -99,6 +99,195 @@ export namespace backend {
 	        this.area_ha = source["area_ha"];
 	    }
 	}
+	export class CompositeRequest {
+	    area_id: string;
+	    polygon_geojson?: GeoJSONGeometry;
+	    start: string;
+	    end: string;
+	    max_cloud: number;
+	    monthly_best: boolean;
+	    tiles: string[];
+	    scene_id: string;
+	    kind: string;
+	    bands?: string[];
+	    index?: string;
+	    stretch_pct?: number[];
+	
+	    static createFrom(source: any = {}) {
+	        return new CompositeRequest(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.area_id = source["area_id"];
+	        this.polygon_geojson = this.convertValues(source["polygon_geojson"], GeoJSONGeometry);
+	        this.start = source["start"];
+	        this.end = source["end"];
+	        this.max_cloud = source["max_cloud"];
+	        this.monthly_best = source["monthly_best"];
+	        this.tiles = source["tiles"];
+	        this.scene_id = source["scene_id"];
+	        this.kind = source["kind"];
+	        this.bands = source["bands"];
+	        this.index = source["index"];
+	        this.stretch_pct = source["stretch_pct"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class CompositeResult {
+	    extent: Bounds;
+	    overlay_uri: string;
+	    meta?: Record<string, any>;
+	
+	    static createFrom(source: any = {}) {
+	        return new CompositeResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.extent = this.convertValues(source["extent"], Bounds);
+	        this.overlay_uri = source["overlay_uri"];
+	        this.meta = source["meta"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class DataCubeRequest {
+	    area_id: string;
+	    polygon_geojson?: GeoJSONGeometry;
+	    start: string;
+	    end: string;
+	    max_cloud: number;
+	    monthly_best: boolean;
+	    tiles: string[];
+	
+	    static createFrom(source: any = {}) {
+	        return new DataCubeRequest(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.area_id = source["area_id"];
+	        this.polygon_geojson = this.convertValues(source["polygon_geojson"], GeoJSONGeometry);
+	        this.start = source["start"];
+	        this.end = source["end"];
+	        this.max_cloud = source["max_cloud"];
+	        this.monthly_best = source["monthly_best"];
+	        this.tiles = source["tiles"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class DataCubeScene {
+	    id: string;
+	    date: string;
+	    cloud_cover: number;
+	    tile: string;
+	    satellite: string;
+	    preview_uri?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new DataCubeScene(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.date = source["date"];
+	        this.cloud_cover = source["cloud_cover"];
+	        this.tile = source["tile"];
+	        this.satellite = source["satellite"];
+	        this.preview_uri = source["preview_uri"];
+	    }
+	}
+	export class DataCubeResult {
+	    n_scenes: number;
+	    scenes: DataCubeScene[];
+	    date_range: string[];
+	    monthly_best: boolean;
+	    max_cloud: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new DataCubeResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.n_scenes = source["n_scenes"];
+	        this.scenes = this.convertValues(source["scenes"], DataCubeScene);
+	        this.date_range = source["date_range"];
+	        this.monthly_best = source["monthly_best"];
+	        this.max_cloud = source["max_cloud"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	
 	
 	export class GeocodeResult {
 	    display_name: string;
@@ -276,108 +465,6 @@ export namespace backend {
 	        this.mapbiomas_path = source["mapbiomas_path"];
 	    }
 	
-		convertValues(a: any, classs: any, asMap: boolean = false): any {
-		    if (!a) {
-		        return a;
-		    }
-		    if (a.slice && a.map) {
-		        return (a as any[]).map(elem => this.convertValues(elem, classs));
-		    } else if ("object" === typeof a) {
-		        if (asMap) {
-		            for (const key of Object.keys(a)) {
-		                a[key] = new classs(a[key]);
-		            }
-		            return a;
-		        }
-		        return new classs(a);
-		    }
-		    return a;
-		}
-	}
-	export class DataCubeRequest {
-	    area_id: string;
-	    polygon_geojson?: GeoJSONGeometry;
-	    start: string;
-	    end: string;
-	    max_cloud: number;
-	    monthly_best: boolean;
-	    tiles: string[];
-
-	    static createFrom(source: any = {}) {
-	        return new DataCubeRequest(source);
-	    }
-
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.area_id = source["area_id"];
-	        this.polygon_geojson = this.convertValues(source["polygon_geojson"], GeoJSONGeometry);
-	        this.start = source["start"];
-	        this.end = source["end"];
-	        this.max_cloud = source["max_cloud"];
-	        this.monthly_best = source["monthly_best"];
-	        this.tiles = source["tiles"];
-	    }
-
-		convertValues(a: any, classs: any, asMap: boolean = false): any {
-		    if (!a) {
-		        return a;
-		    }
-		    if (a.slice && a.map) {
-		        return (a as any[]).map(elem => this.convertValues(elem, classs));
-		    } else if ("object" === typeof a) {
-		        if (asMap) {
-		            for (const key of Object.keys(a)) {
-		                a[key] = new classs(a[key]);
-		            }
-		            return a;
-		        }
-		        return new classs(a);
-		    }
-		    return a;
-		}
-	}
-	export class DataCubeScene {
-	    id: string;
-	    date: string;
-	    cloud_cover: number;
-	    tile: string;
-	    satellite: string;
-	    preview_uri?: string;
-
-	    static createFrom(source: any = {}) {
-	        return new DataCubeScene(source);
-	    }
-
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.id = source["id"];
-	        this.date = source["date"];
-	        this.cloud_cover = source["cloud_cover"];
-	        this.tile = source["tile"];
-	        this.satellite = source["satellite"];
-	        this.preview_uri = source["preview_uri"];
-	    }
-	}
-	export class DataCubeResult {
-	    n_scenes: number;
-	    scenes: DataCubeScene[];
-	    date_range: string[];
-	    monthly_best: boolean;
-	    max_cloud: number;
-
-	    static createFrom(source: any = {}) {
-	        return new DataCubeResult(source);
-	    }
-
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.n_scenes = source["n_scenes"];
-	        this.scenes = this.convertValues(source["scenes"], DataCubeScene);
-	        this.date_range = source["date_range"];
-	        this.monthly_best = source["monthly_best"];
-	        this.max_cloud = source["max_cloud"];
-	    }
-
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
 		    if (!a) {
 		        return a;

@@ -66,6 +66,12 @@ type sidecarRequest struct {
 	ModelKind      string           `json:"model_kind"`
 	PrithviMode    string           `json:"prithvi_mode"`
 	WorkDir        string           `json:"work_dir"`
+	// Composite / index render (action=render_composite).
+	SceneID    string    `json:"scene_id,omitempty"`
+	Kind       string    `json:"kind,omitempty"`
+	Bands      []string  `json:"bands,omitempty"`
+	Index      string    `json:"index,omitempty"`
+	StretchPct []float64 `json:"stretch_pct,omitempty"`
 }
 
 // ClassStat is a per-class statistic from the classification result.
@@ -208,6 +214,29 @@ type DataCubeResult struct {
 	DateRange   []string        `json:"date_range"`
 	MonthlyBest bool            `json:"monthly_best"`
 	MaxCloud    float64         `json:"max_cloud"`
+}
+
+// CompositeRequest renders an RGB composite or spectral index for one scene.
+type CompositeRequest struct {
+	AreaID         string           `json:"area_id"`
+	PolygonGeoJSON *GeoJSONGeometry `json:"polygon_geojson"`
+	Start          string           `json:"start"`
+	End            string           `json:"end"`
+	MaxCloud       float64          `json:"max_cloud"`
+	MonthlyBest    bool             `json:"monthly_best"`
+	Tiles          []string         `json:"tiles"`
+	SceneID        string           `json:"scene_id"`
+	Kind           string           `json:"kind"` // "rgb" | "index"
+	Bands          []string         `json:"bands,omitempty"`
+	Index          string           `json:"index,omitempty"`
+	StretchPct     []float64        `json:"stretch_pct,omitempty"`
+}
+
+// CompositeResult is a PNG overlay for map display.
+type CompositeResult struct {
+	Extent     Bounds            `json:"extent"`
+	OverlayURI string            `json:"overlay_uri"`
+	Meta       map[string]any    `json:"meta,omitempty"`
 }
 
 // sidecarResult is the raw JSON returned by the sidecar on stdout.

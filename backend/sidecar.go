@@ -767,6 +767,178 @@ func (r *Runner) ListDataCube(ctx context.Context, req DataCubeRequest) (*DataCu
 	return &result, nil
 }
 
+// RenderComposite builds an RGB or index PNG overlay for one STAC scene.
+func (r *Runner) RenderComposite(ctx context.Context, req CompositeRequest) (*CompositeResult, error) {
+	if _, err := os.Stat(r.sidecar); err != nil {
+		return nil, fmt.Errorf("sidecar not found at %s", r.sidecar)
+	}
+	if strings.TrimSpace(req.SceneID) == "" {
+		return nil, fmt.Errorf("select a scene first")
+	}
+	if strings.TrimSpace(req.Start) == "" || strings.TrimSpace(req.End) == "" {
+		return nil, fmt.Errorf("set the acquisition period (start and end dates)")
+	}
+
+	maxCloud := req.MaxCloud
+	if maxCloud <= 0 {
+		maxCloud = 100
+	}
+	kind := strings.TrimSpace(req.Kind)
+	if kind == "" {
+		kind = "rgb"
+	}
+
+	var polygon *GeoJSONGeometry
+	tiles := req.Tiles
+	if req.AreaID != "" {
+		area, ok := r.loadArea(req.AreaID)
+		if !ok {
+			return nil, fmt.Errorf("unknown area: %s", req.AreaID)
+		}
+		geom := area.Geometry
+		polygon = &geom
+		if len(tiles) == 0 {
+			tiles = []string{"T22JBT", "T21JZN"}
+		}
+	} else if req.PolygonGeoJSON != nil {
+		polygon = req.PolygonGeoJSON
+	} else {
+		return nil, fmt.Errorf("no area or polygon provided")
+	}
+
+	stretch := req.StretchPct
+	if len(stretch) != 2 {
+		stretch = []float64{2, 98}
+	}
+
+	workDir, err := os.MkdirTemp("", "geosense-comp-")
+	if err != nil {
+		return nil, fmt.Errorf("failed to create work dir: %w", err)
+	}
+	defer os.RemoveAll(workDir)
+
+	sReq := sidecarRequest{
+		Action:         "render_composite",
+		ModelDir:       r.modelDir,
+		Source:         "stac",
+		Start:          req.Start,
+		End:            req.End,
+		MaxCloud:       maxCloud,
+		MonthlyBest:    req.MonthlyBest,
+		Tiles:          tiles,
+		PolygonGeoJSON: polygon,
+		WorkDir:        workDir,
+		SceneID:        req.SceneID,
+		Kind:           kind,
+		Bands:          req.Bands,
+		Index:          req.Index,
+		StretchPct:     stretch,
+	}
+	reqBytes, err := json.Marshal(sReq)
+	if err != nil {
+		return nil, fmt.Errorf("failed to encode request: %w", err)
+	}
+
+	cmd := exec.CommandContext(ctx, r.pythonPath, r.sidecar)
+	cmd.Stdin = strings.NewReader(string(reqBytes))
+
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		return nil, err
+	}
+	stderr, err := cmd.StderrPipe()
+	if err != nil {
+		return nil, err
+	}
+
+	if err := cmd.Start(); err != nil {
+		return nil, fmt.Errorf("failed to start sidecar: %w", err)
+	}
+
+	var wg sync.WaitGroup
+	var lastError string
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		scanner := bufio.NewScanner(stderr)
+		scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
+		for scanner.Scan() {
+			line := strings.TrimSpace(scanner.Text())
+			if line == "" {
+				continue
+			}
+			var ev struct {
+				Progress *int   `json:"progress"`
+				Msg      string `json:"msg"`
+				Error    string `json:"error"`
+			}
+			if err := json.Unmarshal([]byte(line), &ev); err != nil {
+				wruntime.EventsEmit(ctx, "predict:progress", ProgressEvent{Progress: -1, Msg: line})
+				continue
+			}
+			if ev.Error != "" {
+				lastError = ev.Error
+				continue
+			}
+			p := -1
+			if ev.Progress != nil {
+				p = *ev.Progress
+			}
+			wruntime.EventsEmit(ctx, "predict:progress", ProgressEvent{Progress: p, Msg: ev.Msg})
+		}
+	}()
+
+	var out strings.Builder
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		scanner := bufio.NewScanner(stdout)
+		scanner.Buffer(make([]byte, 0, 1024*1024), 16*1024*1024)
+		for scanner.Scan() {
+			out.WriteString(scanner.Text())
+		}
+	}()
+
+	wg.Wait()
+	waitErr := cmd.Wait()
+	if waitErr != nil {
+		if lastError != "" {
+			return nil, fmt.Errorf("%s", lastError)
+		}
+		return nil, fmt.Errorf("sidecar failed: %w", waitErr)
+	}
+
+	raw := strings.TrimSpace(out.String())
+	if raw == "" {
+		if lastError != "" {
+			return nil, fmt.Errorf("%s", lastError)
+		}
+		return nil, fmt.Errorf("sidecar produced no output")
+	}
+
+	var wrapped struct {
+		Extent     Bounds         `json:"extent"`
+		OverlayPNG string         `json:"overlay_png"`
+		Meta       map[string]any `json:"meta"`
+	}
+	if err := json.Unmarshal([]byte(raw), &wrapped); err != nil {
+		return nil, fmt.Errorf("failed to parse composite result: %w", err)
+	}
+	if wrapped.OverlayPNG == "" {
+		return nil, fmt.Errorf("sidecar returned empty composite overlay")
+	}
+	uri, err := pngToDataURI(wrapped.OverlayPNG)
+	if err != nil {
+		return nil, fmt.Errorf("failed to encode composite PNG: %w", err)
+	}
+	return &CompositeResult{
+		Extent:     wrapped.Extent,
+		OverlayURI: uri,
+		Meta:       wrapped.Meta,
+	}, nil
+}
+
 // pngToDataURI reads a PNG file and returns a base64 data URI.
 func pngToDataURI(path string) (string, error) {
 	data, err := os.ReadFile(path)

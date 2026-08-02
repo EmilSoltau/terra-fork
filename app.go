@@ -223,6 +223,14 @@ func (a *App) ListDataCube(req backend.DataCubeRequest) (*backend.DataCubeResult
 	return a.runner.ListDataCube(a.ctx, req)
 }
 
+// RenderComposite builds an RGB / false-color or spectral-index overlay for one scene.
+func (a *App) RenderComposite(req backend.CompositeRequest) (*backend.CompositeResult, error) {
+	if a.runner == nil {
+		return nil, errors.New("runner not initialized")
+	}
+	return a.runner.RenderComposite(a.ctx, req)
+}
+
 // ExportClassification copies the classification GeoTIFF to a user-chosen path.
 func (a *App) ExportClassification(rasterPath string) (string, error) {
 	if strings.TrimSpace(rasterPath) == "" {

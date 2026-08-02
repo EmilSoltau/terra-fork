@@ -15,8 +15,6 @@ export function GeocodeSearch(arg1:string):Promise<Array<backend.GeocodeResult>>
 
 export function GetBootLogs():Promise<Array<string>>;
 
-export function RevealMainWindow():Promise<void>;
-
 export function GetPreferences():Promise<store.Preferences>;
 
 export function ListDataCube(arg1:backend.DataCubeRequest):Promise<backend.DataCubeResult>;
@@ -36,6 +34,10 @@ export function OpenExternal(arg1:string):Promise<void>;
 export function Predict(arg1:backend.PredictRequest):Promise<backend.PredictResult>;
 
 export function Register(arg1:string,arg2:string,arg3:string):Promise<store.User>;
+
+export function RenderComposite(arg1:backend.CompositeRequest):Promise<backend.CompositeResult>;
+
+export function RevealMainWindow():Promise<void>;
 
 export function SavePreferences(arg1:store.Preferences):Promise<void>;
 

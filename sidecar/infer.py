@@ -920,6 +920,151 @@ def main():
         sys.stdout.flush()
         return
 
+    # RGB / false-color composite or spectral index for one STAC scene.
+    if action == 'render_composite':
+        import composite as comp
+
+        configure_gdal_for_cog()
+        start = req.get('start')
+        end = req.get('end')
+        max_cloud = float(req.get('max_cloud', 100.0))
+        monthly_best = bool(req.get('monthly_best', True))
+        tiles = req.get('tiles') or None
+        scene_id = (req.get('scene_id') or '').strip()
+        kind = (req.get('kind') or 'rgb').strip().lower()
+        stretch = req.get('stretch_pct') or [2, 98]
+        try:
+            stretch_lo = float(stretch[0])
+            stretch_hi = float(stretch[1])
+        except Exception:
+            stretch_lo, stretch_hi = 2.0, 98.0
+
+        if not scene_id:
+            fail('render_composite requires scene_id')
+        if not start or not end:
+            fail('render_composite requires start and end dates (YYYY-MM-DD)')
+        if req.get('polygon_geojson'):
+            polygon = polygon_from_geojson(req['polygon_geojson'])
+        elif req.get('kml_path'):
+            area = parse_kml_coordinates(Path(req['kml_path']), req.get('kml_target'))
+            if area is None:
+                fail('polygon not found in KML')
+            polygon = area['polygon']
+        else:
+            fail('no polygon provided (polygon_geojson or kml_path required)')
+
+        emit_progress(10, 'querying STAC for scene')
+        try:
+            products = list_stac_products(
+                polygon, start, end, tile_list=tiles, max_cloud=max_cloud,
+                monthly_best=False,  # need full list to match scene_id
+            )
+        except Exception as e:
+            fail(f'STAC query failed: {e}')
+
+        product = None
+        for p in products:
+            if (p.get('id') or '') == scene_id:
+                product = p
+                break
+        if product is None:
+            # Fall back: monthly_best list may have dropped the scene; retry without cloud filter widen
+            try:
+                products = list_stac_products(
+                    polygon, start, end, tile_list=tiles, max_cloud=100.0,
+                    monthly_best=False,
+                )
+            except Exception as e:
+                fail(f'STAC query failed: {e}')
+            for p in products:
+                if (p.get('id') or '') == scene_id:
+                    product = p
+                    break
+        if product is None:
+            fail(f'scene not found: {scene_id}')
+
+        emit_progress(30, 'loading reference band B04')
+        try:
+            ref, ref_prof = load_and_clip_band(product, 'B04', polygon, '10m')
+        except Exception as e:
+            fail(f'failed to load B04: {e}')
+
+        def load_band(name: str):
+            res = comp.BAND_RESOLUTION.get(name, '10m')
+            return load_band_to_reference_grid(product, name, polygon, ref_prof, res)
+
+        mask = ref > 0
+        overlay_png = work_dir / 'composite.png'
+        meta = {
+            'kind': kind,
+            'scene_id': scene_id,
+            'date': product['date'].strftime('%Y-%m-%d') if hasattr(product.get('date'), 'strftime') else str(product.get('date', '')),
+            'stretch_pct': [stretch_lo, stretch_hi],
+        }
+
+        if kind == 'rgb':
+            bands = req.get('bands') or list(comp.RGB_PRESETS['true_color'])
+            if len(bands) != 3:
+                fail('rgb kind requires bands: [R, G, B]')
+            for bname in bands:
+                if bname not in comp.ALLOWED_BANDS:
+                    fail(f'unsupported band: {bname}')
+            emit_progress(50, f'loading {bands[0]}/{bands[1]}/{bands[2]}')
+            try:
+                r = load_band(bands[0]) / 10000.0
+                g = load_band(bands[1]) / 10000.0
+                b = load_band(bands[2]) / 10000.0
+            except Exception as e:
+                fail(f'band load failed: {e}')
+            mask = mask & (r > 0) & (g > 0) & (b > 0)
+            rgba = comp.rgb_to_rgba(r, g, b, mask, stretch_lo, stretch_hi)
+            meta['bands'] = bands
+        elif kind == 'index':
+            index_name = (req.get('index') or 'ndvi').strip().lower()
+            if index_name not in comp.ALLOWED_INDICES:
+                fail(f'unsupported index: {index_name}')
+            emit_progress(50, f'computing {index_name}')
+            try:
+                if index_name == 'ndvi':
+                    nir = load_band('B08') / 10000.0
+                    red = load_band('B04') / 10000.0
+                    idx = calculate_ndvi(nir, red)
+                    mask = mask & (nir > 0) & (red > 0)
+                elif index_name == 'ndwi':
+                    green = load_band('B03') / 10000.0
+                    nir = load_band('B08') / 10000.0
+                    idx = comp.calculate_ndwi(green, nir)
+                    mask = mask & (green > 0) & (nir > 0)
+                elif index_name == 'ndmi':
+                    nir = load_band('B08') / 10000.0
+                    swir = load_band('B11') / 10000.0
+                    idx = comp.calculate_ndmi(nir, swir)
+                    mask = mask & (nir > 0) & (swir > 0)
+                else:  # evi
+                    nir = load_band('B08') / 10000.0
+                    red = load_band('B04') / 10000.0
+                    blue = load_band('B02') / 10000.0
+                    idx = calculate_evi(nir, red, blue)
+                    mask = mask & (nir > 0) & (red > 0) & (blue > 0)
+            except Exception as e:
+                fail(f'index bands failed: {e}')
+            rgba = comp.index_to_rgba(idx, mask, index_name, stretch_lo, stretch_hi)
+            meta['index'] = index_name
+        else:
+            fail(f'unknown kind: {kind}')
+
+        emit_progress(85, 'writing PNG')
+        comp.write_rgba_png(rgba, overlay_png)
+        extent = comp.extent_from_profile(ref_prof)
+        emit_progress(100, 'done')
+        sys.stdout.write(json.dumps({
+            'extent': extent,
+            'overlay_png': str(overlay_png),
+            'meta': meta,
+        }))
+        sys.stdout.flush()
+        return
+
     model_dir = Path(req.get('model_dir', ''))
     source = req.get('source', 'stac')  # 'stac' (cloud COG) or 'local' (.SAFE)
     sentinel_dir = Path(req.get('sentinel_dir', '')) if req.get('sentinel_dir') else None
