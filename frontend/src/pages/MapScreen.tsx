@@ -277,6 +277,8 @@ export function MapScreen(props: MapScreenProps) {
             onShowPredictionOverlayChange={
               props.onShowPredictionOverlayChange
             }
+            swipeCompare={props.swipeCompare}
+            onSwipeCompareChange={props.onSwipeCompareChange}
             onClear={props.onClearComposition}
           />
         ) : showPredictionStatus ? (

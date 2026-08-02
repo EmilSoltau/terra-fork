@@ -1036,76 +1036,89 @@ export function MapView({
         ]
       : null
 
-  const swipeActive = swipeCompare && !!overlayUrl && hasValidExtent
-
   // Confidence is semi-transparent, so prediction always shows through unless
   // we hide it. When confidenceOnTop is off, show confidence alone.
   // Swipe clips whichever overlay(s) are visible so the left side shows basemap.
   const showPredictionUnderConfidence = !showConfidence || confidenceOnTop
-  const compositionLayer =
+
+  const compositionVisible = !!(
     composition &&
     showCompositionOverlay &&
     compositionBounds &&
-    composition.overlay_uri ? (
-      <PredictionOverlay
-        key="composition"
-        url={composition.overlay_uri}
-        bounds={compositionBounds}
-        opacity={composition.opacity}
-        smooth={false}
-        zIndex={350}
-      />
-    ) : null
-
-  const predictionOpacity = swipeActive
-    ? Math.max(overlayOpacity, 0.88)
-    : overlayOpacity
-  const swipeClip = swipeActive ? swipeRatio : null
-  const predictionLayer =
+    composition.overlay_uri
+  )
+  const predictionVisible = !!(
     result &&
     showPredictionOverlay &&
     hasValidExtent &&
     overlayBounds &&
     overlayUrl &&
-    showPredictionUnderConfidence ? (
-      <PredictionOverlay
-        key="prediction"
-        url={overlayUrl}
-        bounds={overlayBounds}
-        opacity={predictionOpacity}
-        smooth={smoothOverlay}
-        zIndex={400}
-        swipeRatio={swipeClip}
-      />
-    ) : null
-
-  const confidenceLayer =
+    showPredictionUnderConfidence
+  )
+  const confidenceVisible = !!(
     result &&
     hasValidExtent &&
     overlayBounds &&
     showConfidence &&
-    result.confidence_uri ? (
-      <PredictionOverlay
-        key="confidence"
-        url={result.confidence_uri}
-        bounds={overlayBounds}
-        opacity={
-          swipeActive
-            ? Math.max(Math.min(1, overlayOpacity + 0.15), 0.9)
-            : Math.min(1, overlayOpacity + 0.15)
-        }
-        smooth={false}
-        zIndex={450}
-        swipeRatio={swipeClip}
-      />
-    ) : null
+    result.confidence_uri
+  )
 
-  const swipeRightLabel =
-    showConfidence && !showPredictionUnderConfidence
-      ? "Confidence"
-      : showConfidence
-        ? "Confidence"
-        : "Prediction"
+  const swipeActive =
+    swipeCompare &&
+    (compositionVisible || predictionVisible || confidenceVisible)
+
+  const swipeClip = swipeActive ? swipeRatio : null
+  const predictionOpacity = swipeActive
+    ? Math.max(overlayOpacity, 0.88)
+    : overlayOpacity
+
+  const compositionLayer = compositionVisible ? (
+    <PredictionOverlay
+      key="composition"
+      url={composition!.overlay_uri}
+      bounds={compositionBounds!}
+      opacity={composition!.opacity}
+      smooth={false}
+      zIndex={350}
+      swipeRatio={swipeClip}
+    />
+  ) : null
+
+  const predictionLayer = predictionVisible ? (
+    <PredictionOverlay
+      key="prediction"
+      url={overlayUrl}
+      bounds={overlayBounds!}
+      opacity={predictionOpacity}
+      smooth={smoothOverlay}
+      zIndex={400}
+      swipeRatio={swipeClip}
+    />
+  ) : null
+
+  const confidenceLayer = confidenceVisible ? (
+    <PredictionOverlay
+      key="confidence"
+      url={result!.confidence_uri}
+      bounds={overlayBounds!}
+      opacity={
+        swipeActive
+          ? Math.max(Math.min(1, overlayOpacity + 0.15), 0.9)
+          : Math.min(1, overlayOpacity + 0.15)
+      }
+      smooth={false}
+      zIndex={450}
+      swipeRatio={swipeClip}
+    />
+  ) : null
+
+  const swipeRightLabel = confidenceVisible
+    ? "Confidence"
+    : predictionVisible
+      ? "Prediction"
+      : compositionVisible
+        ? composition?.title || "Composition"
+        : "Overlay"
 
   // Example outlines are shown only when no custom polygon is active, as faint
   // clickable shortcuts to the article's validated sites.

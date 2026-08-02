@@ -19,6 +19,8 @@ interface CompositionStatusPanelProps {
   hasPrediction: boolean
   showPredictionOverlay: boolean
   onShowPredictionOverlayChange: (v: boolean) => void
+  swipeCompare: boolean
+  onSwipeCompareChange: (v: boolean) => void
   onClear: () => void
 }
 
@@ -60,6 +62,8 @@ export const CompositionStatusPanel = forwardRef<
     hasPrediction,
     showPredictionOverlay,
     onShowPredictionOverlayChange,
+    swipeCompare,
+    onSwipeCompareChange,
     onClear,
   },
   ref
@@ -246,6 +250,15 @@ export const CompositionStatusPanel = forwardRef<
                     />
                     Show on map
                   </label>
+                  <label className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                    <input
+                      type="checkbox"
+                      checked={swipeCompare}
+                      onChange={(e) => onSwipeCompareChange(e.target.checked)}
+                      className="accent-primary"
+                    />
+                    Swipe imagery ↔ overlay
+                  </label>
                   {hasPrediction && (
                     <label className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
                       <input
@@ -262,7 +275,9 @@ export const CompositionStatusPanel = forwardRef<
                 </div>
                 <p className="flex items-center gap-1 text-[10px] text-muted-foreground">
                   <Layers className="size-3 shrink-0" />
-                  Composite sits under prediction when both are on.
+                  {swipeCompare
+                    ? "Drag the handle to reveal satellite imagery under the composition."
+                    : "Composite sits under prediction when both are on."}
                 </p>
               </>
             ) : (
