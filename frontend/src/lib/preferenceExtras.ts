@@ -5,6 +5,8 @@ export type { LeftDockTabsMode }
 export interface PreferenceExtras {
   left_dock_tabs?: LeftDockTabsMode
   active_project_id?: string
+  /** Last custom AOI display name (survives restart with active project / prefs). */
+  aoi_label?: string
 }
 
 export function parsePreferenceExtras(
