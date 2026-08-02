@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -223,20 +224,50 @@ func (a *App) ListDataCube(req backend.DataCubeRequest) (*backend.DataCubeResult
 	return a.runner.ListDataCube(a.ctx, req)
 }
 
+// RenderComposite builds an RGB / false-color or spectral-index overlay for one scene.
+func (a *App) RenderComposite(req backend.CompositeRequest) (*backend.CompositeResult, error) {
+	if a.runner == nil {
+		return nil, errors.New("runner not initialized")
+	}
+	return a.runner.RenderComposite(a.ctx, req)
+}
+
 // ExportClassification copies the classification GeoTIFF to a user-chosen path.
 func (a *App) ExportClassification(rasterPath string) (string, error) {
-	if strings.TrimSpace(rasterPath) == "" {
-		return "", errors.New("no raster to export")
+	return a.ExportOverlayFile(rasterPath, "terra_classification.tif")
+}
+
+// ExportOverlayFile saves an overlay asset via SaveFileDialog.
+// src may be a filesystem path or a data:image/png;base64,... URI.
+func (a *App) ExportOverlayFile(src string, defaultFilename string) (string, error) {
+	src = strings.TrimSpace(src)
+	if src == "" {
+		return "", errors.New("no overlay to export")
 	}
-	if _, err := os.Stat(rasterPath); err != nil {
-		return "", errors.New("classification raster not found (run Classify first)")
+	if strings.TrimSpace(defaultFilename) == "" {
+		defaultFilename = "terra_overlay.png"
 	}
-	dest, err := wruntime.SaveFileDialog(a.ctx, wruntime.SaveDialogOptions{
-		Title:           "Export classification GeoTIFF",
-		DefaultFilename: "terra_classification.tif",
-		Filters: []wruntime.FileFilter{
+
+	ext := strings.ToLower(filepath.Ext(defaultFilename))
+	filters := []wruntime.FileFilter{
+		{DisplayName: "PNG", Pattern: "*.png"},
+		{DisplayName: "GeoTIFF", Pattern: "*.tif;*.tiff"},
+	}
+	switch ext {
+	case ".tif", ".tiff":
+		filters = []wruntime.FileFilter{
 			{DisplayName: "GeoTIFF", Pattern: "*.tif;*.tiff"},
-		},
+		}
+	case ".png":
+		filters = []wruntime.FileFilter{
+			{DisplayName: "PNG", Pattern: "*.png"},
+		}
+	}
+
+	dest, err := wruntime.SaveFileDialog(a.ctx, wruntime.SaveDialogOptions{
+		Title:           "Export overlay",
+		DefaultFilename: defaultFilename,
+		Filters:         filters,
 	})
 	if err != nil {
 		return "", err
@@ -244,7 +275,22 @@ func (a *App) ExportClassification(rasterPath string) (string, error) {
 	if dest == "" {
 		return "", nil
 	}
-	in, err := os.Open(rasterPath)
+
+	if strings.HasPrefix(src, "data:") {
+		raw, err := decodeDataURI(src)
+		if err != nil {
+			return "", err
+		}
+		if err := os.WriteFile(dest, raw, 0o644); err != nil {
+			return "", err
+		}
+		return dest, nil
+	}
+
+	if _, err := os.Stat(src); err != nil {
+		return "", fmt.Errorf("overlay file not found (re-apply or re-run to regenerate): %s", src)
+	}
+	in, err := os.Open(src)
 	if err != nil {
 		return "", err
 	}
@@ -258,6 +304,15 @@ func (a *App) ExportClassification(rasterPath string) (string, error) {
 		return "", err
 	}
 	return dest, nil
+}
+
+func decodeDataURI(uri string) ([]byte, error) {
+	const marker = "base64,"
+	i := strings.Index(uri, marker)
+	if i < 0 {
+		return nil, errors.New("unsupported data URI")
+	}
+	return base64.StdEncoding.DecodeString(uri[i+len(marker):])
 }
 
 func (a *App) persistRunIfLoggedIn(req backend.PredictRequest, res *backend.PredictResult) {
@@ -285,6 +340,7 @@ func (a *App) persistAnalysis(req backend.PredictRequest, res *backend.PredictRe
 	_ = store.WriteDataURIFile(res.OverlayURI, filepath.Join(assetsDir, "overlay.png"))
 	_ = store.WriteDataURIFile(res.ConfidenceURI, filepath.Join(assetsDir, "confidence.png"))
 	_ = store.WriteDataURIFile(res.NDVIMeanURI, filepath.Join(assetsDir, "ndvi_mean.png"))
+	_ = store.WriteDataURIFile(res.TrueColorURI, filepath.Join(assetsDir, "true_color.png"))
 	_ = store.WriteDataURIFile(res.ReferenceURI, filepath.Join(assetsDir, "reference.png"))
 	if res.LULC != nil && res.LULC.MapURI != "" {
 		_ = store.WriteDataURIFile(res.LULC.MapURI, filepath.Join(assetsDir, "lulc_map.png"))
@@ -302,6 +358,7 @@ func (a *App) persistAnalysis(req backend.PredictRequest, res *backend.PredictRe
 	stored.OverlayURI = ""
 	stored.ConfidenceURI = ""
 	stored.NDVIMeanURI = ""
+	stored.TrueColorURI = ""
 	stored.ReferenceURI = ""
 	if stored.LULC != nil {
 		lulcCopy := *stored.LULC
@@ -324,7 +381,10 @@ func (a *App) persistAnalysis(req backend.PredictRequest, res *backend.PredictRe
 	} else if req.AreaID != "" {
 		poly = fmt.Sprintf(`{"area_id":%q}`, req.AreaID)
 	}
-	label := req.AreaID
+	label := strings.TrimSpace(req.Label)
+	if label == "" {
+		label = strings.TrimSpace(req.AreaID)
+	}
 	if label == "" {
 		label = "Custom AOI"
 	}
@@ -336,6 +396,7 @@ func (a *App) persistAnalysis(req backend.PredictRequest, res *backend.PredictRe
 		"area_id":         req.AreaID,
 		"has_reference":   res.ReferenceURI != "",
 		"has_ndvi_mean":   res.NDVIMeanURI != "",
+		"has_true_color":  res.TrueColorURI != "",
 	})
 
 	_, _ = st.SaveRun(store.InferenceRun{
@@ -352,7 +413,11 @@ func (a *App) persistAnalysis(req backend.PredictRequest, res *backend.PredictRe
 		AssetsRelPath:  assetsRel,
 		NDates:         res.NDates,
 		Label:          label,
+		ProjectID:      strings.TrimSpace(req.ProjectID),
 	})
+	if strings.TrimSpace(req.ProjectID) != "" {
+		st.TouchProject(req.ProjectID)
+	}
 }
 
 // ListRuns returns recent inference runs (signed-in user, or local guest).
@@ -405,6 +470,9 @@ func (a *App) LoadAnalysis(runID string) (*backend.PredictResult, error) {
 	}
 	if uri, err := store.ReadFileDataURI(filepath.Join(assetsDir, "ndvi_mean.png"), "image/png"); err == nil {
 		res.NDVIMeanURI = uri
+	}
+	if uri, err := store.ReadFileDataURI(filepath.Join(assetsDir, "true_color.png"), "image/png"); err == nil {
+		res.TrueColorURI = uri
 	}
 	if uri, err := store.ReadFileDataURI(filepath.Join(assetsDir, "reference.png"), "image/png"); err == nil {
 		res.ReferenceURI = uri
@@ -575,32 +643,20 @@ func (a *App) ClearAvatar() (*store.User, error) {
 	return updated, nil
 }
 
-// GetPreferences returns preferences for the logged-in user.
+// GetPreferences returns preferences for the logged-in user (or local guest).
 func (a *App) GetPreferences() (*store.Preferences, error) {
 	if err := a.requireStore(); err != nil {
 		return nil, err
 	}
-	a.mu.RLock()
-	u := a.currentUser
-	a.mu.RUnlock()
-	if u == nil {
-		return nil, store.ErrUnauthorized
-	}
-	return a.store.GetPreferences(u.ID)
+	return a.store.GetPreferences(a.effectiveUserID())
 }
 
-// SavePreferences persists preferences for the logged-in user.
+// SavePreferences persists preferences for the logged-in user (or local guest).
 func (a *App) SavePreferences(prefs store.Preferences) error {
 	if err := a.requireStore(); err != nil {
 		return err
 	}
-	a.mu.RLock()
-	u := a.currentUser
-	a.mu.RUnlock()
-	if u == nil {
-		return store.ErrUnauthorized
-	}
-	prefs.UserID = u.ID
+	prefs.UserID = a.effectiveUserID()
 	return a.store.SavePreferences(prefs)
 }
 

@@ -18,7 +18,7 @@ export function AppSidebar({
   const { user, loading, screen, goMap, goAuth, goProfile, goAnalysis } = useAuth()
 
   return (
-    <aside className="app-no-drag flex w-14 shrink-0 flex-col items-center bg-ink/30 py-3 backdrop-blur-md">
+    <aside className="app-no-drag flex w-14 shrink-0 flex-col items-center border-r border-border/60 bg-ink py-3">
       <nav className="flex flex-1 flex-col items-center gap-1">
         <NavItem
           active={screen === "map"}
@@ -84,8 +84,8 @@ function NavItem({
       className={cn(
         "relative flex h-10 w-10 items-center justify-center rounded-md transition-colors",
         active
-          ? "bg-surface-raised/90 text-foreground"
-          : "text-muted-foreground hover:bg-surface/50 hover:text-foreground"
+          ? "bg-surface-raised text-foreground"
+          : "text-muted-foreground hover:bg-surface-raised/70 hover:text-foreground"
       )}
     >
       {icon}

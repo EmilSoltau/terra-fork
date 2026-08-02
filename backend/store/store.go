@@ -62,6 +62,38 @@ type InferenceRun struct {
 	AssetsRelPath  string `json:"assets_relpath,omitempty"`
 	NDates         int    `json:"n_dates"`
 	Label          string `json:"label,omitempty"`
+	ProjectID      string `json:"project_id,omitempty"`
+}
+
+// Project groups AOI, analyses, and overlay assets for an agronomist workflow.
+type Project struct {
+	ID             string `json:"id"`
+	UserID         string `json:"user_id"`
+	Name           string `json:"name"`
+	Notes          string `json:"notes,omitempty"`
+	CreatedAt      string `json:"created_at"`
+	UpdatedAt      string `json:"updated_at"`
+	PolygonGeoJSON string `json:"polygon_geojson,omitempty"`
+	AreaID         string `json:"area_id,omitempty"`
+	Label          string `json:"label,omitempty"`
+	RunCount       int    `json:"run_count,omitempty"`
+	OverlayCount   int    `json:"overlay_count,omitempty"`
+}
+
+// ProjectOverlay is a persisted composition (or similar) asset under a project.
+type ProjectOverlay struct {
+	ID         string `json:"id"`
+	ProjectID  string `json:"project_id"`
+	Kind       string `json:"kind"`
+	Title      string `json:"title"`
+	MetaJSON   string `json:"meta_json,omitempty"`
+	PNGRelPath string `json:"png_relpath,omitempty"`
+	TIFRelPath string `json:"tif_relpath,omitempty"`
+	CreatedAt  string `json:"created_at"`
+	// OverlayURI is hydrated for the UI (data URI); not stored in SQLite.
+	OverlayURI string `json:"overlay_uri,omitempty"`
+	// RasterTIF is an absolute path when a GeoTIFF exists on disk.
+	RasterTIF string `json:"raster_tif,omitempty"`
 }
 
 // LocalUserID owns analyses saved when nobody is signed in.
@@ -153,8 +185,38 @@ CREATE INDEX IF NOT EXISTS idx_runs_user_created ON inference_runs(user_id, crea
 		`ALTER TABLE inference_runs ADD COLUMN result_json TEXT NOT NULL DEFAULT '{}'`,
 		`ALTER TABLE inference_runs ADD COLUMN assets_relpath TEXT`,
 		`ALTER TABLE inference_runs ADD COLUMN label TEXT NOT NULL DEFAULT ''`,
+		`ALTER TABLE inference_runs ADD COLUMN project_id TEXT`,
 	} {
 		_, _ = s.db.Exec(stmt)
+	}
+	projectSchema := `
+CREATE TABLE IF NOT EXISTS projects (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  notes TEXT NOT NULL DEFAULT '',
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  polygon_geojson TEXT NOT NULL DEFAULT '',
+  area_id TEXT NOT NULL DEFAULT '',
+  label TEXT NOT NULL DEFAULT ''
+);
+CREATE INDEX IF NOT EXISTS idx_projects_user_updated ON projects(user_id, updated_at DESC);
+CREATE TABLE IF NOT EXISTS project_overlays (
+  id TEXT PRIMARY KEY,
+  project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  kind TEXT NOT NULL DEFAULT 'composition',
+  title TEXT NOT NULL DEFAULT '',
+  meta_json TEXT NOT NULL DEFAULT '{}',
+  png_relpath TEXT,
+  tif_relpath TEXT,
+  created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_project_overlays_project ON project_overlays(project_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_runs_project_created ON inference_runs(project_id, created_at DESC);
+`
+	if _, err := s.db.Exec(projectSchema); err != nil {
+		return fmt.Errorf("migrate projects: %w", err)
 	}
 	if err := s.ensureLocalUser(); err != nil {
 		return err
@@ -587,11 +649,11 @@ func (s *Store) SaveRun(run InferenceRun) (*InferenceRun, error) {
 	_, err := s.db.Exec(
 		`INSERT INTO inference_runs
 		 (id, user_id, created_at, model_kind, period_start, period_end, polygon_geojson, status,
-		  summary_json, overlay_relpath, n_dates, result_json, assets_relpath, label)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		  summary_json, overlay_relpath, n_dates, result_json, assets_relpath, label, project_id)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		run.ID, run.UserID, run.CreatedAt, run.ModelKind, run.PeriodStart, run.PeriodEnd,
 		run.PolygonGeoJSON, run.Status, run.SummaryJSON, nullIfEmpty(run.OverlayRelPath), run.NDates,
-		run.ResultJSON, nullIfEmpty(run.AssetsRelPath), run.Label,
+		run.ResultJSON, nullIfEmpty(run.AssetsRelPath), run.Label, nullIfEmpty(run.ProjectID),
 	)
 	if err != nil {
 		return nil, err
@@ -609,7 +671,8 @@ func (s *Store) ListRuns(userID string, limit int) ([]InferenceRun, error) {
 	rows, err := s.db.Query(
 		`SELECT id, user_id, created_at, model_kind, period_start, period_end, polygon_geojson,
 		        status, summary_json, COALESCE(overlay_relpath,''), n_dates,
-		        COALESCE(result_json,'{}'), COALESCE(assets_relpath,''), COALESCE(label,'')
+		        COALESCE(result_json,'{}'), COALESCE(assets_relpath,''), COALESCE(label,''),
+		        COALESCE(project_id,'')
 		 FROM inference_runs WHERE user_id = ?
 		 ORDER BY created_at DESC LIMIT ?`,
 		userID, limit,
@@ -624,7 +687,7 @@ func (s *Store) ListRuns(userID string, limit int) ([]InferenceRun, error) {
 		if err := rows.Scan(
 			&r.ID, &r.UserID, &r.CreatedAt, &r.ModelKind, &r.PeriodStart, &r.PeriodEnd,
 			&r.PolygonGeoJSON, &r.Status, &r.SummaryJSON, &r.OverlayRelPath, &r.NDates,
-			&r.ResultJSON, &r.AssetsRelPath, &r.Label,
+			&r.ResultJSON, &r.AssetsRelPath, &r.Label, &r.ProjectID,
 		); err != nil {
 			return nil, err
 		}
@@ -641,13 +704,14 @@ func (s *Store) GetRun(userID, runID string) (*InferenceRun, error) {
 	err := s.db.QueryRow(
 		`SELECT id, user_id, created_at, model_kind, period_start, period_end, polygon_geojson,
 		        status, summary_json, COALESCE(overlay_relpath,''), n_dates,
-		        COALESCE(result_json,'{}'), COALESCE(assets_relpath,''), COALESCE(label,'')
+		        COALESCE(result_json,'{}'), COALESCE(assets_relpath,''), COALESCE(label,''),
+		        COALESCE(project_id,'')
 		 FROM inference_runs WHERE id = ? AND user_id = ?`,
 		runID, userID,
 	).Scan(
 		&r.ID, &r.UserID, &r.CreatedAt, &r.ModelKind, &r.PeriodStart, &r.PeriodEnd,
 		&r.PolygonGeoJSON, &r.Status, &r.SummaryJSON, &r.OverlayRelPath, &r.NDates,
-		&r.ResultJSON, &r.AssetsRelPath, &r.Label,
+		&r.ResultJSON, &r.AssetsRelPath, &r.Label, &r.ProjectID,
 	)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound
@@ -660,6 +724,33 @@ func (s *Store) GetRun(userID, runID string) (*InferenceRun, error) {
 
 func (s *Store) RunsDir(runID string) string {
 	return filepath.Join(s.dataDir, "runs", runID)
+}
+
+// DeleteRun removes a run row and its on-disk assets.
+func (s *Store) DeleteRun(userID, runID string) error {
+	if userID == "" {
+		userID = LocalUserID
+	}
+	if strings.TrimSpace(runID) == "" {
+		return ErrInvalidInput
+	}
+	run, err := s.GetRun(userID, runID)
+	if err != nil {
+		return err
+	}
+	res, err := s.db.Exec(`DELETE FROM inference_runs WHERE id = ? AND user_id = ?`, runID, userID)
+	if err != nil {
+		return err
+	}
+	n, _ := res.RowsAffected()
+	if n == 0 {
+		return ErrNotFound
+	}
+	_ = os.RemoveAll(s.RunsDir(runID))
+	if run.ProjectID != "" {
+		s.TouchProject(run.ProjectID)
+	}
+	return nil
 }
 
 // WriteDataURIFile decodes a data URI (or copies a filesystem path) into dest.

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
-import { notifyError, notifySuccess } from "@/lib/notify"
+import { AnimatePresence, motion } from "motion/react"
+import { notifyError, notifyInfo, notifySuccess } from "@/lib/notify"
 import { useTheme } from "next-themes"
 import {
   ListEmbeddedAreas,
@@ -7,8 +8,15 @@ import {
   Predict,
   AnalyzeLULC,
   ListDataCube,
+  RenderComposite,
   OpenExternal,
   RevealMainWindow,
+  SavePreferences,
+  SaveProjectOverlay,
+  ListProjectOverlays,
+  GetProject,
+  UpdateProjectAOI,
+  CreateProject,
 } from "../wailsjs/go/main/App"
 import { EventsOn, EventsOff } from "../wailsjs/runtime/runtime"
 import type {
@@ -23,7 +31,24 @@ import type {
   LULCAnalysis,
   DataCubeResult,
   DataCubeRequest,
+  DataCubeScene,
+  CompositionOverlay,
+  CompositeRequest,
+  CompositeKind,
+  CompositeIndex,
+  CompositeResult,
+  LeftDockTabsMode,
+  Project,
+  SaveProjectOverlayRequest,
 } from "@/lib/types"
+import { leftDockTabsModeFromPrefs, parsePreferenceExtras } from "@/lib/preferenceExtras"
+import { projectOverlayToComposition } from "@/lib/projectOverlays"
+import { ProjectSwitcher } from "@/components/ProjectSwitcher"
+import { resolveCompositionMeta } from "@/lib/compositeCatalog"
+import {
+  DEFAULT_AOI_CONTOUR_SCHEME,
+  type AoiContourSchemeId,
+} from "@/lib/aoiStyle"
 import { AuthProvider, useAuth } from "@/lib/auth"
 import { ThemeSync } from "@/components/ThemeSync"
 import { TitleBar } from "@/components/TitleBar"
@@ -105,6 +130,11 @@ function App() {
   const [showConfidence, setShowConfidence] = useState(false)
   const [confidenceOnTop, setConfidenceOnTop] = useState(true)
   const [smoothOverlay, setSmoothOverlay] = useState(false)
+  const [showPredictionOverlay, setShowPredictionOverlay] = useState(true)
+  const [swipeCompare, setSwipeCompare] = useState(false)
+  const [swipeRatio, setSwipeRatio] = useState(0.5)
+  const [aoiContourScheme, setAoiContourScheme] =
+    useState<AoiContourSchemeId>(DEFAULT_AOI_CONTOUR_SCHEME)
   const [running, setRunning] = useState<boolean>(false)
   const [progress, setProgress] = useState<number>(0)
   const [progressMsg, setProgressMsg] = useState<string>("")
@@ -113,6 +143,8 @@ function App() {
   const [lulcRunning, setLulcRunning] = useState(false)
   const [booting, setBooting] = useState(true)
   const [splashExiting, setSplashExiting] = useState(false)
+  const [leftDockTabs, setLeftDockTabs] =
+    useState<LeftDockTabsMode>("retracted_only")
   const { setTheme } = useTheme()
 
   const applyPrefs = useCallback(
@@ -130,6 +162,7 @@ function App() {
       if (p.theme === "dark" || p.theme === "light" || p.theme === "system") {
         setTheme(p.theme)
       }
+      setLeftDockTabs(leftDockTabsModeFromPrefs(p))
     },
     [setTheme]
   )
@@ -192,12 +225,14 @@ function App() {
     setActiveExample(id)
     setCustomPolygon(area.geometry)
     setResult(null)
+    setShowPredictionOverlay(true)
     setAnalysisLabel(undefined)
   }
 
   const clearArea = () => {
     setCustomPolygon(null)
     setActiveExample("")
+    setAnalysisLabel(undefined)
   }
 
   const handleImportPolygon = async () => {
@@ -242,6 +277,7 @@ function App() {
         }
         setActiveExample("")
         setCustomPolygon(geom)
+        setAnalysisLabel(undefined)
         notifySuccess("Polygon imported.")
       }
       input.click()
@@ -274,6 +310,10 @@ function App() {
             showConfidence={showConfidence}
             confidenceOnTop={confidenceOnTop}
             smoothOverlay={smoothOverlay}
+            showPredictionOverlay={showPredictionOverlay}
+            swipeCompare={swipeCompare}
+            swipeRatio={swipeRatio}
+            aoiContourScheme={aoiContourScheme}
             running={running}
             progress={progress}
             progressMsg={progressMsg}
@@ -295,6 +335,10 @@ function App() {
             setShowConfidence={setShowConfidence}
             setConfidenceOnTop={setConfidenceOnTop}
             setSmoothOverlay={setSmoothOverlay}
+            setShowPredictionOverlay={setShowPredictionOverlay}
+            setSwipeCompare={setSwipeCompare}
+            setSwipeRatio={setSwipeRatio}
+            setAoiContourScheme={setAoiContourScheme}
             setRunning={setRunning}
             setProgress={setProgress}
             setProgressMsg={setProgressMsg}
@@ -302,6 +346,7 @@ function App() {
             setAnalysisLabel={setAnalysisLabel}
             lulcRunning={lulcRunning}
             setLulcRunning={setLulcRunning}
+            leftDockTabs={leftDockTabs}
             onSelectExample={handleSelectExample}
             onClearArea={clearArea}
             onImportPolygon={handleImportPolygon}
@@ -329,6 +374,10 @@ function AppBody(props: {
   showConfidence: boolean
   confidenceOnTop: boolean
   smoothOverlay: boolean
+  showPredictionOverlay: boolean
+  swipeCompare: boolean
+  swipeRatio: number
+  aoiContourScheme: AoiContourSchemeId
   running: boolean
   progress: number
   progressMsg: string
@@ -350,6 +399,10 @@ function AppBody(props: {
   setShowConfidence: (v: boolean) => void
   setConfidenceOnTop: (v: boolean) => void
   setSmoothOverlay: (v: boolean) => void
+  setShowPredictionOverlay: (v: boolean) => void
+  setSwipeCompare: (v: boolean) => void
+  setSwipeRatio: (v: number) => void
+  setAoiContourScheme: (id: AoiContourSchemeId) => void
   setRunning: (v: boolean) => void
   setProgress: (v: number) => void
   setProgressMsg: (v: string) => void
@@ -357,16 +410,344 @@ function AppBody(props: {
   setAnalysisLabel: (v: string | undefined) => void
   lulcRunning: boolean
   setLulcRunning: (v: boolean) => void
+  leftDockTabs: LeftDockTabsMode
   onSelectExample: (id: string) => void
   onClearArea: () => void
   onImportPolygon: () => void
 }) {
-  const { refreshRuns, screen, goAnalysis, goMap, runs } = useAuth()
+  const { refreshRuns, refreshProjects, screen, goAnalysis, goMap, runs, projects, prefs } =
+    useAuth()
   const [loadingRun, setLoadingRun] = useState(false)
   const [dataCubeOpen, setDataCubeOpen] = useState(false)
   const [dataCubeLoading, setDataCubeLoading] = useState(false)
   const [dataCubeError, setDataCubeError] = useState<string | null>(null)
   const [dataCubeResult, setDataCubeResult] = useState<DataCubeResult | null>(null)
+  const [activeProjectId, setActiveProjectId] = useState<string | null>(null)
+
+  const [composition, setComposition] = useState<CompositionOverlay | null>(null)
+  /** Session gallery of applied compositions (newest first); map shows `composition`. */
+  const [compositionGallery, setCompositionGallery] = useState<
+    CompositionOverlay[]
+  >([])
+  const [showCompositionOverlay, setShowCompositionOverlay] = useState(true)
+  const [composeRunning, setComposeRunning] = useState(false)
+  const [composeProgress, setComposeProgress] = useState(0)
+  const [composeProgressMsg, setComposeProgressMsg] = useState("")
+  const [composeScenes, setComposeScenes] = useState<DataCubeScene[]>([])
+  const [composeScenesLoading, setComposeScenesLoading] = useState(false)
+  const [composeScenesError, setComposeScenesError] = useState<string | null>(null)
+  const [selectedSceneId, setSelectedSceneId] = useState("")
+  const [composeKind, setComposeKind] = useState<CompositeKind>("rgb")
+  const [composeBands, setComposeBands] = useState<[string, string, string]>([
+    "B04",
+    "B03",
+    "B02",
+  ])
+  const [composeIndex, setComposeIndex] = useState<CompositeIndex>("ndvi")
+  const [composeStretchLow, setComposeStretchLow] = useState(2)
+  const [composeStretchHigh, setComposeStretchHigh] = useState(98)
+  const [composeOpacity, setComposeOpacity] = useState(0.85)
+
+  useEffect(() => {
+    const id = parsePreferenceExtras(prefs?.extras_json).active_project_id
+    setActiveProjectId(id?.trim() ? id : null)
+  }, [prefs?.extras_json])
+
+  const persistActiveProjectId = useCallback(
+    async (id: string | null) => {
+      setActiveProjectId(id)
+      if (!prefs) return
+      const extras = parsePreferenceExtras(prefs.extras_json)
+      if (id) extras.active_project_id = id
+      else delete extras.active_project_id
+      try {
+        await SavePreferences({
+          ...prefs,
+          extras_json: JSON.stringify(extras),
+        } as never)
+      } catch {
+        /* best-effort */
+      }
+    },
+    [prefs]
+  )
+
+  const syncProjectAoi = useCallback(
+    async (projectId: string, labelOverride?: string) => {
+      const useExample =
+        !!props.activeExample &&
+        !!props.areas.find((a) => a.id === props.activeExample)
+      const renamed = (labelOverride ?? props.analysisLabel)?.trim()
+      const label =
+        renamed ||
+        (useExample
+          ? props.areas.find((a) => a.id === props.activeExample)?.label ||
+            props.activeExample
+          : props.customPolygon
+            ? "Custom AOI"
+            : "")
+      let poly = ""
+      if (!useExample && props.customPolygon) {
+        poly = JSON.stringify(props.customPolygon)
+      }
+      try {
+        await UpdateProjectAOI(
+          projectId,
+          useExample ? props.activeExample : "",
+          poly,
+          label
+        )
+        await refreshProjects()
+      } catch {
+        /* best-effort */
+      }
+    },
+    [
+      props.activeExample,
+      props.areas,
+      props.customPolygon,
+      props.analysisLabel,
+      refreshProjects,
+    ]
+  )
+
+  const activateProject = useCallback(
+    async (id: string | null) => {
+      await persistActiveProjectId(id)
+      if (!id) {
+        setComposition(null)
+        setCompositionGallery([])
+        setShowCompositionOverlay(true)
+        return
+      }
+      try {
+        const p = (await GetProject(id)) as unknown as Project
+        if (p.area_id) {
+          props.setActiveExample(p.area_id)
+          props.setCustomPolygon(null)
+          props.setAnalysisLabel(p.label || p.name)
+        } else if (p.polygon_geojson) {
+          const aoi = parseRunPolygon(p.polygon_geojson, props.areas)
+          props.setActiveExample(aoi.exampleId)
+          props.setCustomPolygon(aoi.polygon)
+          props.setAnalysisLabel(p.label || p.name)
+          if (aoi.polygon?.type === "Polygon") {
+            const ring = aoi.polygon.coordinates?.[0]
+            if (ring?.length) {
+              let lat = 0
+              let lon = 0
+              for (const [x, y] of ring) {
+                lon += x
+                lat += y
+              }
+              props.setFlyTo({
+                lat: lat / ring.length,
+                lon: lon / ring.length,
+                key: Date.now(),
+              })
+            }
+          }
+        }
+        const overlays = (await ListProjectOverlays(
+          id
+        )) as unknown as import("@/lib/types").ProjectOverlay[]
+        const gallery = overlays
+          .map(projectOverlayToComposition)
+          .filter((x): x is CompositionOverlay => !!x)
+        setCompositionGallery(gallery)
+        setComposition(gallery[0] ?? null)
+        setShowCompositionOverlay(!!gallery[0])
+      } catch (e) {
+        notifyError("Could not open project", e)
+      }
+    },
+    [
+      persistActiveProjectId,
+      props.areas,
+      props.setActiveExample,
+      props.setCustomPolygon,
+      props.setAnalysisLabel,
+      props.setFlyTo,
+    ]
+  )
+
+  const handleCreateProjectFromMap = useCallback(async () => {
+    const hint =
+      props.analysisLabel ||
+      (props.activeExample
+        ? props.areas.find((a) => a.id === props.activeExample)?.label
+        : null) ||
+      (props.customPolygon ? "Custom AOI" : "New field")
+    const name = window.prompt("Project name", hint)
+    if (!name?.trim()) return
+    try {
+      const p = (await CreateProject(name.trim(), "")) as unknown as Project
+      await refreshProjects()
+      await activateProject(p.id)
+      await syncProjectAoi(p.id)
+      notifySuccess("Project created", p.name)
+    } catch (e) {
+      notifyError("Could not create project", e)
+    }
+  }, [
+    activateProject,
+    refreshProjects,
+    syncProjectAoi,
+    props.analysisLabel,
+    props.activeExample,
+    props.areas,
+    props.customPolygon,
+  ])
+
+  const clearAreaAndComposition = useCallback(() => {
+    setComposition(null)
+    setCompositionGallery([])
+    setShowCompositionOverlay(true)
+    setComposeScenes([])
+    setSelectedSceneId("")
+    setComposeScenesError(null)
+    props.onClearArea()
+  }, [props.onClearArea])
+
+  const handleListComposeScenes = async () => {
+    if (!props.start || !props.end) {
+      notifyError("Set the acquisition period.")
+      return
+    }
+    if (!props.customPolygon && !props.activeExample) {
+      notifyError("Define an area: draw, search, or load an example.")
+      return
+    }
+    const useExample =
+      !!props.activeExample && !!props.areas.find((a) => a.id === props.activeExample)
+    const req: DataCubeRequest = {
+      area_id: useExample ? props.activeExample : "",
+      polygon_geojson: useExample ? null : props.customPolygon,
+      start: props.start,
+      end: props.end,
+      max_cloud: props.maxCloud,
+      monthly_best: props.monthlyBest,
+      tiles: [],
+    }
+    setComposeScenesLoading(true)
+    setComposeScenesError(null)
+    try {
+      const res = (await ListDataCube(req as never)) as unknown as DataCubeResult
+      setComposeScenes(res.scenes ?? [])
+      if ((res.scenes?.length ?? 0) === 0) {
+        notifyInfo("No scenes found for this period / cloud filter.")
+      } else if (!selectedSceneId && res.scenes[0]) {
+        setSelectedSceneId(res.scenes[0].id)
+      }
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e)
+      setComposeScenesError(msg)
+      notifyError("Scene list error", msg)
+    } finally {
+      setComposeScenesLoading(false)
+    }
+  }
+
+  const handleApplyComposition = async () => {
+    if (!selectedSceneId) {
+      notifyError("Select a scene first.")
+      return
+    }
+    if (!props.start || !props.end) {
+      notifyError("Set the acquisition period.")
+      return
+    }
+    if (!props.customPolygon && !props.activeExample) {
+      notifyError("Define an area first.")
+      return
+    }
+    const useExample =
+      !!props.activeExample && !!props.areas.find((a) => a.id === props.activeExample)
+    const req: CompositeRequest = {
+      area_id: useExample ? props.activeExample : "",
+      polygon_geojson: useExample ? null : props.customPolygon,
+      start: props.start,
+      end: props.end,
+      max_cloud: props.maxCloud,
+      monthly_best: props.monthlyBest,
+      tiles: [],
+      scene_id: selectedSceneId,
+      kind: composeKind,
+      bands: composeKind === "rgb" ? [...composeBands] : undefined,
+      index: composeKind === "index" ? composeIndex : undefined,
+      stretch_pct: [composeStretchLow, composeStretchHigh],
+    }
+    setComposeRunning(true)
+    setComposeProgress(5)
+    setComposeProgressMsg("requesting composite…")
+    try {
+      const res = (await RenderComposite(req as never)) as unknown as CompositeResult
+      setComposeProgress(100)
+      setComposeProgressMsg("done")
+      const meta = resolveCompositionMeta({
+        kind: composeKind,
+        bands: composeBands,
+        index: composeIndex,
+      })
+      const sceneDate =
+        composeScenes.find((s) => s.id === selectedSceneId)?.date ?? undefined
+      const entry: CompositionOverlay = {
+        id:
+          typeof crypto !== "undefined" && "randomUUID" in crypto
+            ? crypto.randomUUID()
+            : `comp-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        overlay_uri: res.overlay_uri,
+        extent: res.extent,
+        opacity: composeOpacity,
+        label: meta.label,
+        title: meta.title,
+        description: meta.description,
+        kind: meta.kind,
+        bands: meta.bands,
+        index: meta.index,
+        presetId: meta.presetId,
+        sceneDate,
+        raster_tif: res.raster_tif,
+      }
+      setComposition(entry)
+      setCompositionGallery((prev) => [entry, ...prev].slice(0, 12))
+      setShowCompositionOverlay(true)
+      props.setShowPredictionOverlay(false)
+      if (activeProjectId) {
+        try {
+          const metaJson = JSON.stringify({
+            description: meta.description,
+            kind: meta.kind,
+            bands: meta.bands,
+            index: meta.index,
+            presetId: meta.presetId,
+            sceneDate,
+            opacity: composeOpacity,
+            extent: res.extent,
+            label: meta.label,
+          })
+          const reqSave: SaveProjectOverlayRequest = {
+            project_id: activeProjectId,
+            kind: "composition",
+            title: meta.title,
+            meta_json: metaJson,
+            overlay_uri: res.overlay_uri,
+            raster_tif: res.raster_tif,
+          }
+          await SaveProjectOverlay(reqSave as never)
+          await syncProjectAoi(activeProjectId)
+          await refreshProjects()
+        } catch (e) {
+          notifyError("Composition applied, but save to project failed", e)
+        }
+      }
+      notifySuccess("Composition applied to map.")
+    } catch (e) {
+      notifyError("Composition error", e)
+    } finally {
+      setComposeRunning(false)
+    }
+  }
 
   const handleViewDataCube = async () => {
     if (!props.start || !props.end) {
@@ -430,14 +811,25 @@ function AppBody(props: {
       mode: props.mode,
       model_kind: props.modelKind,
       prithvi_mode: props.prithviMode,
+      project_id: activeProjectId || undefined,
+      label:
+        props.analysisLabel?.trim() ||
+        (useExample
+          ? props.areas.find((a) => a.id === props.activeExample)?.label
+          : undefined) ||
+        (useExample ? props.activeExample : "Custom AOI"),
     }
     try {
       const res = (await Predict(req as never)) as unknown as PredictResult
       props.setResult(res)
-      const label = useExample
-        ? props.areas.find((a) => a.id === props.activeExample)?.label
-        : "Custom AOI"
-      props.setAnalysisLabel(label)
+      props.setShowPredictionOverlay(true)
+      if (!props.analysisLabel?.trim()) {
+        props.setAnalysisLabel(req.label)
+      }
+      if (activeProjectId) {
+        await syncProjectAoi(activeProjectId, req.label)
+        await refreshProjects()
+      }
       notifySuccess(`Classification complete — ${res.n_dates} scenes (saved).`, undefined, {
         action: {
           label: "View analysis",
@@ -445,6 +837,7 @@ function AppBody(props: {
         },
       })
       void refreshRuns()
+      void refreshProjects()
     } catch (e) {
       notifyError("Inference error", e)
     } finally {
@@ -469,10 +862,12 @@ function AppBody(props: {
         area_id: useExample ? props.activeExample : "",
         polygon_geojson: useExample ? null : props.customPolygon,
       } as never)) as unknown as LULCAnalysis
-      const label = useExample
-        ? props.areas.find((a) => a.id === props.activeExample)?.label
-        : "Custom AOI"
-      props.setAnalysisLabel(label)
+      if (!props.analysisLabel?.trim()) {
+        const label = useExample
+          ? props.areas.find((a) => a.id === props.activeExample)?.label
+          : "Custom AOI"
+        props.setAnalysisLabel(label)
+      }
       const mapUri = lulc.map_uri ?? ""
       const extent = lulc.extent ?? {
         lon_min: 0,
@@ -500,11 +895,13 @@ function AppBody(props: {
       // Keep prior classification if any; otherwise expose LULC as the map overlay.
       const prev = props.result
       const keepClassification = !!prev && ((prev.n_dates ?? 0) > 0 || !!prev.overlay_uri)
+      props.setShowPredictionOverlay(true)
       props.setResult({
         extent: keepClassification && prev ? prev.extent : extent,
         overlay_uri: keepClassification && prev?.overlay_uri ? prev.overlay_uri : mapUri,
         confidence_uri: prev?.confidence_uri ?? "",
         ndvi_mean_uri: prev?.ndvi_mean_uri ?? "",
+        true_color_uri: prev?.true_color_uri ?? "",
         reference_uri: mapUri || prev?.reference_uri || "",
         raster_tif: prev?.raster_tif ?? "",
         mean_confidence: prev?.mean_confidence ?? 0,
@@ -539,6 +936,7 @@ function AppBody(props: {
       try {
         const res = (await LoadAnalysis(run.id)) as unknown as PredictResult
         props.setResult(res)
+        props.setShowPredictionOverlay(true)
         if (isModelKind(run.model_kind)) props.setModelKind(run.model_kind)
         props.setAnalysisLabel(run.label || "Saved analysis")
         const aoi = parseRunPolygon(run.polygon_geojson, props.areas)
@@ -584,17 +982,35 @@ function AppBody(props: {
 
   const backToAnalysesList = useCallback(() => {
     props.setResult(null)
+    props.setShowPredictionOverlay(true)
     props.setAnalysisLabel(undefined)
+    props.setSwipeCompare(false)
     goAnalysis()
-  }, [goAnalysis, props.setResult, props.setAnalysisLabel])
+  }, [
+    goAnalysis,
+    props.setResult,
+    props.setShowPredictionOverlay,
+    props.setAnalysisLabel,
+    props.setSwipeCompare,
+  ])
 
   const startNewClassification = useCallback(() => {
     props.setResult(null)
+    props.setShowPredictionOverlay(true)
     props.setAnalysisLabel(undefined)
+    props.setSwipeCompare(false)
+    props.setSwipeRatio(0.5)
     props.onClearArea()
     goMap()
-  }, [goMap, props.setResult, props.setAnalysisLabel, props.onClearArea])
-
+  }, [
+    goMap,
+    props.setResult,
+    props.setShowPredictionOverlay,
+    props.setAnalysisLabel,
+    props.setSwipeCompare,
+    props.setSwipeRatio,
+    props.onClearArea,
+  ])
   const areaLabel = useMemo(() => {
     if (props.analysisLabel) return props.analysisLabel
     if (props.activeExample) {
@@ -605,7 +1021,21 @@ function AppBody(props: {
 
   return (
     <div className="flex h-screen w-screen flex-col overflow-hidden bg-background text-foreground">
-      <TitleBar view={props.view} result={props.result} />
+      <TitleBar
+        view={props.view}
+        result={props.result}
+        projectSwitcher={
+          screen === "map" ? (
+            <ProjectSwitcher
+              projects={projects}
+              activeProjectId={activeProjectId}
+              onSelect={(id) => void activateProject(id)}
+              onCreate={() => void handleCreateProjectFromMap()}
+              onOpenHub={() => goAnalysis()}
+            />
+          ) : undefined
+        }
+      />
 
       <div className="flex min-h-0 flex-1">
         <AppSidebar
@@ -617,82 +1047,180 @@ function AppBody(props: {
           }}
         />
         <div className="relative min-h-0 min-w-0 flex-1">
-          {screen === "map" && (
-            <MapScreen
-              areas={props.areas}
-              activeExample={props.activeExample}
-              customPolygon={props.customPolygon}
-              flyTo={props.flyTo}
-              result={props.result}
-              overlayOpacity={props.overlayOpacity}
-              showConfidence={props.showConfidence}
-              confidenceOnTop={props.confidenceOnTop}
-              smoothOverlay={props.smoothOverlay}
-              areaLabel={areaLabel}
-              hasArea={props.hasArea}
-              start={props.start}
-              end={props.end}
-              maxCloud={props.maxCloud}
-              monthlyBest={props.monthlyBest}
-              mode={props.mode}
-              modelKind={props.modelKind}
-              prithviMode={props.prithviMode}
-              running={props.running}
-              progress={props.progress}
-              progressMsg={props.progressMsg}
-              onViewChange={props.setView}
-              onPolygonDrawn={(geom) => {
-                props.setCustomPolygon(geom)
-                if (geom) props.setActiveExample("")
-              }}
-              onSelectExample={props.onSelectExample}
-              onLocationSelect={(lat, lon) =>
-                props.setFlyTo({ lat, lon, key: Date.now() })
-              }
-              onClearArea={props.onClearArea}
-              onImportPolygon={props.onImportPolygon}
-              onStartChange={props.setStart}
-              onEndChange={props.setEnd}
-              onMaxCloudChange={props.setMaxCloud}
-              onMonthlyBestChange={props.setMonthlyBest}
-              onModeChange={props.setMode}
-              onModelKindChange={props.setModelKind}
-              onPrithviModeChange={props.setPrithviMode}
-              onOpacityChange={props.setOverlayOpacity}
-              onShowConfidenceChange={props.setShowConfidence}
-              onConfidenceOnTopChange={props.setConfidenceOnTop}
-              onSmoothOverlayChange={props.setSmoothOverlay}
-              onRun={handleRun}
-              onAnalyzeLULC={handleAnalyzeLULC}
-              lulcRunning={props.lulcRunning}
-              onCloseResult={() => {
-                props.setResult(null)
-                props.setAnalysisLabel(undefined)
-              }}
-              onNewClassification={startNewClassification}
-              onViewDataCube={() => void handleViewDataCube()}
-              dataCubeLoading={dataCubeLoading}
-              dataCubeOpen={dataCubeOpen}
-              dataCubeError={dataCubeError}
-              dataCubeResult={dataCubeResult}
-              onCloseDataCube={() => {
-                setDataCubeOpen(false)
-                setDataCubeError(null)
-              }}
-            />
-          )}
-          {screen === "analysis" && (
-            <AnalysisPage
-              result={props.result}
-              modelKind={props.modelKind}
-              areaLabel={areaLabel}
-              areaId={props.activeExample || undefined}
-              loadingRun={loadingRun}
-              onOpenRun={openSavedAnalysis}
-              onBackToList={backToAnalysesList}
-              onNewClassification={startNewClassification}
-            />
-          )}
+          <AnimatePresence mode="wait" initial={false}>
+            {screen === "map" && (
+              <motion.div
+                key="screen-map"
+                className="absolute inset-0 min-h-0"
+                initial={{ opacity: 0, x: -14 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -10 }}
+                transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
+              >
+                <MapScreen
+                  areas={props.areas}
+                  activeExample={props.activeExample}
+                  customPolygon={props.customPolygon}
+                  flyTo={props.flyTo}
+                  result={props.result}
+                  overlayOpacity={props.overlayOpacity}
+                  showConfidence={props.showConfidence}
+                  confidenceOnTop={props.confidenceOnTop}
+                  smoothOverlay={props.smoothOverlay}
+                  showPredictionOverlay={props.showPredictionOverlay}
+                  showCompositionOverlay={showCompositionOverlay}
+                  composition={
+                    composition
+                      ? { ...composition, opacity: composeOpacity }
+                      : null
+                  }
+                  swipeCompare={props.swipeCompare}
+                  swipeRatio={props.swipeRatio}
+                  areaLabel={areaLabel}
+                  onAreaLabelChange={(label) => {
+                    props.setAnalysisLabel(label)
+                    if (activeProjectId) void syncProjectAoi(activeProjectId, label)
+                  }}
+                  aoiContourScheme={props.aoiContourScheme}
+                  onAoiContourSchemeChange={props.setAoiContourScheme}
+                  hasArea={props.hasArea}
+                  start={props.start}
+                  end={props.end}
+                  maxCloud={props.maxCloud}
+                  monthlyBest={props.monthlyBest}
+                  mode={props.mode}
+                  modelKind={props.modelKind}
+                  prithviMode={props.prithviMode}
+                  running={props.running}
+                  progress={props.progress}
+                  progressMsg={props.progressMsg}
+                  composeRunning={composeRunning}
+                  composeProgress={composeProgress}
+                  composeProgressMsg={composeProgressMsg}
+                  composeScenes={composeScenes}
+                  composeScenesLoading={composeScenesLoading}
+                  composeScenesError={composeScenesError}
+                  selectedSceneId={selectedSceneId}
+                  composeKind={composeKind}
+                  composeBands={composeBands}
+                  composeIndex={composeIndex}
+                  composeStretchLow={composeStretchLow}
+                  composeStretchHigh={composeStretchHigh}
+                  composeOpacity={composeOpacity}
+                  onViewChange={props.setView}
+                  onPolygonDrawn={(geom) => {
+                    props.setCustomPolygon(geom)
+                    if (geom) {
+                      props.setActiveExample("")
+                      props.setAnalysisLabel(undefined)
+                    }
+                  }}
+                  onSelectExample={props.onSelectExample}
+                  onLocationSelect={(lat, lon) =>
+                    props.setFlyTo({ lat, lon, key: Date.now() })
+                  }
+                  onClearArea={clearAreaAndComposition}
+                  onImportPolygon={props.onImportPolygon}
+                  onStartChange={props.setStart}
+                  onEndChange={props.setEnd}
+                  onMaxCloudChange={props.setMaxCloud}
+                  onMonthlyBestChange={props.setMonthlyBest}
+                  onModeChange={props.setMode}
+                  onModelKindChange={props.setModelKind}
+                  onPrithviModeChange={props.setPrithviMode}
+                  onOpacityChange={props.setOverlayOpacity}
+                  onShowConfidenceChange={props.setShowConfidence}
+                  onConfidenceOnTopChange={props.setConfidenceOnTop}
+                  onSmoothOverlayChange={props.setSmoothOverlay}
+                  onShowPredictionOverlayChange={props.setShowPredictionOverlay}
+                  onShowCompositionOverlayChange={setShowCompositionOverlay}
+                  onSelectScene={setSelectedSceneId}
+                  onComposeKindChange={setComposeKind}
+                  onComposeBandsChange={setComposeBands}
+                  onComposeIndexChange={setComposeIndex}
+                  onComposeStretchChange={(low, high) => {
+                    setComposeStretchLow(low)
+                    setComposeStretchHigh(high)
+                  }}
+                  onComposeOpacityChange={setComposeOpacity}
+                  onListComposeScenes={() => void handleListComposeScenes()}
+                  onApplyComposition={() => void handleApplyComposition()}
+                  onClearComposition={() => {
+                    setComposition(null)
+                    setCompositionGallery([])
+                    setShowCompositionOverlay(true)
+                  }}
+                  compositionGallery={compositionGallery}
+                  onSelectComposition={(id) => {
+                    const hit = compositionGallery.find((c) => c.id === id)
+                    if (hit) {
+                      setComposition(hit)
+                      setShowCompositionOverlay(true)
+                    }
+                  }}
+                  onRemoveComposition={(id) => {
+                    setCompositionGallery((prev) => {
+                      const next = prev.filter((c) => c.id !== id)
+                      setComposition((cur) =>
+                        cur?.id === id ? (next[0] ?? null) : cur
+                      )
+                      return next
+                    })
+                  }}
+                  onSwipeCompareChange={props.setSwipeCompare}
+                  onSwipeRatioChange={props.setSwipeRatio}
+                  onRun={handleRun}
+                  onAnalyzeLULC={handleAnalyzeLULC}
+                  lulcRunning={props.lulcRunning}
+                  onCloseResult={() => {
+                    props.setResult(null)
+                    props.setShowPredictionOverlay(true)
+                    props.setAnalysisLabel(undefined)
+                    props.setSwipeCompare(false)
+                    props.setSwipeRatio(0.5)
+                  }}
+                  onNewClassification={startNewClassification}
+                  onViewDataCube={() => void handleViewDataCube()}
+                  dataCubeLoading={dataCubeLoading}
+                  dataCubeOpen={dataCubeOpen}
+                  dataCubeError={dataCubeError}
+                  dataCubeResult={dataCubeResult}
+                  onCloseDataCube={() => {
+                    setDataCubeOpen(false)
+                    setDataCubeError(null)
+                  }}
+                  leftDockTabs={props.leftDockTabs}
+                />
+              </motion.div>
+            )}
+            {screen === "analysis" && (
+              <motion.div
+                key="screen-analysis"
+                className="absolute inset-0 min-h-0"
+                initial={{ opacity: 0, x: 18 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: 12 }}
+                transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
+              >
+                <AnalysisPage
+                  result={props.result}
+                  modelKind={props.modelKind}
+                  areaLabel={areaLabel}
+                  areaId={props.activeExample || undefined}
+                  loadingRun={loadingRun}
+                  onOpenRun={openSavedAnalysis}
+                  onBackToList={backToAnalysesList}
+                  onNewClassification={startNewClassification}
+                  onAreaLabelChange={(label) => {
+                    props.setAnalysisLabel(label)
+                    if (activeProjectId) void syncProjectAoi(activeProjectId, label)
+                  }}
+                  onActivateProject={(id) => void activateProject(id)}
+                  activeProjectId={activeProjectId}
+                />
+              </motion.div>
+            )}
+          </AnimatePresence>
           {screen === "auth" && <AuthPage />}
           {screen === "profile" && (
             <ProfilePage loadingRun={loadingRun} onOpenRun={openSavedAnalysis} />

@@ -12,6 +12,7 @@ import {
   ClearAvatar,
   CurrentUser,
   GetPreferences,
+  ListProjects,
   ListRuns,
   Login,
   Logout,
@@ -20,7 +21,7 @@ import {
   SetAvatar,
   UpdateProfile,
 } from "../../wailsjs/go/main/App"
-import type { InferenceRun, Preferences, User } from "@/lib/types"
+import type { InferenceRun, Preferences, Project, User } from "@/lib/types"
 
 export type AppScreen = "map" | "auth" | "profile" | "analysis"
 
@@ -28,6 +29,7 @@ interface AuthContextValue {
   user: User | null
   prefs: Preferences | null
   runs: InferenceRun[]
+  projects: Project[]
   loading: boolean
   screen: AppScreen
   goMap: () => void
@@ -43,6 +45,7 @@ interface AuthContextValue {
   clearAvatar: () => Promise<void>
   savePrefs: (prefs: Preferences) => Promise<void>
   refreshRuns: () => Promise<void>
+  refreshProjects: () => Promise<void>
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null)
@@ -57,15 +60,25 @@ export function AuthProvider({
   const [user, setUser] = useState<User | null>(null)
   const [prefs, setPrefs] = useState<Preferences | null>(null)
   const [runs, setRuns] = useState<InferenceRun[]>([])
+  const [projects, setProjects] = useState<Project[]>([])
   const [loading, setLoading] = useState(true)
   const [screen, setScreen] = useState<AppScreen>("map")
 
   const refreshRuns = useCallback(async () => {
     try {
-      const r = (await ListRuns(20)) as unknown as InferenceRun[]
+      const r = (await ListRuns(50)) as unknown as InferenceRun[]
       setRuns(r ?? [])
     } catch {
       setRuns([])
+    }
+  }, [])
+
+  const refreshProjects = useCallback(async () => {
+    try {
+      const p = (await ListProjects()) as unknown as Project[]
+      setProjects(p ?? [])
+    } catch {
+      setProjects([])
     }
   }, [])
 
@@ -78,10 +91,10 @@ export function AuthProvider({
       } catch {
         setPrefs(null)
       }
-      await refreshRuns()
+      await Promise.all([refreshRuns(), refreshProjects()])
       void u
     },
-    [onPrefsApplied, refreshRuns]
+    [onPrefsApplied, refreshRuns, refreshProjects]
   )
 
   useEffect(() => {
@@ -91,14 +104,23 @@ export function AuthProvider({
         const next = raw?.id ? raw : null
         setUser(next)
         if (next) await loadPrefsAndRuns(next)
-        else await refreshRuns()
+        else {
+          try {
+            const p = (await GetPreferences()) as unknown as Preferences
+            setPrefs(p)
+            onPrefsApplied?.(p)
+          } catch {
+            setPrefs(null)
+          }
+          await Promise.all([refreshRuns(), refreshProjects()])
+        }
       })
       .catch(async () => {
         setUser(null)
-        await refreshRuns()
+        await Promise.all([refreshRuns(), refreshProjects()])
       })
       .finally(() => setLoading(false))
-  }, [loadPrefsAndRuns, refreshRuns])
+  }, [loadPrefsAndRuns, refreshRuns, refreshProjects, onPrefsApplied])
 
   const login = useCallback(
     async (email: string, password: string) => {
@@ -128,8 +150,8 @@ export function AuthProvider({
     setPrefs(null)
     setScreen("map")
     notifySuccess("Signed out.")
-    await refreshRuns()
-  }, [refreshRuns])
+    await Promise.all([refreshRuns(), refreshProjects()])
+  }, [refreshRuns, refreshProjects])
 
   const updateProfile = useCallback(async (displayName: string) => {
     const u = (await UpdateProfile(displayName)) as unknown as User
@@ -168,6 +190,7 @@ export function AuthProvider({
       user,
       prefs,
       runs,
+      projects,
       loading,
       screen,
       goMap: () => setScreen("map"),
@@ -183,11 +206,13 @@ export function AuthProvider({
       clearAvatar,
       savePrefs,
       refreshRuns,
+      refreshProjects,
     }),
     [
       user,
       prefs,
       runs,
+      projects,
       loading,
       screen,
       goProfile,
@@ -199,6 +224,7 @@ export function AuthProvider({
       clearAvatar,
       savePrefs,
       refreshRuns,
+      refreshProjects,
     ]
   )
 

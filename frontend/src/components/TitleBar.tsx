@@ -1,4 +1,5 @@
 import { Minus, Square, X } from "lucide-react"
+import type { ReactNode } from "react"
 import {
   WindowMinimise,
   WindowToggleMaximise,
@@ -10,6 +11,7 @@ import { useAuth } from "@/lib/auth"
 interface TitleBarProps {
   view: { lat: number; lon: number; zoom: number }
   result: PredictResult | null
+  projectSwitcher?: ReactNode
 }
 
 function fmtCoord(v: number, pos: string, neg: string): string {
@@ -19,7 +21,7 @@ function fmtCoord(v: number, pos: string, neg: string): string {
 
 // Frameless title bar: brand + context + map telemetry. Navigation lives in
 // the left AppSidebar so the header stays free of per-page icons.
-export function TitleBar({ view, result }: TitleBarProps) {
+export function TitleBar({ view, result, projectSwitcher }: TitleBarProps) {
   const { screen } = useAuth()
   const onMap = screen === "map"
 
@@ -46,6 +48,7 @@ export function TitleBar({ view, result }: TitleBarProps) {
                 ? "analysis"
                 : "profile"}
         </span>
+        {projectSwitcher}
       </div>
 
       <div className="flex items-center gap-3">

@@ -1,17 +1,31 @@
+import { useState } from "react"
 import { AnimatePresence } from "motion/react"
 import type {
   Area,
+  CompositionOverlay,
+  CompositeIndex,
+  CompositeKind,
   DataCubeResult,
+  DataCubeScene,
   GeoJSONGeometry,
+  LeftDockTabsMode,
   ModelKind,
   PredictResult,
 } from "@/lib/types"
+import type { AoiContourSchemeId } from "@/lib/aoiStyle"
 import { MapView } from "@/components/MapView"
 import { SearchBar } from "@/components/SearchBar"
 import { ControlPanel } from "@/components/ControlPanel"
+import { CompositionPanel } from "@/components/CompositionPanel"
+import { LeftDockRail, type LeftDockPanel } from "@/components/LeftDockRail"
 import { ResultsPanel } from "@/components/ResultsPanel"
+import { CompositionStatusPanel } from "@/components/CompositionStatusPanel"
 import { DataCubeModal } from "@/components/DataCubeModal"
 import { ConfidenceLegend } from "@/components/ConfidenceLegend"
+import {
+  OverlayToolsButton,
+  OverlayToolsPanel,
+} from "@/components/OverlayToolsPanel"
 
 export interface MapScreenProps {
   areas: Area[]
@@ -23,7 +37,19 @@ export interface MapScreenProps {
   showConfidence: boolean
   confidenceOnTop: boolean
   smoothOverlay: boolean
+  showPredictionOverlay: boolean
+  showCompositionOverlay: boolean
+  composition: CompositionOverlay | null
+  /** Session gallery of applied compositions (newest first). */
+  compositionGallery?: CompositionOverlay[]
+  onSelectComposition?: (id: string) => void
+  onRemoveComposition?: (id: string) => void
+  swipeCompare: boolean
+  swipeRatio: number
   areaLabel?: string
+  onAreaLabelChange: (label: string) => void
+  aoiContourScheme: AoiContourSchemeId
+  onAoiContourSchemeChange: (id: AoiContourSchemeId) => void
   hasArea: boolean
   start: string
   end: string
@@ -35,6 +61,19 @@ export interface MapScreenProps {
   running: boolean
   progress: number
   progressMsg: string
+  composeRunning: boolean
+  composeProgress: number
+  composeProgressMsg: string
+  composeScenes: DataCubeScene[]
+  composeScenesLoading: boolean
+  composeScenesError: string | null
+  selectedSceneId: string
+  composeKind: CompositeKind
+  composeBands: [string, string, string]
+  composeIndex: CompositeIndex
+  composeStretchLow: number
+  composeStretchHigh: number
+  composeOpacity: number
   onViewChange: (v: { lat: number; lon: number; zoom: number }) => void
   onPolygonDrawn: (geom: GeoJSONGeometry | null) => void
   onSelectExample: (id: string) => void
@@ -52,6 +91,19 @@ export interface MapScreenProps {
   onShowConfidenceChange: (v: boolean) => void
   onConfidenceOnTopChange: (v: boolean) => void
   onSmoothOverlayChange: (v: boolean) => void
+  onShowPredictionOverlayChange: (v: boolean) => void
+  onShowCompositionOverlayChange: (v: boolean) => void
+  onSelectScene: (id: string) => void
+  onComposeKindChange: (k: CompositeKind) => void
+  onComposeBandsChange: (b: [string, string, string]) => void
+  onComposeIndexChange: (i: CompositeIndex) => void
+  onComposeStretchChange: (low: number, high: number) => void
+  onComposeOpacityChange: (v: number) => void
+  onListComposeScenes: () => void
+  onApplyComposition: () => void
+  onClearComposition: () => void
+  onSwipeCompareChange: (v: boolean) => void
+  onSwipeRatioChange: (v: number) => void
   onRun: () => void
   onAnalyzeLULC: () => void
   lulcRunning?: boolean
@@ -63,9 +115,30 @@ export interface MapScreenProps {
   dataCubeError?: string | null
   dataCubeResult?: DataCubeResult | null
   onCloseDataCube: () => void
+  leftDockTabs?: LeftDockTabsMode
 }
 
 export function MapScreen(props: MapScreenProps) {
+  const [leftPanel, setLeftPanel] = useState<LeftDockPanel | null>("classify")
+  const [overlayToolsOpen, setOverlayToolsOpen] = useState(false)
+  const tabsMode = props.leftDockTabs ?? "retracted_only"
+  const showDockTabs = tabsMode === "always" || leftPanel === null
+  const panelOffsetClass =
+    tabsMode === "always" && showDockTabs ? "left-14" : "left-3"
+
+  const selectDock = (id: LeftDockPanel) => {
+    setLeftPanel((cur) => (cur === id ? null : id))
+  }
+
+  const showCompositionStatus =
+    leftPanel === "compose" || (!props.result && !!props.composition)
+  const showPredictionStatus =
+    !showCompositionStatus && !!props.result
+
+  const selectedSceneDate =
+    props.composeScenes.find((s) => s.id === props.selectedSceneId)?.date ??
+    null
+
   return (
     <div className="relative h-full min-h-0 w-full">
       <MapView
@@ -80,11 +153,59 @@ export function MapScreen(props: MapScreenProps) {
         showConfidence={props.showConfidence}
         confidenceOnTop={props.confidenceOnTop}
         smoothOverlay={props.smoothOverlay}
+        showPredictionOverlay={props.showPredictionOverlay}
+        showCompositionOverlay={props.showCompositionOverlay}
+        composition={props.composition}
+        swipeCompare={props.swipeCompare}
+        swipeRatio={props.swipeRatio}
+        onSwipeRatioChange={props.onSwipeRatioChange}
         areaLabel={props.areaLabel}
+        onAreaLabelChange={props.onAreaLabelChange}
+        aoiContourScheme={props.aoiContourScheme}
+        onAoiContourSchemeChange={props.onAoiContourSchemeChange}
+        onClearArea={props.onClearArea}
         onViewChange={props.onViewChange}
       />
 
       <SearchBar onSelectLocation={props.onLocationSelect} />
+
+      <OverlayToolsButton
+        active={overlayToolsOpen}
+        onClick={() => setOverlayToolsOpen((o) => !o)}
+      />
+      <OverlayToolsPanel
+        open={overlayToolsOpen}
+        onClose={() => setOverlayToolsOpen(false)}
+        result={props.result}
+        composition={props.composition}
+        compositionGallery={props.compositionGallery ?? []}
+        onSelectComposition={props.onSelectComposition}
+        onRemoveComposition={props.onRemoveComposition}
+        areaLabel={props.areaLabel}
+        modelKind={props.modelKind}
+        composeSceneDate={
+          props.composeScenes.find((s) => s.id === props.selectedSceneId)
+            ?.date ?? null
+        }
+        showPredictionOverlay={props.showPredictionOverlay}
+        onShowPredictionOverlayChange={props.onShowPredictionOverlayChange}
+        showCompositionOverlay={props.showCompositionOverlay}
+        onShowCompositionOverlayChange={props.onShowCompositionOverlayChange}
+        showConfidence={props.showConfidence}
+        onShowConfidenceChange={props.onShowConfidenceChange}
+        confidenceOnTop={props.confidenceOnTop}
+        onConfidenceOnTopChange={props.onConfidenceOnTopChange}
+        smoothOverlay={props.smoothOverlay}
+        onSmoothOverlayChange={props.onSmoothOverlayChange}
+        swipeCompare={props.swipeCompare}
+        onSwipeCompareChange={props.onSwipeCompareChange}
+        overlayOpacity={props.overlayOpacity}
+        onOverlayOpacityChange={props.onOpacityChange}
+        composeOpacity={props.composeOpacity}
+        onComposeOpacityChange={props.onComposeOpacityChange}
+        aoiContourScheme={props.aoiContourScheme}
+        onAoiContourSchemeChange={props.onAoiContourSchemeChange}
+      />
 
       <ConfidenceLegend
         visible={
@@ -94,56 +215,124 @@ export function MapScreen(props: MapScreenProps) {
         }
       />
 
-      <ControlPanel
-        areas={props.areas}
-        activeExample={props.activeExample}
-        onSelectExample={props.onSelectExample}
-        customPolygon={props.customPolygon}
-        hasArea={props.hasArea}
-        onClearArea={props.onClearArea}
-        onImportPolygon={props.onImportPolygon}
-        start={props.start}
-        end={props.end}
-        onStartChange={props.onStartChange}
-        onEndChange={props.onEndChange}
-        maxCloud={props.maxCloud}
-        onMaxCloudChange={props.onMaxCloudChange}
-        monthlyBest={props.monthlyBest}
-        onMonthlyBestChange={props.onMonthlyBestChange}
-        mode={props.mode}
-        onModeChange={props.onModeChange}
-        modelKind={props.modelKind}
-        onModelKindChange={props.onModelKindChange}
-        prithviMode={props.prithviMode}
-        onPrithviModeChange={props.onPrithviModeChange}
-        overlayOpacity={props.overlayOpacity}
-        onOpacityChange={props.onOpacityChange}
-        smoothOverlay={props.smoothOverlay}
-        onSmoothOverlayChange={props.onSmoothOverlayChange}
-        running={props.running}
-        progress={props.progress}
-        progressMsg={props.progressMsg}
-        onRun={props.onRun}
-        onAnalyzeLULC={props.onAnalyzeLULC}
-        onViewDataCube={props.onViewDataCube}
-        lulcRunning={props.lulcRunning}
-        dataCubeLoading={props.dataCubeLoading}
-      />
+      <AnimatePresence initial={false}>
+        {showDockTabs && (
+          <LeftDockRail
+            key="dock-rail"
+            active={leftPanel}
+            onSelect={selectDock}
+          />
+        )}
+      </AnimatePresence>
 
-      <AnimatePresence>
-        {props.result && (
+      <AnimatePresence mode="wait" initial={false}>
+        {leftPanel === "classify" ? (
+          <ControlPanel
+            key="classify"
+            panelOffsetClass={panelOffsetClass}
+            areas={props.areas}
+            activeExample={props.activeExample}
+            onSelectExample={props.onSelectExample}
+            customPolygon={props.customPolygon}
+            hasArea={props.hasArea}
+            onClearArea={props.onClearArea}
+            onImportPolygon={props.onImportPolygon}
+            start={props.start}
+            end={props.end}
+            onStartChange={props.onStartChange}
+            onEndChange={props.onEndChange}
+            maxCloud={props.maxCloud}
+            onMaxCloudChange={props.onMaxCloudChange}
+            monthlyBest={props.monthlyBest}
+            onMonthlyBestChange={props.onMonthlyBestChange}
+            mode={props.mode}
+            onModeChange={props.onModeChange}
+            modelKind={props.modelKind}
+            onModelKindChange={props.onModelKindChange}
+            prithviMode={props.prithviMode}
+            onPrithviModeChange={props.onPrithviModeChange}
+            overlayOpacity={props.overlayOpacity}
+            onOpacityChange={props.onOpacityChange}
+            smoothOverlay={props.smoothOverlay}
+            onSmoothOverlayChange={props.onSmoothOverlayChange}
+            running={props.running}
+            progress={props.progress}
+            progressMsg={props.progressMsg}
+            onRun={props.onRun}
+            onAnalyzeLULC={props.onAnalyzeLULC}
+            onViewDataCube={props.onViewDataCube}
+            lulcRunning={props.lulcRunning}
+            dataCubeLoading={props.dataCubeLoading}
+            onCollapse={() => setLeftPanel(null)}
+          />
+        ) : leftPanel === "compose" ? (
+          <CompositionPanel
+            key="compose"
+            panelOffsetClass={panelOffsetClass}
+            hasArea={props.hasArea}
+            start={props.start}
+            end={props.end}
+            onStartChange={props.onStartChange}
+            onEndChange={props.onEndChange}
+            maxCloud={props.maxCloud}
+            onMaxCloudChange={props.onMaxCloudChange}
+            monthlyBest={props.monthlyBest}
+            onMonthlyBestChange={props.onMonthlyBestChange}
+            scenes={props.composeScenes}
+            scenesLoading={props.composeScenesLoading}
+            scenesError={props.composeScenesError}
+            selectedSceneId={props.selectedSceneId}
+            onSelectScene={props.onSelectScene}
+            onListScenes={props.onListComposeScenes}
+            kind={props.composeKind}
+            onKindChange={props.onComposeKindChange}
+            bands={props.composeBands}
+            onBandsChange={props.onComposeBandsChange}
+            index={props.composeIndex}
+            onIndexChange={props.onComposeIndexChange}
+            stretchLow={props.composeStretchLow}
+            stretchHigh={props.composeStretchHigh}
+            onStretchChange={props.onComposeStretchChange}
+            opacity={props.composeOpacity}
+            onOpacityChange={props.onComposeOpacityChange}
+            running={props.composeRunning}
+            progress={props.composeProgress}
+            progressMsg={props.composeProgressMsg}
+            hasOverlay={!!props.composition}
+            onApply={props.onApplyComposition}
+            onClear={props.onClearComposition}
+            onCollapse={() => setLeftPanel(null)}
+          />
+        ) : null}
+      </AnimatePresence>
+
+      <AnimatePresence mode="wait" initial={false}>
+        {showCompositionStatus ? (
+          <CompositionStatusPanel
+            key="composition-status"
+            composition={props.composition}
+            sceneDate={selectedSceneDate}
+            composeOpacity={props.composeOpacity}
+            onClear={props.onClearComposition}
+          />
+        ) : showPredictionStatus ? (
           <ResultsPanel
-            result={props.result}
+            key="prediction-status"
+            result={props.result!}
+            showPredictionOverlay={props.showPredictionOverlay}
+            onShowPredictionOverlayChange={props.onShowPredictionOverlayChange}
             showConfidence={props.showConfidence}
             onShowConfidenceChange={props.onShowConfidenceChange}
             confidenceOnTop={props.confidenceOnTop}
             onConfidenceOnTopChange={props.onConfidenceOnTopChange}
             smoothOverlay={props.smoothOverlay}
             onSmoothOverlayChange={props.onSmoothOverlayChange}
+            swipeCompare={props.swipeCompare}
+            onSwipeCompareChange={props.onSwipeCompareChange}
             onClose={props.onCloseResult}
             onNewClassification={props.onNewClassification}
           />
-        )}
+        ) : null}
       </AnimatePresence>
 
       <DataCubeModal

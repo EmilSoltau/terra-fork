@@ -285,6 +285,99 @@
   -webkit-backdrop-filter: blur(18px) saturate(1.05);
 }
 
+/*
+  Workspace chrome — Dark Modern plane language (scoped).
+  Accent / CTA stay TERRA ochre (--p-accent). Selection uses VS Code blue.
+*/
+.terra-workspace {
+  --ar-bg: #1f1f1f;
+  --ar-panel: #181818;
+  --ar-raised: #252526;
+  --ar-border: #2b2b2b;
+  --ar-select: #264f78;
+  --ar-muted: #9d9d9d;
+  background: var(--ar-bg);
+  color: rgb(var(--p-text));
+}
+
+:root[data-theme="light"] .terra-workspace {
+  --ar-bg: rgb(var(--p-ink));
+  --ar-panel: rgb(var(--p-surface));
+  --ar-raised: rgb(var(--p-surface-raised));
+  --ar-border: rgb(var(--p-line) / 0.45);
+  --ar-select: rgb(var(--p-accent) / 0.22);
+  --ar-muted: rgb(var(--p-muted));
+}
+
+.terra-workspace .ar-header {
+  background: var(--ar-panel);
+  border-bottom: 1px solid var(--ar-border);
+}
+
+.terra-workspace .ar-sidebar {
+  background: var(--ar-panel);
+  border-right: 1px solid var(--ar-border);
+}
+
+.ar-section {
+  background: var(--ar-panel, rgb(var(--p-surface)));
+  border: 1px solid var(--ar-border, rgb(var(--p-line) / 0.35));
+  border-radius: var(--radius-sm);
+}
+
+.ar-raised {
+  background: var(--ar-raised, rgb(var(--p-surface-raised)));
+  border: 1px solid var(--ar-border, rgb(var(--p-line) / 0.35));
+  border-radius: var(--radius-sm);
+}
+
+.ar-inset {
+  background: var(--ar-bg, rgb(var(--p-ink)));
+  border: 1px solid var(--ar-border, rgb(var(--p-line) / 0.35));
+  border-radius: var(--radius-sm);
+}
+
+.ar-ghost {
+  border-color: var(--ar-border, rgb(var(--p-line) / 0.4));
+  background: var(--ar-bg, rgb(var(--p-ink) / 0.45));
+}
+
+.ar-ghost:hover {
+  background: var(--ar-raised, rgb(var(--p-surface-raised)));
+}
+
+.ar-select {
+  background: color-mix(
+    in srgb,
+    var(--ar-select, rgb(var(--p-accent))) 55%,
+    transparent
+  );
+  border: 1px solid
+    color-mix(in srgb, var(--ar-select, rgb(var(--p-accent))) 80%, white 10%);
+  border-radius: var(--radius-sm);
+}
+
+.ar-track {
+  background: var(--ar-bg, rgb(var(--p-ink) / 0.55));
+}
+
+.ar-nav-item {
+  border-radius: var(--radius-sm);
+}
+
+.ar-nav-item:hover {
+  background: var(--ar-raised, rgb(var(--p-surface-raised)));
+}
+
+.ar-nav-item.is-active {
+  background: color-mix(
+    in srgb,
+    var(--ar-select, rgb(var(--p-accent))) 45%,
+    transparent
+  );
+  color: rgb(var(--p-text));
+}
+
 .hairline {
   border: none;
   border-top: 1px solid var(--hairline);
@@ -416,6 +509,74 @@
   transform: none;
 }
 
+.overlay-thumb-crisp {
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+}
+
+/* Left dock — vertical named tabs for Classify / Compositions */
+.left-dock-tab-label {
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+  white-space: nowrap;
+  letter-spacing: 0.04em;
+  line-height: 1.1;
+  user-select: none;
+}
+
+/*
+ * Basemap LayersControl — same glass panel chrome as left-dock / Overlay Tools
+ * (replaces Leaflet’s default white square + raster icon).
+ */
+.leaflet-top.leaflet-right .leaflet-control-layers {
+  margin: 10px 10px 0 0 !important;
+  background: var(--panel) !important;
+  border: 1px solid rgb(var(--p-line) / 0.28) !important;
+  border-radius: 2px !important;
+  box-shadow: none !important;
+  backdrop-filter: blur(18px) saturate(1.05);
+  -webkit-backdrop-filter: blur(18px) saturate(1.05);
+  color: var(--foreground);
+}
+.leaflet-control-layers-toggle {
+  width: 32px !important;
+  height: 32px !important;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%23a1a1aa' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83z'/%3E%3Cpath d='m22 17.65-9.17 4.16a2 2 0 0 1-1.66 0L2 17.65'/%3E%3Cpath d='m22 12.65-9.17 4.16a2 2 0 0 1-1.66 0L2 12.65'/%3E%3C/svg%3E") !important;
+  background-size: 16px 16px !important;
+  background-repeat: no-repeat !important;
+  background-position: center !important;
+  background-color: transparent !important;
+  opacity: 0.85;
+}
+.leaflet-control-layers-toggle:hover {
+  opacity: 1;
+  background-color: rgb(var(--p-line) / 0.12) !important;
+}
+.leaflet-control-layers-expanded {
+  padding: 8px 10px !important;
+  min-width: 11rem;
+}
+.leaflet-control-layers-expanded .leaflet-control-layers-list,
+.leaflet-control-layers-expanded label,
+.leaflet-control-layers-expanded span {
+  color: var(--muted-foreground);
+  font-size: 11px;
+  font-family: var(--font-sans);
+}
+.leaflet-control-layers-expanded label:hover,
+.leaflet-control-layers-expanded label:hover span {
+  color: var(--foreground);
+}
+.leaflet-control-layers-separator {
+  border-top-color: rgb(var(--p-line) / 0.28) !important;
+}
+
+/* Map swipe (imagery ↔ prediction) — handle sits above leaflet panes */
+.map-swipe-handle {
+  touch-action: none;
+  user-select: none;
+}
+
 /* AOI name chip — glued to contour edge, rotation applied inline */
 .aoi-label {
   background: transparent !important;
@@ -425,6 +586,7 @@
   display: inline-block;
   padding: 3px 9px;
   border-radius: 4px;
+  /* Default chip chrome; MapView may override via inline scheme colors */
   background: rgb(245 245 243 / 0.97);
   color: rgb(55 55 55);
   font-family: var(--font-sans);
@@ -498,3 +660,82 @@
   background: rgb(var(--p-surface));
   color: rgb(var(--p-text));
 }
+
+/* Sonner toasts — match panel chrome (not richColors peach/red banners) */
+[data-sonner-toaster] {
+  --width: 22rem;
+  font-family: var(--font-sans);
+}
+.terra-toast {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.7rem;
+  width: var(--width);
+  padding: 0.7rem 0.85rem;
+  border-radius: 2px;
+  background: var(--panel);
+  border: 1px solid rgb(var(--p-line) / 0.32);
+  backdrop-filter: blur(18px) saturate(1.05);
+  -webkit-backdrop-filter: blur(18px) saturate(1.05);
+  color: var(--foreground);
+  box-shadow: 0 10px 32px rgb(0 0 0 / 0.32);
+}
+.terra-toast [data-icon] {
+  margin-top: 0.1rem;
+  flex-shrink: 0;
+}
+.terra-toast-success [data-icon] {
+  color: rgb(var(--p-accent));
+}
+.terra-toast-error [data-icon] {
+  color: rgb(220 80 70);
+}
+.terra-toast-info [data-icon],
+.terra-toast-warning [data-icon] {
+  color: rgb(var(--p-muted));
+}
+.terra-toast [data-content] {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 0;
+}
+.terra-toast-title {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  color: var(--foreground);
+}
+.terra-toast-desc {
+  font-size: 11px;
+  line-height: 1.35;
+  color: var(--muted-foreground);
+  word-break: break-word;
+}
+.terra-toast-close {
+  position: absolute !important;
+  top: 0.45rem !important;
+  right: 0.45rem !important;
+  left: auto !important;
+  transform: none !important;
+  width: 1.25rem !important;
+  height: 1.25rem !important;
+  border-radius: 2px !important;
+  border: 1px solid rgb(var(--p-line) / 0.35) !important;
+  background: transparent !important;
+  color: var(--muted-foreground) !important;
+  opacity: 0.85;
+}
+.terra-toast-close:hover {
+  opacity: 1;
+  background: rgb(var(--p-line) / 0.12) !important;
+  color: var(--foreground) !important;
+}
+.terra-toast-error {
+  border-color: rgb(220 80 70 / 0.35);
+}
+.terra-toast-success {
+  border-color: rgb(var(--p-accent) / 0.35);
+}
+

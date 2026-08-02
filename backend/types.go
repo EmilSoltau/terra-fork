@@ -48,6 +48,10 @@ type PredictRequest struct {
 	ModelKind string `json:"model_kind"`
 	// PrithviMode is "pixel" or "patch" (used when ModelKind is "prithvi").
 	PrithviMode string `json:"prithvi_mode"`
+	// ProjectID optionally attaches the saved run to a project.
+	ProjectID string `json:"project_id,omitempty"`
+	// Label is the display name for the AOI (custom rename or example label).
+	Label string `json:"label,omitempty"`
 }
 
 // sidecarRequest is the JSON contract written to the Python sidecar stdin.
@@ -66,6 +70,12 @@ type sidecarRequest struct {
 	ModelKind      string           `json:"model_kind"`
 	PrithviMode    string           `json:"prithvi_mode"`
 	WorkDir        string           `json:"work_dir"`
+	// Composite / index render (action=render_composite).
+	SceneID    string    `json:"scene_id,omitempty"`
+	Kind       string    `json:"kind,omitempty"`
+	Bands      []string  `json:"bands,omitempty"`
+	Index      string    `json:"index,omitempty"`
+	StretchPct []float64 `json:"stretch_pct,omitempty"`
 }
 
 // ClassStat is a per-class statistic from the classification result.
@@ -210,6 +220,30 @@ type DataCubeResult struct {
 	MaxCloud    float64         `json:"max_cloud"`
 }
 
+// CompositeRequest renders an RGB composite or spectral index for one scene.
+type CompositeRequest struct {
+	AreaID         string           `json:"area_id"`
+	PolygonGeoJSON *GeoJSONGeometry `json:"polygon_geojson"`
+	Start          string           `json:"start"`
+	End            string           `json:"end"`
+	MaxCloud       float64          `json:"max_cloud"`
+	MonthlyBest    bool             `json:"monthly_best"`
+	Tiles          []string         `json:"tiles"`
+	SceneID        string           `json:"scene_id"`
+	Kind           string           `json:"kind"` // "rgb" | "index"
+	Bands          []string         `json:"bands,omitempty"`
+	Index          string           `json:"index,omitempty"`
+	StretchPct     []float64        `json:"stretch_pct,omitempty"`
+}
+
+// CompositeResult is a PNG overlay for map display (+ optional GeoTIFF path).
+type CompositeResult struct {
+	Extent     Bounds         `json:"extent"`
+	OverlayURI string         `json:"overlay_uri"`
+	RasterTIF  string         `json:"raster_tif,omitempty"`
+	Meta       map[string]any `json:"meta,omitempty"`
+}
+
 // sidecarResult is the raw JSON returned by the sidecar on stdout.
 type sidecarResult struct {
 	Extent          Bounds                `json:"extent"`
@@ -217,6 +251,7 @@ type sidecarResult struct {
 	RasterTIF       string                `json:"raster_tif"`
 	ConfidencePNG   string                `json:"confidence_png"`
 	NDVIMeanPNG     string                `json:"ndvi_mean_png"`
+	TrueColorPNG    string                `json:"true_color_png"`
 	ReferencePNG    string                `json:"reference_png"`
 	MeanConfidence  float64               `json:"mean_confidence"`
 	NDates          int                   `json:"n_dates"`
@@ -248,6 +283,7 @@ type PredictResult struct {
 	OverlayURI      string                `json:"overlay_uri"`
 	ConfidenceURI   string                `json:"confidence_uri"`
 	NDVIMeanURI     string                `json:"ndvi_mean_uri"`
+	TrueColorURI    string                `json:"true_color_uri"`
 	ReferenceURI    string                `json:"reference_uri"`
 	RasterTIF       string                `json:"raster_tif"`
 	MeanConfidence  float64               `json:"mean_confidence"`

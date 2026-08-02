@@ -38,6 +38,10 @@ export interface PredictRequest {
   mode: "single" | "temporal"
   model_kind: ModelKind
   prithvi_mode: "pixel" | "patch"
+  /** Attach the saved run to this project when set. */
+  project_id?: string
+  /** Display name for the AOI (custom rename or example label). */
+  label?: string
 }
 
 export interface ClassStat {
@@ -145,6 +149,7 @@ export interface PredictResult {
   overlay_uri: string
   confidence_uri: string
   ndvi_mean_uri: string
+  true_color_uri: string
   reference_uri: string
   raster_tif: string
   mean_confidence: number
@@ -188,6 +193,9 @@ export interface Preferences {
   extras_json?: string
 }
 
+/** How vertical left-dock tabs behave (stored in extras_json.left_dock_tabs). */
+export type LeftDockTabsMode = "retracted_only" | "always"
+
 export interface InferenceRun {
   id: string
   user_id: string
@@ -203,6 +211,43 @@ export interface InferenceRun {
   assets_relpath?: string
   n_dates: number
   label?: string
+  project_id?: string
+}
+
+export interface Project {
+  id: string
+  user_id: string
+  name: string
+  notes?: string
+  created_at: string
+  updated_at: string
+  polygon_geojson?: string
+  area_id?: string
+  label?: string
+  run_count?: number
+  overlay_count?: number
+}
+
+export interface ProjectOverlay {
+  id: string
+  project_id: string
+  kind: string
+  title: string
+  meta_json?: string
+  png_relpath?: string
+  tif_relpath?: string
+  created_at: string
+  overlay_uri?: string
+  raster_tif?: string
+}
+
+export interface SaveProjectOverlayRequest {
+  project_id: string
+  kind: string
+  title: string
+  meta_json: string
+  overlay_uri: string
+  raster_tif?: string
 }
 
 export interface DataCubeRequest {
@@ -230,4 +275,50 @@ export interface DataCubeResult {
   date_range: string[]
   monthly_best: boolean
   max_cloud: number
+}
+
+export type CompositeKind = "rgb" | "index"
+export type CompositeIndex = "ndvi" | "ndwi" | "ndmi" | "evi"
+
+export interface CompositeRequest {
+  area_id: string
+  polygon_geojson: GeoJSONGeometry | null
+  start: string
+  end: string
+  max_cloud: number
+  monthly_best: boolean
+  tiles: string[]
+  scene_id: string
+  kind: CompositeKind
+  bands?: string[]
+  index?: CompositeIndex
+  stretch_pct?: number[]
+}
+
+export interface CompositeResult {
+  extent: Bounds
+  overlay_uri: string
+  raster_tif?: string
+  meta?: Record<string, unknown>
+}
+
+export interface CompositionOverlay {
+  /** Client session id — stable key for the overlay gallery. */
+  id: string
+  overlay_uri: string
+  extent: Bounds
+  opacity: number
+  /** Short telemetry line, e.g. "Agriculture · B11-B08-B02" */
+  label?: string
+  /** Display name, e.g. "Agriculture" or "NDVI" */
+  title?: string
+  description?: string
+  kind?: CompositeKind
+  bands?: [string, string, string]
+  index?: CompositeIndex
+  presetId?: string
+  /** Scene acquisition date captured at apply time. */
+  sceneDate?: string
+  /** Local GeoTIFF path for export (when available). */
+  raster_tif?: string
 }

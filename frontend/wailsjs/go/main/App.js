@@ -10,12 +10,32 @@ export function ClearAvatar() {
   return window['go']['main']['App']['ClearAvatar']();
 }
 
+export function CreateProject(arg1, arg2) {
+  return window['go']['main']['App']['CreateProject'](arg1, arg2);
+}
+
 export function CurrentUser() {
   return window['go']['main']['App']['CurrentUser']();
 }
 
+export function DeleteAnalysis(arg1) {
+  return window['go']['main']['App']['DeleteAnalysis'](arg1);
+}
+
+export function DeleteProject(arg1) {
+  return window['go']['main']['App']['DeleteProject'](arg1);
+}
+
+export function DeleteProjectOverlay(arg1) {
+  return window['go']['main']['App']['DeleteProjectOverlay'](arg1);
+}
+
 export function ExportClassification(arg1) {
   return window['go']['main']['App']['ExportClassification'](arg1);
+}
+
+export function ExportOverlayFile(arg1, arg2) {
+  return window['go']['main']['App']['ExportOverlayFile'](arg1, arg2);
 }
 
 export function GeocodeSearch(arg1) {
@@ -26,20 +46,32 @@ export function GetBootLogs() {
   return window['go']['main']['App']['GetBootLogs']();
 }
 
-export function RevealMainWindow() {
-  return window['go']['main']['App']['RevealMainWindow']();
-}
-
 export function GetPreferences() {
   return window['go']['main']['App']['GetPreferences']();
+}
+
+export function GetProject(arg1) {
+  return window['go']['main']['App']['GetProject'](arg1);
+}
+
+export function ListDataCube(arg1) {
+  return window['go']['main']['App']['ListDataCube'](arg1);
 }
 
 export function ListEmbeddedAreas() {
   return window['go']['main']['App']['ListEmbeddedAreas']();
 }
 
-export function ListDataCube(arg1) {
-  return window['go']['main']['App']['ListDataCube'](arg1);
+export function ListProjectOverlays(arg1) {
+  return window['go']['main']['App']['ListProjectOverlays'](arg1);
+}
+
+export function ListProjectRuns(arg1, arg2) {
+  return window['go']['main']['App']['ListProjectRuns'](arg1, arg2);
+}
+
+export function ListProjects() {
+  return window['go']['main']['App']['ListProjects']();
 }
 
 export function ListRuns(arg1) {
@@ -70,14 +102,38 @@ export function Register(arg1, arg2, arg3) {
   return window['go']['main']['App']['Register'](arg1, arg2, arg3);
 }
 
+export function RenderComposite(arg1) {
+  return window['go']['main']['App']['RenderComposite'](arg1);
+}
+
+export function RevealMainWindow() {
+  return window['go']['main']['App']['RevealMainWindow']();
+}
+
 export function SavePreferences(arg1) {
   return window['go']['main']['App']['SavePreferences'](arg1);
+}
+
+export function SaveProjectOverlay(arg1) {
+  return window['go']['main']['App']['SaveProjectOverlay'](arg1);
 }
 
 export function SetAvatar(arg1) {
   return window['go']['main']['App']['SetAvatar'](arg1);
 }
 
+export function SetRunProject(arg1, arg2) {
+  return window['go']['main']['App']['SetRunProject'](arg1, arg2);
+}
+
 export function UpdateProfile(arg1) {
   return window['go']['main']['App']['UpdateProfile'](arg1);
+}
+
+export function UpdateProject(arg1) {
+  return window['go']['main']['App']['UpdateProject'](arg1);
+}
+
+export function UpdateProjectAOI(arg1, arg2, arg3, arg4) {
+  return window['go']['main']['App']['UpdateProjectAOI'](arg1, arg2, arg3, arg4);
 }

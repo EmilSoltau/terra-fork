@@ -563,14 +563,23 @@ def write_ndvi_mean_png(ndvi_mean, valid_mask, out_path):
 
 
 def compute_aoi_vi_series(products, polygon, ref_prof):
-    """Mean ± std NDVI/EVI/SAVI per date; also spatial NDVI temporal mean."""
+    """Mean ± std NDVI/EVI/SAVI per date; also spatial NDVI temporal mean.
+
+    Also keeps reflectance for the peak-NDVI scene so we can write a true-color
+    AOI chip aligned to the same grid as the other overlays.
+    """
+    import composite as comp
+
     series = []
     dates = []
     ndvi_means = []
     ndvi_stack = []
+    best_ndvi = -1.0
+    best_rgb = None  # (red, green, blue, valid_mask)
     for product in products:
         try:
             blue = load_band_to_reference_grid(product, "B02", polygon, ref_prof) / 10000.0
+            green = load_band_to_reference_grid(product, "B03", polygon, ref_prof) / 10000.0
             red = load_band_to_reference_grid(product, "B04", polygon, ref_prof) / 10000.0
             nir = load_band_to_reference_grid(product, "B08", polygon, ref_prof) / 10000.0
             ndvi = calculate_ndvi(nir, red)
@@ -581,12 +590,21 @@ def compute_aoi_vi_series(products, polygon, ref_prof):
                 continue
             date_str = product["date"].strftime("%Y-%m-%d")
             dates.append(product["date"])
-            ndvi_means.append(float(np.mean(ndvi[valid])))
+            mean_ndvi = float(np.mean(ndvi[valid]))
+            ndvi_means.append(mean_ndvi)
             ndvi_stack.append(ndvi.astype(np.float32))
+            if mean_ndvi > best_ndvi:
+                best_ndvi = mean_ndvi
+                best_rgb = (
+                    red.astype(np.float32),
+                    green.astype(np.float32),
+                    blue.astype(np.float32),
+                    valid,
+                )
             series.append(
                 {
                     "date": date_str,
-                    "ndvi_mean": round(float(np.mean(ndvi[valid])), 4),
+                    "ndvi_mean": round(mean_ndvi, 4),
                     "ndvi_std": round(float(np.std(ndvi[valid])), 4),
                     "evi_mean": round(float(np.mean(evi[valid])), 4),
                     "evi_std": round(float(np.std(evi[valid])), 4),
@@ -611,7 +629,13 @@ def compute_aoi_vi_series(products, polygon, ref_prof):
                 0.0,
             ).astype(np.float32)
         valid_mask = nonzero.any(axis=0)
-    return series, dates, ndvi_means, ndvi_mean_map, valid_mask
+
+    true_color_rgba = None
+    if best_rgb is not None:
+        r, g, b, mask = best_rgb
+        true_color_rgba = comp.rgb_to_rgba(r, g, b, mask)
+
+    return series, dates, ndvi_means, ndvi_mean_map, valid_mask, true_color_rgba
 
 
 def classify_temporal_transformer(products, polygon, ref_profile, model_dir):
@@ -920,6 +944,158 @@ def main():
         sys.stdout.flush()
         return
 
+    # RGB / false-color composite or spectral index for one STAC scene.
+    if action == 'render_composite':
+        import composite as comp
+
+        configure_gdal_for_cog()
+        start = req.get('start')
+        end = req.get('end')
+        max_cloud = float(req.get('max_cloud', 100.0))
+        monthly_best = bool(req.get('monthly_best', True))
+        tiles = req.get('tiles') or None
+        scene_id = (req.get('scene_id') or '').strip()
+        kind = (req.get('kind') or 'rgb').strip().lower()
+        stretch = req.get('stretch_pct') or [2, 98]
+        try:
+            stretch_lo = float(stretch[0])
+            stretch_hi = float(stretch[1])
+        except Exception:
+            stretch_lo, stretch_hi = 2.0, 98.0
+
+        if not scene_id:
+            fail('render_composite requires scene_id')
+        if not start or not end:
+            fail('render_composite requires start and end dates (YYYY-MM-DD)')
+        if req.get('polygon_geojson'):
+            polygon = polygon_from_geojson(req['polygon_geojson'])
+        elif req.get('kml_path'):
+            area = parse_kml_coordinates(Path(req['kml_path']), req.get('kml_target'))
+            if area is None:
+                fail('polygon not found in KML')
+            polygon = area['polygon']
+        else:
+            fail('no polygon provided (polygon_geojson or kml_path required)')
+
+        emit_progress(10, 'querying STAC for scene')
+        try:
+            products = list_stac_products(
+                polygon, start, end, tile_list=tiles, max_cloud=max_cloud,
+                monthly_best=False,  # need full list to match scene_id
+            )
+        except Exception as e:
+            fail(f'STAC query failed: {e}')
+
+        product = None
+        for p in products:
+            if (p.get('id') or '') == scene_id:
+                product = p
+                break
+        if product is None:
+            # Fall back: monthly_best list may have dropped the scene; retry without cloud filter widen
+            try:
+                products = list_stac_products(
+                    polygon, start, end, tile_list=tiles, max_cloud=100.0,
+                    monthly_best=False,
+                )
+            except Exception as e:
+                fail(f'STAC query failed: {e}')
+            for p in products:
+                if (p.get('id') or '') == scene_id:
+                    product = p
+                    break
+        if product is None:
+            fail(f'scene not found: {scene_id}')
+
+        emit_progress(30, 'loading reference band B04')
+        try:
+            ref, ref_prof = load_and_clip_band(product, 'B04', polygon, '10m')
+        except Exception as e:
+            fail(f'failed to load B04: {e}')
+
+        def load_band(name: str):
+            res = comp.BAND_RESOLUTION.get(name, '10m')
+            return load_band_to_reference_grid(product, name, polygon, ref_prof, res)
+
+        mask = ref > 0
+        overlay_png = work_dir / 'composite.png'
+        meta = {
+            'kind': kind,
+            'scene_id': scene_id,
+            'date': product['date'].strftime('%Y-%m-%d') if hasattr(product.get('date'), 'strftime') else str(product.get('date', '')),
+            'stretch_pct': [stretch_lo, stretch_hi],
+        }
+
+        if kind == 'rgb':
+            bands = req.get('bands') or list(comp.RGB_PRESETS['true_color'])
+            if len(bands) != 3:
+                fail('rgb kind requires bands: [R, G, B]')
+            for bname in bands:
+                if bname not in comp.ALLOWED_BANDS:
+                    fail(f'unsupported band: {bname}')
+            emit_progress(50, f'loading {bands[0]}/{bands[1]}/{bands[2]}')
+            try:
+                r = load_band(bands[0]) / 10000.0
+                g = load_band(bands[1]) / 10000.0
+                b = load_band(bands[2]) / 10000.0
+            except Exception as e:
+                fail(f'band load failed: {e}')
+            mask = mask & (r > 0) & (g > 0) & (b > 0)
+            rgba = comp.rgb_to_rgba(r, g, b, mask, stretch_lo, stretch_hi)
+            meta['bands'] = bands
+        elif kind == 'index':
+            index_name = (req.get('index') or 'ndvi').strip().lower()
+            if index_name not in comp.ALLOWED_INDICES:
+                fail(f'unsupported index: {index_name}')
+            emit_progress(50, f'computing {index_name}')
+            try:
+                if index_name == 'ndvi':
+                    nir = load_band('B08') / 10000.0
+                    red = load_band('B04') / 10000.0
+                    idx = calculate_ndvi(nir, red)
+                    mask = mask & (nir > 0) & (red > 0)
+                elif index_name == 'ndwi':
+                    green = load_band('B03') / 10000.0
+                    nir = load_band('B08') / 10000.0
+                    idx = comp.calculate_ndwi(green, nir)
+                    mask = mask & (green > 0) & (nir > 0)
+                elif index_name == 'ndmi':
+                    nir = load_band('B08') / 10000.0
+                    swir = load_band('B11') / 10000.0
+                    idx = comp.calculate_ndmi(nir, swir)
+                    mask = mask & (nir > 0) & (swir > 0)
+                else:  # evi
+                    nir = load_band('B08') / 10000.0
+                    red = load_band('B04') / 10000.0
+                    blue = load_band('B02') / 10000.0
+                    idx = calculate_evi(nir, red, blue)
+                    mask = mask & (nir > 0) & (red > 0) & (blue > 0)
+            except Exception as e:
+                fail(f'index bands failed: {e}')
+            rgba = comp.index_to_rgba(idx, mask, index_name, stretch_lo, stretch_hi)
+            meta['index'] = index_name
+        else:
+            fail(f'unknown kind: {kind}')
+
+        emit_progress(85, 'writing PNG')
+        comp.write_rgba_png(rgba, overlay_png)
+        raster_tif = work_dir / 'composite.tif'
+        emit_progress(92, 'writing GeoTIFF')
+        try:
+            comp.write_rgba_geotiff(rgba, ref_prof, raster_tif)
+        except Exception as e:
+            fail(f'composite GeoTIFF failed: {e}')
+        extent = comp.extent_from_profile(ref_prof)
+        emit_progress(100, 'done')
+        sys.stdout.write(json.dumps({
+            'extent': extent,
+            'overlay_png': str(overlay_png),
+            'raster_tif': str(raster_tif),
+            'meta': meta,
+        }))
+        sys.stdout.flush()
+        return
+
     model_dir = Path(req.get('model_dir', ''))
     source = req.get('source', 'stac')  # 'stac' (cloud COG) or 'local' (.SAFE)
     sentinel_dir = Path(req.get('sentinel_dir', '')) if req.get('sentinel_dir') else None
@@ -1095,8 +1271,9 @@ def main():
 
     emit_progress(88, 'computing vegetation index series and phenology')
     import phenology as pheno
-    vi_series, vi_dates, ndvi_means, ndvi_mean_map, ndvi_valid = compute_aoi_vi_series(
-        products, polygon, ref_profile
+    import composite as comp
+    vi_series, vi_dates, ndvi_means, ndvi_mean_map, ndvi_valid, true_color_rgba = (
+        compute_aoi_vi_series(products, polygon, ref_profile)
     )
     phenology = pheno.phenology_metrics(ndvi_means, vi_dates) if vi_dates else {
         'sos_doy': None, 'pos_doy': None, 'eos_doy': None, 'los_days': None,
@@ -1109,6 +1286,7 @@ def main():
     raster_tif = work_dir / 'classification_map.tif'
     confidence_png = work_dir / 'confidence.png'
     ndvi_mean_png = work_dir / 'ndvi_mean.png'
+    true_color_png = work_dir / 'true_color.png'
     reference_png = work_dir / 'reference.png'
     write_overlay_png(classification_map, overlay_png)
     write_classification_tif(classification_map, ref_profile, raster_tif)
@@ -1119,6 +1297,10 @@ def main():
     if ndvi_mean_map is not None and ndvi_valid is not None:
         write_ndvi_mean_png(ndvi_mean_map, ndvi_valid, ndvi_mean_png)
         ndvi_mean_path = str(ndvi_mean_png)
+    true_color_path = ''
+    if true_color_rgba is not None:
+        comp.write_rgba_png(true_color_rgba, true_color_png)
+        true_color_path = str(true_color_png)
     reference_path = ''
     if mb_map is not None:
         # Mask reference to AOI footprint (same as classification valid pixels).
@@ -1167,6 +1349,7 @@ def main():
         'raster_tif': str(raster_tif),
         'confidence_png': str(confidence_png),
         'ndvi_mean_png': ndvi_mean_path,
+        'true_color_png': true_color_path,
         'reference_png': reference_path,
         'mean_confidence': round(mean_conf, 4),
         'n_dates': len(products),

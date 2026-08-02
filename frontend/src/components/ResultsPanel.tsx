@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { forwardRef, useState } from "react"
 import { motion } from "motion/react"
 import { X, ChevronDown, ChevronUp, ChartColumn, Plus } from "lucide-react"
 import type { PredictResult } from "@/lib/types"
@@ -6,27 +6,39 @@ import { useAuth } from "@/lib/auth"
 
 interface ResultsPanelProps {
   result: PredictResult
+  showPredictionOverlay: boolean
+  onShowPredictionOverlayChange: (v: boolean) => void
   showConfidence: boolean
   onShowConfidenceChange: (v: boolean) => void
   confidenceOnTop: boolean
   onConfidenceOnTopChange: (v: boolean) => void
   smoothOverlay: boolean
   onSmoothOverlayChange: (v: boolean) => void
+  swipeCompare: boolean
+  onSwipeCompareChange: (v: boolean) => void
   onClose: () => void
   onNewClassification: () => void
 }
 
-export function ResultsPanel({
-  result,
-  showConfidence,
-  onShowConfidenceChange,
-  confidenceOnTop,
-  onConfidenceOnTopChange,
-  smoothOverlay,
-  onSmoothOverlayChange,
-  onClose,
-  onNewClassification,
-}: ResultsPanelProps) {
+export const ResultsPanel = forwardRef<HTMLDivElement, ResultsPanelProps>(
+  function ResultsPanel(
+    {
+      result,
+      showPredictionOverlay,
+      onShowPredictionOverlayChange,
+      showConfidence,
+      onShowConfidenceChange,
+      confidenceOnTop,
+      onConfidenceOnTopChange,
+      smoothOverlay,
+      onSmoothOverlayChange,
+      swipeCompare,
+      onSwipeCompareChange,
+      onClose,
+      onNewClassification,
+    },
+    ref
+  ) {
   const [collapsed, setCollapsed] = useState(false)
   const { goAnalysis } = useAuth()
 
@@ -50,7 +62,8 @@ export function ResultsPanel({
 
   return (
     <motion.div
-      className="panel app-no-drag absolute bottom-3 left-[20.5rem] right-16 z-[1000] mx-auto max-w-[36rem] rounded-md"
+      ref={ref}
+      className="panel app-no-drag absolute bottom-3 left-[23.5rem] right-16 z-[1000] mx-auto max-w-[36rem] rounded-md"
       initial={{ opacity: 0, y: 24 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: 24 }}
@@ -112,11 +125,31 @@ export function ResultsPanel({
               <label className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
                 <input
                   type="checkbox"
+                  checked={showPredictionOverlay}
+                  onChange={(e) =>
+                    onShowPredictionOverlayChange(e.target.checked)
+                  }
+                  className="accent-primary"
+                />
+                Show prediction overlay
+              </label>
+              <label className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                <input
+                  type="checkbox"
                   checked={smoothOverlay}
                   onChange={(e) => onSmoothOverlayChange(e.target.checked)}
                   className="accent-primary"
                 />
                 Smooth prediction overlay
+              </label>
+              <label className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                <input
+                  type="checkbox"
+                  checked={swipeCompare}
+                  onChange={(e) => onSwipeCompareChange(e.target.checked)}
+                  className="accent-primary"
+                />
+                Swipe imagery ↔ overlay
               </label>
               {!isLulcOnly && (
                 <label className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
@@ -169,11 +202,13 @@ export function ResultsPanel({
             <p className="text-[10px] text-muted-foreground">
               {isLulcOnly
                 ? "MapBiomas cover on the map. Open Analysis for groups, diversity and details."
-                : "Open Analysis for land cover / use, cover map, VI series and phenology."}
+                : swipeCompare
+                  ? "Drag the handle to reveal satellite imagery under the prediction / confidence overlay."
+                  : "Open Analysis for land cover / use, cover map, VI series and phenology."}
             </p>
           </div>
         </>
       )}
     </motion.div>
   )
-}
+})
