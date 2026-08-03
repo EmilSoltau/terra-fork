@@ -687,6 +687,24 @@ export namespace backend {
 		    return a;
 		}
 	}
+	export class ResearchExportMeta {
+	    model_kind: string;
+	    area_id: string;
+	    aoi_label: string;
+	    polygon_geojson: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new ResearchExportMeta(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.model_kind = source["model_kind"];
+	        this.area_id = source["area_id"];
+	        this.aoi_label = source["aoi_label"];
+	        this.polygon_geojson = source["polygon_geojson"];
+	    }
+	}
 	
 
 }

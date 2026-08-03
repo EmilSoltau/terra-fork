@@ -38,6 +38,10 @@ export function ExportOverlayFile(arg1, arg2) {
   return window['go']['main']['App']['ExportOverlayFile'](arg1, arg2);
 }
 
+export function ExportResearchPack(arg1, arg2) {
+  return window['go']['main']['App']['ExportResearchPack'](arg1, arg2);
+}
+
 export function GeocodeSearch(arg1) {
   return window['go']['main']['App']['GeocodeSearch'](arg1);
 }

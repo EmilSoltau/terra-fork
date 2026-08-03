@@ -34,6 +34,7 @@ import {
   DeleteAnalysis,
   DeleteProject,
   ExportClassification,
+  ExportResearchPack,
   ListProjectOverlays,
   ListProjectRuns,
   LoadAnalysis,
@@ -62,6 +63,8 @@ interface AnalysisPageProps {
   modelKind: string
   areaLabel?: string
   areaId?: string
+  /** Current AOI polygon as GeoJSON text (geometry or Feature). */
+  polygonGeoJSON?: string
   loadingRun?: boolean
   onOpenRun: (run: InferenceRun) => Promise<void>
   onBackToList: () => void
@@ -86,6 +89,7 @@ export function AnalysisPage({
   modelKind,
   areaLabel,
   areaId,
+  polygonGeoJSON,
   loadingRun,
   onOpenRun,
   onBackToList,
@@ -605,6 +609,43 @@ export function AnalysisPage({
     }
   }
 
+  const canExportTables =
+    (result.class_stats?.length ?? 0) > 0 ||
+    (result.vi_series?.length ?? 0) > 0 ||
+    !!result.lulc ||
+    (result.phenology_states?.length ?? 0) > 0 ||
+    (result.temporal?.length ?? 0) > 0
+
+  const exportTables = async () => {
+    if (!canExportTables) return
+    try {
+      // Strip bulky data URIs — only tabular fields + raster path are needed.
+      const pack = {
+        ...result,
+        overlay_uri: "",
+        confidence_uri: "",
+        ndvi_mean_uri: "",
+        true_color_uri: "",
+        reference_uri: "",
+        lulc: result.lulc
+          ? { ...result.lulc, map_uri: "", map_png: "" }
+          : result.lulc,
+      }
+      const dest = await ExportResearchPack(
+        {
+          model_kind: modelKind,
+          area_id: areaId ?? "",
+          aoi_label: areaLabel?.trim() || "",
+          polygon_geojson: polygonGeoJSON?.trim() || "",
+        },
+        pack as never
+      )
+      if (dest) notifyExportOk(dest)
+    } catch (e) {
+      notifyExportFail(e)
+    }
+  }
+
   const metric = (label: string, value: number | null | undefined, suffix = "") => (
     <div className="ar-raised flex min-h-[4.25rem] flex-col justify-center px-2.5 py-2">
       <div className="eyebrow">{label}</div>
@@ -743,6 +784,16 @@ export function AnalysisPage({
               <Plus className="h-3 w-3" />
               New classification
             </button>
+            {canExportTables && (
+              <button
+                type="button"
+                onClick={() => void exportTables()}
+                className={btnGhost}
+              >
+                <Download className="h-3 w-3" />
+                Export tables
+              </button>
+            )}
             {hasClassification && result.raster_tif && (
               <button
                 type="button"

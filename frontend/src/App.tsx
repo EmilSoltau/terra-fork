@@ -1133,6 +1133,15 @@ function AppBody(props: {
     return props.customPolygon ? "Custom AOI" : undefined
   }, [props.analysisLabel, props.activeExample, props.areas, props.customPolygon])
 
+  const analysisPolygonGeoJSON = useMemo(() => {
+    if (props.customPolygon) return JSON.stringify(props.customPolygon)
+    if (props.activeExample) {
+      const geom = props.areas.find((a) => a.id === props.activeExample)?.geometry
+      if (geom) return JSON.stringify(geom)
+    }
+    return ""
+  }, [props.customPolygon, props.activeExample, props.areas])
+
   return (
     <div className="flex h-screen w-screen flex-col overflow-hidden bg-background text-foreground">
       <TitleBar
@@ -1320,6 +1329,7 @@ function AppBody(props: {
                   modelKind={props.modelKind}
                   areaLabel={areaLabel}
                   areaId={props.activeExample || undefined}
+                  polygonGeoJSON={analysisPolygonGeoJSON}
                   loadingRun={loadingRun}
                   onOpenRun={openSavedAnalysis}
                   onBackToList={backToAnalysesList}

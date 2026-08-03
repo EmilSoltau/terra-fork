@@ -121,6 +121,7 @@ Open **Analysis** for:
 - Cover map tiles (satellite, NDVI mean, MapBiomas, prediction, confidence)
 - Class statistics, VI series, phenology
 - Project hub (folders, unassigned runs, overlays)
+- **Export tables** — ZIP with CSVs (class stats, VI series, phenology, MapBiomas compare), AOI GeoJSON, and classification GeoTIFF when available — for notebooks / training workspaces
 - Export GeoTIFF from the analysis header when available
 
 From saved runs, select two and **Compare** for side-by-side prediction /

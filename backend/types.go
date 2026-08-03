@@ -304,3 +304,11 @@ type ProgressEvent struct {
 	Progress int    `json:"progress"`
 	Msg      string `json:"msg"`
 }
+
+// ResearchExportMeta accompanies a PredictResult when building a research ZIP.
+type ResearchExportMeta struct {
+	ModelKind      string `json:"model_kind"`
+	AreaID         string `json:"area_id"`
+	AoiLabel       string `json:"aoi_label"`
+	PolygonGeoJSON string `json:"polygon_geojson"` // raw GeoJSON geometry or Feature
+}

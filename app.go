@@ -237,6 +237,43 @@ func (a *App) ExportClassification(rasterPath string) (string, error) {
 	return a.ExportOverlayFile(rasterPath, "terra_classification.tif")
 }
 
+// ExportResearchPack writes a ZIP of tabular CSVs (+ AOI / optional GeoTIFF)
+// for use in an external training or study workspace.
+func (a *App) ExportResearchPack(meta backend.ResearchExportMeta, result *backend.PredictResult) (string, error) {
+	if result == nil {
+		return "", errors.New("no analysis result to export")
+	}
+	dataDir := ""
+	if a.store != nil {
+		dataDir = a.store.DataDir()
+	}
+	zipBytes, err := backend.BuildResearchPackZIP(meta, result, dataDir)
+	if err != nil {
+		return "", err
+	}
+
+	dest, err := wruntime.SaveFileDialog(a.ctx, wruntime.SaveDialogOptions{
+		Title:           "Export research pack",
+		DefaultFilename: backend.DefaultResearchPackFilename(meta.AoiLabel),
+		Filters: []wruntime.FileFilter{
+			{DisplayName: "ZIP archive", Pattern: "*.zip"},
+		},
+	})
+	if err != nil {
+		return "", err
+	}
+	if dest == "" {
+		return "", nil
+	}
+	if !strings.HasSuffix(strings.ToLower(dest), ".zip") {
+		dest += ".zip"
+	}
+	if err := os.WriteFile(dest, zipBytes, 0o644); err != nil {
+		return "", err
+	}
+	return dest, nil
+}
+
 // ExportOverlayFile saves an overlay asset via SaveFileDialog.
 // src may be a filesystem path or a data:image/png;base64,... URI.
 func (a *App) ExportOverlayFile(src string, defaultFilename string) (string, error) {
