@@ -114,6 +114,12 @@ stable enough for interactive use. Longer manuals and reports are in preparation
   [joao_leonardi.melo@somosicev.com](mailto:joao_leonardi.melo@somosicev.com) ·
   [opensource.leonardi@gmail.com](mailto:opensource.leonardi@gmail.com)
 
+## AI Agent Usage in this Software:
+
+I am not an experienced Full-Stack developer; my background is mainly in machine learning, deep learning, and remote sensing / Earth observation. Therefore, I used CursorAI to assist me with the development of this software.
+
+All field and academic research I conduct undergoes review by my professors (sometimes from more than two institutions). Depending on the scientific value of the content produced, we evaluate the possibility of publishing papers in conferences or journals. This research takes place in a private institutional repository. If you’d like to collaborate or discuss these topics, feel free to send me an email, and I’ll be happy to connect!
+
 ## Quick start
 
 1. Prefer a **FULL** release zip (embeds Python), or Python 3.12 +
