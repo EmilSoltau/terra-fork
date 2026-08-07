@@ -324,3 +324,38 @@ export interface CompositionOverlay {
   /** Local GeoTIFF path for export (when available). */
   raster_tif?: string
 }
+
+/** One extracted band-ratio index rendered as an independent, toggleable map layer. */
+export interface ExtractLayer {
+  /** Client session id — stable key for the layer list. */
+  id: string
+  /** Index key, e.g. "iron_oxide". */
+  index: string
+  /** Display label, e.g. "Iron oxide". */
+  label: string
+  /** Colormapped preview PNG (base64 data URI). */
+  overlay_uri: string
+  extent: Bounds
+  opacity: number
+  visible: boolean
+  /** Promoted GeoTIFF path for export (when available). */
+  tif?: string
+  /** Persisted project_overlay id (when saved to a project); enables delete. */
+  overlayId?: string
+}
+
+/** Full result of an Extract run (mirrors backend.ExtractResult). */
+export interface ExtractResult {
+  extent: Bounds
+  cube_tif: string
+  index_tifs: Record<string, string>
+  index_overlay_uris: Record<string, string>
+  overlay_uri: string
+  manifest_json: string
+  bands: string[]
+  indices: string[]
+  scenes_used: { id: string; date: string; cloud_cover: number }[]
+  n_scenes: number
+  valid_pct: number
+  date_range: string[]
+}

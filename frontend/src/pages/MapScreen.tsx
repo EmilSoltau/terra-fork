@@ -7,6 +7,8 @@ import type {
   CompositeKind,
   DataCubeResult,
   DataCubeScene,
+  ExtractLayer,
+  ExtractResult,
   GeoJSONGeometry,
   LeftDockTabsMode,
   ModelKind,
@@ -17,7 +19,11 @@ import { MapView } from "@/components/MapView"
 import { SearchBar } from "@/components/SearchBar"
 import { ControlPanel } from "@/components/ControlPanel"
 import { CompositionPanel } from "@/components/CompositionPanel"
+import { ExtractPanel } from "@/components/ExtractPanel"
+import { LayersPanel } from "@/components/LayersPanel"
 import { LeftDockRail, type LeftDockPanel } from "@/components/LeftDockRail"
+import { ExportOverlayFile } from "../../wailsjs/go/main/App"
+import { notifyExportOk, notifyExportFail } from "@/lib/notify"
 import { ResultsPanel } from "@/components/ResultsPanel"
 import { CompositionStatusPanel } from "@/components/CompositionStatusPanel"
 import { DataCubeModal } from "@/components/DataCubeModal"
@@ -116,6 +122,14 @@ export interface MapScreenProps {
   dataCubeResult?: DataCubeResult | null
   onCloseDataCube: () => void
   leftDockTabs?: LeftDockTabsMode
+  // Extract layers
+  extractLayers: ExtractLayer[]
+  onExtractResult: (result: ExtractResult) => void
+  onToggleExtractLayer: (id: string) => void
+  onExtractLayerOpacity: (id: string, v: number) => void
+  onRemoveExtractLayer: (id: string) => void
+  onClearExtractLayers: () => void
+  onZoomExtractLayer: (layer: ExtractLayer) => void
 }
 
 export function MapScreen(props: MapScreenProps) {
@@ -156,6 +170,7 @@ export function MapScreen(props: MapScreenProps) {
         showPredictionOverlay={props.showPredictionOverlay}
         showCompositionOverlay={props.showCompositionOverlay}
         composition={props.composition}
+        extractLayers={props.extractLayers}
         swipeCompare={props.swipeCompare}
         swipeRatio={props.swipeRatio}
         onSwipeRatioChange={props.onSwipeRatioChange}
@@ -295,6 +310,40 @@ export function MapScreen(props: MapScreenProps) {
             hasOverlay={!!props.composition}
             onApply={props.onApplyComposition}
             onClear={props.onClearComposition}
+            onCollapse={() => setLeftPanel(null)}
+          />
+        ) : leftPanel === "extract" ? (
+          <ExtractPanel
+            key="extract"
+            panelOffsetClass={panelOffsetClass}
+            polygon={props.customPolygon}
+            onExtractResult={(result) => {
+              props.onExtractResult(result)
+              setLeftPanel("layers")
+            }}
+            onCollapse={() => setLeftPanel(null)}
+          />
+        ) : leftPanel === "layers" ? (
+          <LayersPanel
+            key="layers"
+            panelOffsetClass={panelOffsetClass}
+            layers={props.extractLayers}
+            onToggle={props.onToggleExtractLayer}
+            onOpacity={props.onExtractLayerOpacity}
+            onRemove={props.onRemoveExtractLayer}
+            onZoom={props.onZoomExtractLayer}
+            onClearAll={props.onClearExtractLayers}
+            onExportPng={(layer) =>
+              ExportOverlayFile(layer.overlay_uri, `index_${layer.index}.png`)
+                .then((d) => d && notifyExportOk(d))
+                .catch(notifyExportFail)
+            }
+            onExportTif={(layer) =>
+              layer.tif &&
+              ExportOverlayFile(layer.tif, `index_${layer.index}.tif`)
+                .then((d) => d && notifyExportOk(d))
+                .catch(notifyExportFail)
+            }
             onCollapse={() => setLeftPanel(null)}
           />
         ) : null}

@@ -14,6 +14,7 @@ import {
   SavePreferences,
   SaveProjectOverlay,
   ListProjectOverlays,
+  DeleteProjectOverlay,
   GetProject,
   UpdateProjectAOI,
   CreateProject,
@@ -33,6 +34,8 @@ import type {
   DataCubeRequest,
   DataCubeScene,
   CompositionOverlay,
+  ExtractLayer,
+  ExtractResult,
   CompositeRequest,
   CompositeKind,
   CompositeIndex,
@@ -43,7 +46,7 @@ import type {
 } from "@/lib/types"
 import { leftDockTabsModeFromPrefs, parsePreferenceExtras } from "@/lib/preferenceExtras"
 import { makeRunLabel, resolveAoiDisplayLabel, aoiLabelFromRunSummary } from "@/lib/aoiLabel"
-import { projectOverlayToComposition } from "@/lib/projectOverlays"
+import { projectOverlayToComposition, projectOverlayToExtractLayer } from "@/lib/projectOverlays"
 import { ProjectSwitcher } from "@/components/ProjectSwitcher"
 import { resolveCompositionMeta } from "@/lib/compositeCatalog"
 import {
@@ -360,6 +363,15 @@ function App() {
   )
 }
 
+/** Display labels for extract band-ratio indices (keys match preprocess.INDEX_REGISTRY). */
+const EXTRACT_INDEX_LABELS: Record<string, string> = {
+  iron_oxide: "Iron oxide",
+  clay_hydroxyl: "Clay / hydroxyl",
+  ferrous_iron: "Ferrous iron",
+  carbonate: "Carbonate",
+  ndvi: "NDVI",
+}
+
 function AppBody(props: {
   areas: Area[]
   activeExample: string
@@ -450,6 +462,96 @@ function AppBody(props: {
   const [composeStretchLow, setComposeStretchLow] = useState(2)
   const [composeStretchHigh, setComposeStretchHigh] = useState(98)
   const [composeOpacity, setComposeOpacity] = useState(0.85)
+
+  // Extract index layers — independent, simultaneously-visible map layers.
+  const [extractLayers, setExtractLayers] = useState<ExtractLayer[]>([])
+  const addExtractLayers = useCallback((res: ExtractResult) => {
+    const overlays = res.index_overlay_uris || {}
+    const tifs = res.index_tifs || {}
+    const stamp = Date.now()
+    const created: ExtractLayer[] = (res.indices || [])
+      .filter((name) => overlays[name])
+      .map((name, i) => ({
+        id: `extract-${stamp}-${i}`,
+        index: name,
+        label: EXTRACT_INDEX_LABELS[name] ?? name,
+        overlay_uri: overlays[name],
+        extent: res.extent,
+        opacity: 0.85,
+        visible: true,
+        tif: tifs[name],
+      }))
+    if (!created.length) return
+    setExtractLayers((prev) => [...created, ...prev])
+
+    // Persist each layer into the active project (reuses the composition
+    // overlay store with kind="extract"). The persisted row id is stitched
+    // back onto the session layer so removal can delete it.
+    if (activeProjectId) {
+      created.forEach((layer) => {
+        const metaJson = JSON.stringify({
+          extent: layer.extent,
+          index: layer.index,
+          label: layer.label,
+          opacity: layer.opacity,
+          visible: layer.visible,
+        })
+        SaveProjectOverlay({
+          project_id: activeProjectId,
+          kind: "extract",
+          title: layer.label,
+          meta_json: metaJson,
+          overlay_uri: layer.overlay_uri,
+          raster_tif: "",
+        } as never)
+          .then((row) => {
+            const rid = (row as unknown as { id?: string })?.id
+            if (rid) {
+              setExtractLayers((prev) =>
+                prev.map((l) => (l.id === layer.id ? { ...l, overlayId: rid } : l)),
+              )
+            }
+          })
+          .catch((e) => notifyError("Extract layer shown, but not saved to project", e))
+      })
+      void refreshProjects()
+    }
+  }, [activeProjectId])
+  const toggleExtractLayer = useCallback(
+    (id: string) => setExtractLayers((prev) => prev.map((l) => (l.id === id ? { ...l, visible: !l.visible } : l))),
+    [],
+  )
+  const setExtractLayerOpacity = useCallback(
+    (id: string, v: number) => setExtractLayers((prev) => prev.map((l) => (l.id === id ? { ...l, opacity: v } : l))),
+    [],
+  )
+  const removeExtractLayer = useCallback(
+    (id: string) =>
+      setExtractLayers((prev) => {
+        const layer = prev.find((l) => l.id === id)
+        if (layer?.overlayId) void DeleteProjectOverlay(layer.overlayId).catch(() => {})
+        return prev.filter((l) => l.id !== id)
+      }),
+    [],
+  )
+  const clearExtractLayers = useCallback(
+    () =>
+      setExtractLayers((prev) => {
+        prev.forEach((l) => {
+          if (l.overlayId) void DeleteProjectOverlay(l.overlayId).catch(() => {})
+        })
+        return []
+      }),
+    [],
+  )
+  const zoomToExtractLayer = useCallback(
+    (layer: ExtractLayer) => {
+      const e = layer.extent
+      props.setFlyTo({ lat: (e.lat_min + e.lat_max) / 2, lon: (e.lon_min + e.lon_max) / 2, key: Date.now() })
+    },
+    [props],
+  )
+
   const didRestoreProjectRef = useRef(false)
 
   const persistAoiLabel = useCallback(
@@ -610,11 +712,17 @@ function AppBody(props: {
           id
         )) as unknown as import("@/lib/types").ProjectOverlay[]
         const gallery = overlays
+          .filter((o) => o.kind !== "extract")
           .map(projectOverlayToComposition)
           .filter((x): x is CompositionOverlay => !!x)
         setCompositionGallery(gallery)
         setComposition(gallery[0] ?? null)
         setShowCompositionOverlay(!!gallery[0])
+        const savedLayers = overlays
+          .filter((o) => o.kind === "extract")
+          .map(projectOverlayToExtractLayer)
+          .filter((x): x is ExtractLayer => !!x)
+        setExtractLayers(savedLayers)
       } catch (e) {
         notifyError("Could not open project", e)
       }
@@ -676,6 +784,7 @@ function AppBody(props: {
     setComposeScenes([])
     setSelectedSceneId("")
     setComposeScenesError(null)
+    setExtractLayers([])
     props.setAnalysisLabel(undefined)
     void persistAoiLabel(null)
     props.onClearArea()
@@ -1312,6 +1421,13 @@ function AppBody(props: {
                     setDataCubeError(null)
                   }}
                   leftDockTabs={props.leftDockTabs}
+                  extractLayers={extractLayers}
+                  onExtractResult={addExtractLayers}
+                  onToggleExtractLayer={toggleExtractLayer}
+                  onExtractLayerOpacity={setExtractLayerOpacity}
+                  onRemoveExtractLayer={removeExtractLayer}
+                  onClearExtractLayers={clearExtractLayers}
+                  onZoomExtractLayer={zoomToExtractLayer}
                 />
               </motion.div>
             )}

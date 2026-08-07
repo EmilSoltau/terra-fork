@@ -2,6 +2,7 @@ import type {
   CompositionOverlay,
   CompositeIndex,
   CompositeKind,
+  ExtractLayer,
   ProjectOverlay,
 } from "@/lib/types"
 
@@ -52,5 +53,35 @@ export function projectOverlayToComposition(
     presetId: meta.presetId,
     sceneDate: meta.sceneDate,
     raster_tif: o.raster_tif,
+  }
+}
+
+type ExtractMeta = {
+  extent?: ExtractLayer["extent"]
+  index?: string
+  label?: string
+  opacity?: number
+  visible?: boolean
+}
+
+/** Map a persisted project overlay (kind="extract") into an ExtractLayer. */
+export function projectOverlayToExtractLayer(o: ProjectOverlay): ExtractLayer | null {
+  if (!o.overlay_uri) return null
+  let meta: ExtractMeta = {}
+  try {
+    if (o.meta_json?.trim()) meta = JSON.parse(o.meta_json) as ExtractMeta
+  } catch {
+    meta = {}
+  }
+  return {
+    id: o.id,
+    overlayId: o.id,
+    index: meta.index ?? o.title,
+    label: meta.label ?? o.title,
+    overlay_uri: o.overlay_uri,
+    extent: meta.extent ?? { lon_min: 0, lat_min: 0, lon_max: 0, lat_max: 0 },
+    opacity: meta.opacity ?? 0.85,
+    visible: meta.visible ?? true,
+    tif: o.raster_tif,
   }
 }

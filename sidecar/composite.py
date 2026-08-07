@@ -98,6 +98,20 @@ _BLUES = [
     (0.03, 0.19, 0.42),
 ]
 
+# Warm (magma-like) ramp for mineral band-ratio indices (low→high abundance).
+_MAGMA = [
+    (0.02, 0.02, 0.11),
+    (0.28, 0.06, 0.40),
+    (0.55, 0.15, 0.51),
+    (0.83, 0.28, 0.44),
+    (0.98, 0.55, 0.38),
+    (0.99, 0.80, 0.51),
+    (0.99, 0.99, 0.75),
+]
+
+# Mineral / alteration band-ratio indices → warm ramp (see preprocess.INDEX_REGISTRY).
+_MINERAL_INDICES = ("iron_oxide", "clay_hydroxyl", "ferrous_iron", "carbonate")
+
 
 def index_to_rgba(
     index: np.ndarray,
@@ -108,7 +122,12 @@ def index_to_rgba(
 ) -> np.ndarray:
     """Colormap a spectral index to RGBA uint8."""
     stretched = percentile_stretch(index.astype(np.float32), mask, stretch_low, stretch_high)
-    stops = _BLUES if name in ("ndwi", "ndmi") else _RDYLGN
+    if name in ("ndwi", "ndmi"):
+        stops = _BLUES
+    elif name in _MINERAL_INDICES:
+        stops = _MAGMA
+    else:
+        stops = _RDYLGN
     rgb = _lerp_cmap(stretched, stops)
     h, w = index.shape
     rgba = np.zeros((h, w, 4), dtype=np.uint8)

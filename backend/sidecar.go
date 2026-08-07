@@ -354,7 +354,7 @@ func (r *Runner) Predict(ctx context.Context, req PredictRequest) (*PredictResul
 			}
 			if err := json.Unmarshal([]byte(line), &ev); err != nil {
 				// Non-JSON stderr (e.g. library warnings): forward as a message.
-				wruntime.EventsEmit(ctx, "predict:progress", ProgressEvent{Progress: -1, Msg: line})
+				emitProgress(ctx, ProgressEvent{Progress: -1, Msg: line})
 				continue
 			}
 			if ev.Error != "" {
@@ -365,7 +365,7 @@ func (r *Runner) Predict(ctx context.Context, req PredictRequest) (*PredictResul
 			if ev.Progress != nil {
 				p = *ev.Progress
 			}
-			wruntime.EventsEmit(ctx, "predict:progress", ProgressEvent{Progress: p, Msg: ev.Msg})
+			emitProgress(ctx, ProgressEvent{Progress: p, Msg: ev.Msg})
 		}
 	}()
 
@@ -581,7 +581,7 @@ func (r *Runner) AnalyzeLULC(ctx context.Context, req LULCRequest) (*LULCAnalysi
 				Error    string `json:"error"`
 			}
 			if err := json.Unmarshal([]byte(line), &ev); err != nil {
-				wruntime.EventsEmit(ctx, "predict:progress", ProgressEvent{Progress: -1, Msg: line})
+				emitProgress(ctx, ProgressEvent{Progress: -1, Msg: line})
 				continue
 			}
 			if ev.Error != "" {
@@ -592,7 +592,7 @@ func (r *Runner) AnalyzeLULC(ctx context.Context, req LULCRequest) (*LULCAnalysi
 			if ev.Progress != nil {
 				p = *ev.Progress
 			}
-			wruntime.EventsEmit(ctx, "predict:progress", ProgressEvent{Progress: p, Msg: ev.Msg})
+			emitProgress(ctx, ProgressEvent{Progress: p, Msg: ev.Msg})
 		}
 	}()
 
@@ -727,7 +727,7 @@ func (r *Runner) ListDataCube(ctx context.Context, req DataCubeRequest) (*DataCu
 				Error    string `json:"error"`
 			}
 			if err := json.Unmarshal([]byte(line), &ev); err != nil {
-				wruntime.EventsEmit(ctx, "predict:progress", ProgressEvent{Progress: -1, Msg: line})
+				emitProgress(ctx, ProgressEvent{Progress: -1, Msg: line})
 				continue
 			}
 			if ev.Error != "" {
@@ -738,7 +738,7 @@ func (r *Runner) ListDataCube(ctx context.Context, req DataCubeRequest) (*DataCu
 			if ev.Progress != nil {
 				p = *ev.Progress
 			}
-			wruntime.EventsEmit(ctx, "predict:progress", ProgressEvent{Progress: p, Msg: ev.Msg})
+			emitProgress(ctx, ProgressEvent{Progress: p, Msg: ev.Msg})
 		}
 	}()
 
@@ -887,7 +887,7 @@ func (r *Runner) RenderComposite(ctx context.Context, req CompositeRequest) (*Co
 				Error    string `json:"error"`
 			}
 			if err := json.Unmarshal([]byte(line), &ev); err != nil {
-				wruntime.EventsEmit(ctx, "predict:progress", ProgressEvent{Progress: -1, Msg: line})
+				emitProgress(ctx, ProgressEvent{Progress: -1, Msg: line})
 				continue
 			}
 			if ev.Error != "" {
@@ -898,7 +898,7 @@ func (r *Runner) RenderComposite(ctx context.Context, req CompositeRequest) (*Co
 			if ev.Progress != nil {
 				p = *ev.Progress
 			}
-			wruntime.EventsEmit(ctx, "predict:progress", ProgressEvent{Progress: p, Msg: ev.Msg})
+			emitProgress(ctx, ProgressEvent{Progress: p, Msg: ev.Msg})
 		}
 	}()
 
@@ -958,6 +958,208 @@ func (r *Runner) RenderComposite(ctx context.Context, req CompositeRequest) (*Co
 		RasterTIF:  rasterTIF,
 		Meta:       wrapped.Meta,
 	}, nil
+}
+
+// Extract builds an analysis-ready, cloud-masked reflectance cube (+ band-ratio
+// indices) for a bbox or polygon. Mirrors the Predict/RenderComposite JSON
+// contract: request on stdin, result on stdout, progress on stderr.
+func (r *Runner) Extract(ctx context.Context, req ExtractRequest) (*ExtractResult, error) {
+	if _, err := os.Stat(r.sidecar); err != nil {
+		return nil, fmt.Errorf("sidecar not found at %s", r.sidecar)
+	}
+	if strings.TrimSpace(req.Start) == "" || strings.TrimSpace(req.End) == "" {
+		return nil, fmt.Errorf("set the acquisition period (start and end dates)")
+	}
+	if len(req.Bbox) != 4 && req.PolygonGeoJSON == nil {
+		return nil, fmt.Errorf("provide a bbox [lon_min,lat_min,lon_max,lat_max] or polygon")
+	}
+	if len(req.Bands) == 0 && len(req.Indices) == 0 {
+		return nil, fmt.Errorf("select at least one band or index to extract")
+	}
+
+	maxCloud := req.MaxCloud
+	if maxCloud <= 0 {
+		maxCloud = 100
+	}
+
+	workDir, err := os.MkdirTemp("", "geosense-extract-")
+	if err != nil {
+		return nil, fmt.Errorf("failed to create work dir: %w", err)
+	}
+	defer os.RemoveAll(workDir)
+
+	sReq := sidecarRequest{
+		Action:         "extract",
+		ModelDir:       r.modelDir,
+		Source:         "stac",
+		Start:          req.Start,
+		End:            req.End,
+		MaxCloud:       maxCloud,
+		MonthlyBest:    req.MonthlyBest,
+		Tiles:          req.Tiles,
+		PolygonGeoJSON: req.PolygonGeoJSON,
+		WorkDir:        workDir,
+		Bands:          req.Bands,
+		Bbox:           req.Bbox,
+		Indices:        req.Indices,
+		MaskClouds:     req.MaskClouds,
+	}
+	reqBytes, err := json.Marshal(sReq)
+	if err != nil {
+		return nil, fmt.Errorf("failed to encode request: %w", err)
+	}
+
+	cmd := exec.CommandContext(ctx, r.pythonPath, r.sidecar)
+	cmd.Stdin = strings.NewReader(string(reqBytes))
+
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		return nil, err
+	}
+	stderr, err := cmd.StderrPipe()
+	if err != nil {
+		return nil, err
+	}
+	if err := cmd.Start(); err != nil {
+		return nil, fmt.Errorf("failed to start sidecar: %w", err)
+	}
+
+	var wg sync.WaitGroup
+	var lastError string
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		scanner := bufio.NewScanner(stderr)
+		scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
+		for scanner.Scan() {
+			line := strings.TrimSpace(scanner.Text())
+			if line == "" {
+				continue
+			}
+			var ev struct {
+				Progress *int   `json:"progress"`
+				Msg      string `json:"msg"`
+				Error    string `json:"error"`
+			}
+			if err := json.Unmarshal([]byte(line), &ev); err != nil {
+				emitProgress(ctx, ProgressEvent{Progress: -1, Msg: line})
+				continue
+			}
+			if ev.Error != "" {
+				lastError = ev.Error
+				continue
+			}
+			p := -1
+			if ev.Progress != nil {
+				p = *ev.Progress
+			}
+			emitProgress(ctx, ProgressEvent{Progress: p, Msg: ev.Msg})
+		}
+	}()
+
+	var out strings.Builder
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		scanner := bufio.NewScanner(stdout)
+		scanner.Buffer(make([]byte, 0, 1024*1024), 16*1024*1024)
+		for scanner.Scan() {
+			out.WriteString(scanner.Text())
+		}
+	}()
+
+	wg.Wait()
+	waitErr := cmd.Wait()
+	if waitErr != nil {
+		if lastError != "" {
+			return nil, fmt.Errorf("%s", lastError)
+		}
+		return nil, fmt.Errorf("sidecar failed: %w", waitErr)
+	}
+
+	raw := strings.TrimSpace(out.String())
+	if raw == "" {
+		if lastError != "" {
+			return nil, fmt.Errorf("%s", lastError)
+		}
+		return nil, fmt.Errorf("sidecar produced no output")
+	}
+
+	var wrapped struct {
+		Extent       Bounds            `json:"extent"`
+		CubeTIF      string            `json:"cube_tif"`
+		IndexTIFs     map[string]string `json:"index_tifs"`
+		IndexOverlays map[string]string `json:"index_overlays"`
+		OverlayPNG    string            `json:"overlay_png"`
+		ManifestJSON  string            `json:"manifest_json"`
+		Bands        []string          `json:"bands"`
+		Indices      []string          `json:"indices"`
+		ScenesUsed   []ExtractScene    `json:"scenes_used"`
+		NScenes      int               `json:"n_scenes"`
+		ValidPct     float64           `json:"valid_pct"`
+		DateRange    []string          `json:"date_range"`
+	}
+	if err := json.Unmarshal([]byte(raw), &wrapped); err != nil {
+		return nil, fmt.Errorf("failed to parse extract result: %w", err)
+	}
+
+	overlayURI := ""
+	if wrapped.OverlayPNG != "" {
+		if uri, uerr := pngToDataURI(wrapped.OverlayPNG); uerr == nil {
+			overlayURI = uri
+		}
+	}
+	cubeTIF := ""
+	if wrapped.CubeTIF != "" {
+		if p, perr := promoteExportFile(wrapped.CubeTIF, "cube.tif"); perr == nil {
+			cubeTIF = p
+		}
+	}
+	indexTIFs := make(map[string]string, len(wrapped.IndexTIFs))
+	for name, src := range wrapped.IndexTIFs {
+		if p, perr := promoteExportFile(src, "index_"+name+".tif"); perr == nil {
+			indexTIFs[name] = p
+		}
+	}
+	indexOverlayURIs := make(map[string]string, len(wrapped.IndexOverlays))
+	for name, png := range wrapped.IndexOverlays {
+		if uri, uerr := pngToDataURI(png); uerr == nil {
+			indexOverlayURIs[name] = uri
+		}
+	}
+	manifest := ""
+	if wrapped.ManifestJSON != "" {
+		if p, perr := promoteExportFile(wrapped.ManifestJSON, "manifest.json"); perr == nil {
+			manifest = p
+		}
+	}
+
+	return &ExtractResult{
+		Extent:           wrapped.Extent,
+		CubeTIF:          cubeTIF,
+		IndexTIFs:        indexTIFs,
+		IndexOverlayURIs: indexOverlayURIs,
+		OverlayURI:       overlayURI,
+		ManifestJSON:     manifest,
+		Bands:        wrapped.Bands,
+		Indices:      wrapped.Indices,
+		ScenesUsed:   wrapped.ScenesUsed,
+		NScenes:      wrapped.NScenes,
+		ValidPct:     wrapped.ValidPct,
+		DateRange:    wrapped.DateRange,
+	}, nil
+}
+
+// emitProgress forwards a predict:progress event to the frontend, but only when
+// the context carries a Wails event emitter. In headless / test contexts (no
+// emitter) the Wails runtime would otherwise log.Fatalf; here it is a no-op, so
+// the sidecar runners are drivable from integration tests without a GUI.
+func emitProgress(ctx context.Context, ev ProgressEvent) {
+	if ctx == nil || ctx.Value("events") == nil {
+		return
+	}
+	wruntime.EventsEmit(ctx, "predict:progress", ev)
 }
 
 // pngToDataURI reads a PNG file and returns a base64 data URI.

@@ -24,6 +24,8 @@ export function ExportOverlayFile(arg1:string,arg2:string):Promise<string>;
 
 export function ExportResearchPack(arg1:backend.ResearchExportMeta,arg2:backend.PredictResult):Promise<string>;
 
+export function Extract(arg1:backend.ExtractRequest):Promise<backend.ExtractResult>;
+
 export function GeocodeSearch(arg1:string):Promise<Array<backend.GeocodeResult>>;
 
 export function GetAppVersion():Promise<string>;

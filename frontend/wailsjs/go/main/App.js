@@ -42,6 +42,10 @@ export function ExportResearchPack(arg1, arg2) {
   return window['go']['main']['App']['ExportResearchPack'](arg1, arg2);
 }
 
+export function Extract(arg1) {
+  return window['go']['main']['App']['Extract'](arg1);
+}
+
 export function GeocodeSearch(arg1) {
   return window['go']['main']['App']['GeocodeSearch'](arg1);
 }

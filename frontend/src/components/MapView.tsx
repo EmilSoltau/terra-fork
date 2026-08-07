@@ -15,7 +15,7 @@ import L from "leaflet"
 // touch-finish incompatibility. Must run before any L.Control.Draw is created.
 import "./leafletDrawPatch"
 import type { LatLngBoundsExpression } from "leaflet"
-import type { Area, PredictResult, GeoJSONGeometry, CompositionOverlay } from "@/lib/types"
+import type { Area, PredictResult, GeoJSONGeometry, CompositionOverlay, ExtractLayer } from "@/lib/types"
 import { majoritySmoothOverlay } from "@/lib/smoothOverlay"
 import {
   getAoiContourScheme,
@@ -45,6 +45,8 @@ interface MapViewProps {
   /** When false, hide the band composition overlay. */
   showCompositionOverlay?: boolean
   composition?: CompositionOverlay | null
+  /** Extract index layers, painted as an independent visible stack. */
+  extractLayers?: ExtractLayer[]
   /** Vertical wipe: left = basemap, right = prediction. */
   swipeCompare: boolean
   swipeRatio: number
@@ -557,7 +559,19 @@ function DrawControl({
           }),
         },
         polyline: false,
-        rectangle: false,
+        // Rectangle tool for bbox-style AOIs (Extract). Emits a Polygon like the
+        // polygon tool, so it flows through the same onPolygonDrawn path.
+        rectangle: {
+          shapeOptions: {
+            interactive: false,
+            clickable: false,
+            fill: true,
+            fillOpacity: 0.06,
+            weight: 1.5,
+            opacity: 1,
+            color: "#ffffff",
+          },
+        },
         circle: false,
         marker: false,
         circlemarker: false,
@@ -985,6 +999,7 @@ export function MapView({
   showPredictionOverlay = true,
   showCompositionOverlay = true,
   composition = null,
+  extractLayers = [],
   swipeCompare,
   swipeRatio,
   onSwipeRatioChange,
@@ -1112,6 +1127,35 @@ export function MapView({
     />
   ) : null
 
+  // Extract index layers — an independent, simultaneously-visible stack below
+  // the prediction (z 400), above compositions (z 350). Each is a PredictionOverlay.
+  const extractLayerNodes = extractLayers
+    .filter((l) => l.visible && l.overlay_uri)
+    .map((l, i) => {
+      const e = l.extent
+      if (
+        e.lon_min === e.lon_max ||
+        e.lat_min === e.lat_max ||
+        (e.lon_min === 0 && e.lon_max === 0 && e.lat_min === 0 && e.lat_max === 0)
+      ) {
+        return null
+      }
+      const bounds: LatLngBoundsExpression = [
+        [e.lat_min, e.lon_min],
+        [e.lat_max, e.lon_max],
+      ]
+      return (
+        <PredictionOverlay
+          key={`extract-${l.id}`}
+          url={l.overlay_uri}
+          bounds={bounds}
+          opacity={l.opacity}
+          smooth={false}
+          zIndex={360 + i}
+        />
+      )
+    })
+
   const swipeRightLabel = confidenceVisible
     ? "Confidence"
     : predictionVisible
@@ -1186,6 +1230,7 @@ export function MapView({
         ))}
 
       {compositionLayer}
+      {extractLayerNodes}
       {predictionLayer}
       {confidenceLayer}
 

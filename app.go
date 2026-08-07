@@ -232,6 +232,15 @@ func (a *App) RenderComposite(req backend.CompositeRequest) (*backend.CompositeR
 	return a.runner.RenderComposite(a.ctx, req)
 }
 
+// Extract builds an analysis-ready, cloud-masked reflectance cube (+ band-ratio
+// indices) for a bbox or polygon. Streams predict:progress events.
+func (a *App) Extract(req backend.ExtractRequest) (*backend.ExtractResult, error) {
+	if a.runner == nil {
+		return nil, errors.New("runner not initialized")
+	}
+	return a.runner.Extract(a.ctx, req)
+}
+
 // ExportClassification copies the classification GeoTIFF to a user-chosen path.
 func (a *App) ExportClassification(rasterPath string) (string, error) {
 	return a.ExportOverlayFile(rasterPath, "terra_classification.tif")

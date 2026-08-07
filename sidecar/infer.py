@@ -184,11 +184,13 @@ def list_stac_products(polygon, start, end, tile_list=None, max_cloud=100.0,
 
     bounds = polygon.bounds
 
-    # The Planetary Computer STAC endpoint occasionally returns transient 5xx
+    # The Planetary Computer STAC endpoint regularly returns transient 5xx
     # (502/503/504) or times out under load. Retry the catalog open + search +
-    # item paging with exponential backoff so a momentary outage does not abort
-    # the whole run.
-    attempts = 4
+    # item paging with patient exponential backoff (capped) so a slow-but-alive
+    # or briefly-degraded service rides out instead of aborting the run.
+    # Waits: 3, 6, 12, 24, 45, 45, 45 s (~180 s total across 7 attempts).
+    attempts = 8
+    max_wait = 45
     items = None
     last_err = None
     for attempt in range(attempts):
@@ -207,10 +209,10 @@ def list_stac_products(polygon, start, end, tile_list=None, max_cloud=100.0,
         except Exception as e:
             last_err = e
             if attempt < attempts - 1:
-                wait = 2 ** attempt  # 1s, 2s, 4s
+                wait = min(3 * (2 ** attempt), max_wait)
                 sys.stderr.write(json.dumps({
                     'progress': -1,
-                    'msg': f'STAC unavailable, retrying in {wait}s ({attempt + 1}/{attempts})',
+                    'msg': f'STAC slow/unavailable, retrying in {wait}s ({attempt + 1}/{attempts})',
                 }) + '\n')
                 sys.stderr.flush()
                 time.sleep(wait)
@@ -224,7 +226,9 @@ def list_stac_products(polygon, start, end, tile_list=None, max_cloud=100.0,
     # collected (present in Planetary Computer assets) so the Prithvi path has
     # its six bands. Missing extra bands do not drop the scene.
     required_bands = ['B02', 'B03', 'B04', 'B08']
-    extra_bands = ['B8A', 'B11', 'B12']
+    # SCL (Scene Classification Layer) is collected for the extract path's
+    # pixel-level cloud/shadow masking; predict/datacube ignore it.
+    extra_bands = ['B8A', 'B11', 'B12', 'SCL']
     products = {}
     for item in items:
         props = item.properties
@@ -365,6 +369,20 @@ def load_band_to_reference_grid(product, band_name, polygon, ref_profile, resolu
         resampling=Resampling.bilinear,
     )
     return dst
+
+
+def load_scl_to_reference_grid(product, polygon, ref_profile):
+    """Load the Sentinel-2 SCL band and reproject to the reference grid using
+    nearest-neighbour (categorical class codes must not be interpolated)."""
+    scl, scl_profile = load_and_clip_band(product, 'SCL', polygon)
+    dst = np.zeros((ref_profile['height'], ref_profile['width']), dtype=np.float32)
+    reproject(
+        source=scl, destination=dst,
+        src_transform=scl_profile['transform'], src_crs=scl_profile['crs'],
+        dst_transform=ref_profile['transform'], dst_crs=ref_profile['crs'],
+        resampling=Resampling.nearest,
+    )
+    return dst.astype(np.int16)
 
 
 # --- Vegetation indices ----------------------------------------------------
@@ -940,6 +958,201 @@ def main():
             'date_range': date_range,
             'monthly_best': monthly_best,
             'max_cloud': max_cloud,
+        }))
+        sys.stdout.flush()
+        return
+
+    # Extract an analysis-ready, cloud-masked reflectance cube + band-ratio
+    # indices for a bbox (or polygon). This is the preprocessing entry point.
+    if action == 'extract':
+        import composite as comp
+        import preprocess as pp
+        from shapely.geometry import box
+
+        configure_gdal_for_cog()
+
+        start = req.get('start')
+        end = req.get('end')
+        if not start or not end:
+            fail('extract requires start and end dates (YYYY-MM-DD)')
+
+        bbox = req.get('bbox')
+        if bbox and len(bbox) == 4:
+            lon_min, lat_min, lon_max, lat_max = [float(v) for v in bbox]
+            polygon = box(lon_min, lat_min, lon_max, lat_max)
+        elif req.get('polygon_geojson'):
+            polygon = polygon_from_geojson(req['polygon_geojson'])
+        else:
+            fail('extract requires bbox [lon_min,lat_min,lon_max,lat_max] or polygon_geojson')
+
+        indices = req.get('indices') or []
+        bands = req.get('bands') or []
+        max_cloud = float(req.get('max_cloud', 100.0))
+        monthly_best = bool(req.get('monthly_best', True))
+        mask_clouds = bool(req.get('mask_clouds', True))
+        tiles = req.get('tiles') or None
+
+        for name in indices:
+            if name not in pp.INDEX_REGISTRY:
+                fail(f'unknown index {name!r}; allowed: {list(pp.INDEX_REGISTRY)}')
+
+        # Bands we must read = requested output bands ∪ bands the indices need.
+        needed = list(dict.fromkeys(list(bands) + pp.required_bands_for(indices)))
+        if not needed:
+            fail('extract requires at least one of: bands, indices')
+        out_bands = list(bands) if bands else list(needed)
+
+        emit_progress(10, 'querying STAC catalog (Planetary Computer)')
+        try:
+            products = list_stac_products(
+                polygon, start, end, tile_list=tiles, max_cloud=max_cloud,
+                monthly_best=monthly_best,
+            )
+        except Exception as e:
+            fail(f'STAC query failed: {e}')
+        if not products:
+            fail('no Sentinel-2 scenes matched the filters')
+
+        # Reference grid from the first needed band of the first scene.
+        emit_progress(18, 'building reference grid')
+        try:
+            _, ref_profile = load_and_clip_band(products[0], needed[0], polygon)
+        except Exception as e:
+            fail(f'could not read reference band {needed[0]}: {e}')
+        h, w = ref_profile['height'], ref_profile['width']
+
+        def _empty():
+            return np.full((h, w), np.nan, dtype=np.float32)
+
+        per_scene_bands = {b: [] for b in needed}
+        per_scene_index = {name: [] for name in indices}
+        scenes_used = []
+        valid_pcts = []
+
+        n = len(products)
+        for i, product in enumerate(products):
+            emit_progress(20 + int(60 * i / max(n, 1)), f'reading scene {i + 1}/{n}')
+
+            valid = None
+            if mask_clouds and 'SCL' in product['assets']:
+                try:
+                    scl_grid = load_scl_to_reference_grid(product, polygon, ref_profile)
+                    valid = pp.build_scl_mask(scl_grid)
+                except Exception:
+                    valid = None  # SCL unavailable → fall back to no pixel mask
+
+            refl = {}
+            for b in needed:
+                if b not in product['assets']:
+                    refl[b] = None
+                    continue
+                try:
+                    dn = load_band_to_reference_grid(product, b, polygon, ref_profile)
+                except Exception:
+                    refl[b] = None
+                    continue
+                vals, _ = pp.apply_scale_offset(dn, nodata=0)  # clip fill (0) = missing
+                if valid is not None:
+                    vals = np.where(valid, vals, np.nan).astype(np.float32)
+                refl[b] = vals
+
+            for b in needed:
+                per_scene_bands[b].append(refl[b] if refl[b] is not None else _empty())
+
+            for name in indices:
+                reqd = pp.INDEX_REGISTRY[name][0]
+                if any(refl.get(bb) is None for bb in reqd):
+                    per_scene_index[name].append(_empty())
+                else:
+                    per_scene_index[name].append(
+                        pp.compute_index({bb: refl[bb] for bb in reqd}, name)
+                    )
+
+            scenes_used.append({
+                'id': product.get('id') or '',
+                'date': product['date'].strftime('%Y-%m-%d'),
+                'cloud_cover': round(float(product.get('cloud_cover', 0.0)), 2),
+            })
+            if valid is not None:
+                valid_pcts.append(pp.valid_fraction(valid))
+
+        # Composite (median of per-scene values → cancels illumination per scene).
+        emit_progress(85, 'compositing')
+        cube = np.stack([pp.median_composite(per_scene_bands[b]) for b in out_bands], axis=0)
+        cube_path = work_dir / 'cube.tif'
+        pp.write_cube_geotiff(cube, ref_profile, out_bands, cube_path)
+
+        index_tifs = {}
+        index_comp = {}
+        for name in indices:
+            comp_idx = pp.median_composite(per_scene_index[name])
+            index_comp[name] = comp_idx
+            idx_path = work_dir / f'index_{name}.tif'
+            pp.write_cube_geotiff(comp_idx[None, ...], ref_profile, [name], idx_path)
+            index_tifs[name] = str(idx_path)
+
+        # Colormapped preview PNG per index (each becomes its own map layer),
+        # plus a single overlay.png (first index/band) for back-compat.
+        index_overlays = {}
+        for name in indices:
+            arr = index_comp[name]
+            rgba = comp.index_to_rgba(np.nan_to_num(arr), np.isfinite(arr), name)
+            p = work_dir / f'overlay_{name}.png'
+            comp.write_rgba_png(rgba, p)
+            index_overlays[name] = str(p)
+
+        overlay_name = indices[0] if indices else out_bands[0]
+        overlay_arr = index_comp[indices[0]] if indices else cube[0]
+        overlay_mask = np.isfinite(overlay_arr)
+        rgba = comp.index_to_rgba(np.nan_to_num(overlay_arr), overlay_mask, overlay_name)
+        overlay_path = work_dir / 'overlay.png'
+        comp.write_rgba_png(rgba, overlay_path)
+
+        lon_min_e, lon_max_e, lat_min_e, lat_max_e = get_map_extent(ref_profile)
+        extent = {
+            'lon_min': lon_min_e, 'lon_max': lon_max_e,
+            'lat_min': lat_min_e, 'lat_max': lat_max_e,
+        }
+        overall_valid = float(np.mean(valid_pcts)) if valid_pcts else 1.0
+        date_range = [
+            products[0]['date'].strftime('%Y-%m-%d'),
+            products[-1]['date'].strftime('%Y-%m-%d'),
+        ]
+
+        manifest = {
+            'source': 'sentinel-2-l2a (Microsoft Planetary Computer STAC)',
+            'bbox': list(polygon.bounds),
+            'date_range': date_range,
+            'bands': out_bands,
+            'indices': indices,
+            'n_scenes': n,
+            'scenes': scenes_used,
+            'crs': str(ref_profile['crs']),
+            'grid': {'height': h, 'width': w},
+            'corrections': {
+                'reflectance_scale': pp.S2_REFLECTANCE_SCALE,
+                'reflectance_offset': pp.S2_REFLECTANCE_OFFSET,
+                'cloud_masked_scl': bool(mask_clouds),
+                'composite': 'per-scene median (ratio-then-composite)',
+            },
+            'mean_valid_fraction': round(overall_valid, 4),
+        }
+        (work_dir / 'manifest.json').write_text(json.dumps(manifest, indent=2))
+
+        emit_progress(100, 'done')
+        sys.stdout.write(json.dumps({
+            'extent': extent,
+            'cube_tif': str(cube_path),
+            'index_tifs': index_tifs,
+            'index_overlays': index_overlays,
+            'overlay_png': str(overlay_path),
+            'manifest_json': str(work_dir / 'manifest.json'),
+            'bands': out_bands,
+            'indices': indices,
+            'scenes_used': scenes_used,
+            'n_scenes': n,
+            'valid_pct': round(100.0 * overall_valid, 1),
+            'date_range': date_range,
         }))
         sys.stdout.flush()
         return

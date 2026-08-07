@@ -78,6 +78,56 @@ type sidecarRequest struct {
 	Bands      []string  `json:"bands,omitempty"`
 	Index      string    `json:"index,omitempty"`
 	StretchPct []float64 `json:"stretch_pct,omitempty"`
+	// Extract (action=extract).
+	Bbox       []float64 `json:"bbox,omitempty"`
+	Indices    []string  `json:"indices,omitempty"`
+	MaskClouds bool      `json:"mask_clouds"`
+}
+
+// ExtractRequest asks the sidecar to build an analysis-ready, cloud-masked
+// surface-reflectance cube (+ band-ratio indices) for a bbox or polygon.
+type ExtractRequest struct {
+	// Bbox is [lon_min, lat_min, lon_max, lat_max] (EPSG:4326). Preferred input.
+	Bbox []float64 `json:"bbox"`
+	// PolygonGeoJSON is an optional fallback when Bbox is empty.
+	PolygonGeoJSON *GeoJSONGeometry `json:"polygon_geojson"`
+	Start          string           `json:"start"`
+	End            string           `json:"end"`
+	// Bands to write to the cube; defaults to the bands the indices need.
+	Bands []string `json:"bands"`
+	// Indices to derive (see preprocess.INDEX_REGISTRY): iron_oxide, clay_hydroxyl,
+	// ferrous_iron, carbonate, ndvi.
+	Indices     []string `json:"indices"`
+	MaxCloud    float64  `json:"max_cloud"`
+	MonthlyBest bool     `json:"monthly_best"`
+	MaskClouds  bool     `json:"mask_clouds"`
+	Tiles       []string `json:"tiles"`
+}
+
+// ExtractScene is one scene that contributed to an extract composite.
+type ExtractScene struct {
+	ID         string  `json:"id"`
+	Date       string  `json:"date"`
+	CloudCover float64 `json:"cloud_cover"`
+}
+
+// ExtractResult is returned to the frontend. Raster paths are promoted to a
+// durable cache; the overlay is a base64 PNG data URI for direct map display.
+type ExtractResult struct {
+	Extent       Bounds            `json:"extent"`
+	CubeTIF      string            `json:"cube_tif"`
+	IndexTIFs    map[string]string `json:"index_tifs"`
+	// IndexOverlayURIs maps each index name to a base64 PNG data URI (one
+	// colormapped preview per index) for painting as an independent map layer.
+	IndexOverlayURIs map[string]string `json:"index_overlay_uris"`
+	OverlayURI       string            `json:"overlay_uri"`
+	ManifestJSON string            `json:"manifest_json"`
+	Bands        []string          `json:"bands"`
+	Indices      []string          `json:"indices"`
+	ScenesUsed   []ExtractScene    `json:"scenes_used"`
+	NScenes      int               `json:"n_scenes"`
+	ValidPct     float64           `json:"valid_pct"`
+	DateRange    []string          `json:"date_range"`
 }
 
 // ClassStat is a per-class statistic from the classification result.

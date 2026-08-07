@@ -290,6 +290,123 @@ export namespace backend {
 		}
 	}
 	
+	export class ExtractRequest {
+	    bbox: number[];
+	    polygon_geojson?: GeoJSONGeometry;
+	    start: string;
+	    end: string;
+	    bands: string[];
+	    indices: string[];
+	    max_cloud: number;
+	    monthly_best: boolean;
+	    mask_clouds: boolean;
+	    tiles: string[];
+	
+	    static createFrom(source: any = {}) {
+	        return new ExtractRequest(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.bbox = source["bbox"];
+	        this.polygon_geojson = this.convertValues(source["polygon_geojson"], GeoJSONGeometry);
+	        this.start = source["start"];
+	        this.end = source["end"];
+	        this.bands = source["bands"];
+	        this.indices = source["indices"];
+	        this.max_cloud = source["max_cloud"];
+	        this.monthly_best = source["monthly_best"];
+	        this.mask_clouds = source["mask_clouds"];
+	        this.tiles = source["tiles"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class ExtractScene {
+	    id: string;
+	    date: string;
+	    cloud_cover: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new ExtractScene(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.date = source["date"];
+	        this.cloud_cover = source["cloud_cover"];
+	    }
+	}
+	export class ExtractResult {
+	    extent: Bounds;
+	    cube_tif: string;
+	    index_tifs: Record<string, string>;
+	    index_overlay_uris: Record<string, string>;
+	    overlay_uri: string;
+	    manifest_json: string;
+	    bands: string[];
+	    indices: string[];
+	    scenes_used: ExtractScene[];
+	    n_scenes: number;
+	    valid_pct: number;
+	    date_range: string[];
+	
+	    static createFrom(source: any = {}) {
+	        return new ExtractResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.extent = this.convertValues(source["extent"], Bounds);
+	        this.cube_tif = source["cube_tif"];
+	        this.index_tifs = source["index_tifs"];
+	        this.index_overlay_uris = source["index_overlay_uris"];
+	        this.overlay_uri = source["overlay_uri"];
+	        this.manifest_json = source["manifest_json"];
+	        this.bands = source["bands"];
+	        this.indices = source["indices"];
+	        this.scenes_used = this.convertValues(source["scenes_used"], ExtractScene);
+	        this.n_scenes = source["n_scenes"];
+	        this.valid_pct = source["valid_pct"];
+	        this.date_range = source["date_range"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	
 	
 	export class GeocodeResult {
 	    display_name: string;
