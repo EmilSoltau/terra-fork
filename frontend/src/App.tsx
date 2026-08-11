@@ -15,6 +15,7 @@ import {
   SaveProjectOverlay,
   ListProjectOverlays,
   DeleteProjectOverlay,
+  UpdateProjectOverlay,
   GetProject,
   UpdateProjectAOI,
   CreateProject,
@@ -517,13 +518,49 @@ function AppBody(props: {
       void refreshProjects()
     }
   }, [activeProjectId])
+  // Persist a layer's opacity/visibility into its project overlay row.
+  const persistLayerMeta = useCallback(
+    (layer: ExtractLayer) => {
+      if (!layer.overlayId || !activeProjectId) return
+      void UpdateProjectOverlay(
+        layer.overlayId,
+        JSON.stringify({
+          extent: layer.extent,
+          index: layer.index,
+          label: layer.label,
+          opacity: layer.opacity,
+          visible: layer.visible,
+        }),
+      ).catch(() => {})
+    },
+    [activeProjectId],
+  )
+  const opacityPersistTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({})
   const toggleExtractLayer = useCallback(
-    (id: string) => setExtractLayers((prev) => prev.map((l) => (l.id === id ? { ...l, visible: !l.visible } : l))),
-    [],
+    (id: string) =>
+      setExtractLayers((prev) =>
+        prev.map((l) => {
+          if (l.id !== id) return l
+          const updated = { ...l, visible: !l.visible }
+          persistLayerMeta(updated) // discrete change → persist immediately
+          return updated
+        }),
+      ),
+    [persistLayerMeta],
   )
   const setExtractLayerOpacity = useCallback(
-    (id: string, v: number) => setExtractLayers((prev) => prev.map((l) => (l.id === id ? { ...l, opacity: v } : l))),
-    [],
+    (id: string, v: number) =>
+      setExtractLayers((prev) =>
+        prev.map((l) => {
+          if (l.id !== id) return l
+          const updated = { ...l, opacity: v }
+          // Debounce: the slider fires rapidly; persist 400ms after the last change.
+          clearTimeout(opacityPersistTimers.current[id])
+          opacityPersistTimers.current[id] = setTimeout(() => persistLayerMeta(updated), 400)
+          return updated
+        }),
+      ),
+    [persistLayerMeta],
   )
   const removeExtractLayer = useCallback(
     (id: string) =>

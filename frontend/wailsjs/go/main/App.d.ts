@@ -78,4 +78,6 @@ export function UpdateProject(arg1:store.Project):Promise<store.Project>;
 
 export function UpdateProjectAOI(arg1:string,arg2:string,arg3:string,arg4:string):Promise<store.Project>;
 
+export function UpdateProjectOverlay(arg1:string,arg2:string):Promise<void>;
+
 export function UpdateProjectRunLabels(arg1:string,arg2:string):Promise<number>;

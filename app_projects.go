@@ -179,6 +179,15 @@ func (a *App) DeleteProjectOverlay(overlayID string) error {
 	return a.store.DeleteProjectOverlay(a.effectiveUserID(), overlayID)
 }
 
+// UpdateProjectOverlay updates an overlay's meta_json (e.g. extract-layer
+// opacity / visibility) so changes persist across sessions.
+func (a *App) UpdateProjectOverlay(overlayID, metaJSON string) error {
+	if err := a.requireStore(); err != nil {
+		return err
+	}
+	return a.store.UpdateProjectOverlayMeta(a.effectiveUserID(), overlayID, metaJSON)
+}
+
 // DeleteAnalysis deletes a saved inference run and its files.
 func (a *App) DeleteAnalysis(runID string) error {
 	if err := a.requireStore(); err != nil {

@@ -392,6 +392,45 @@ func (s *Store) DeleteProjectOverlay(userID, overlayID string) error {
 	return nil
 }
 
+// UpdateProjectOverlayMeta updates the meta_json of one overlay row (used to
+// persist per-layer opacity/visibility changes). Ownership is verified via the
+// same join as DeleteProjectOverlay.
+func (s *Store) UpdateProjectOverlayMeta(userID, overlayID, metaJSON string) error {
+	if userID == "" || overlayID == "" {
+		return ErrInvalidInput
+	}
+	if metaJSON == "" || !json.Valid([]byte(metaJSON)) {
+		metaJSON = "{}"
+	}
+	var (
+		projectID string
+		owner     string
+	)
+	err := s.db.QueryRow(
+		`SELECT o.project_id, p.user_id
+		 FROM project_overlays o
+		 JOIN projects p ON p.id = o.project_id
+		 WHERE o.id = ?`,
+		overlayID,
+	).Scan(&projectID, &owner)
+	if errors.Is(err, sql.ErrNoRows) {
+		return ErrNotFound
+	}
+	if err != nil {
+		return err
+	}
+	if owner != userID {
+		return ErrNotFound
+	}
+	if _, err := s.db.Exec(
+		`UPDATE project_overlays SET meta_json = ? WHERE id = ?`, metaJSON, overlayID,
+	); err != nil {
+		return err
+	}
+	_, _ = s.db.Exec(`UPDATE projects SET updated_at = ? WHERE id = ?`, nowISO(), projectID)
+	return nil
+}
+
 // AbsDataPath joins a relative path under the store data dir.
 func (s *Store) AbsDataPath(rel string) string {
 	rel = strings.TrimSpace(rel)
